@@ -30,7 +30,23 @@ This is being built in phases, each one shipping something testable end-to-end (
       cross-tenant access returns 404, and a Cashier-role staff member is
       blocked from product/warehouse mutations at both the UI and the
       Server Action layer.
-- [ ] Phase 2 — Stock transfers with accountability (request/approve/dispatch/receive)
+- [x] **Phase 2 — Stock transfers**: full accountability state machine
+      (`REQUESTED → APPROVED → IN_TRANSIT → RECEIVED`, or `REJECTED`/`CANCELLED`)
+      in `transfer-service.ts`, plus a lighter one-step external-supplier
+      intake path. Self-approval is blocked by default (requester ≠
+      approver); a `receivedQuantity` that differs from what was requested
+      is recorded as-is and flagged with a `transfer.discrepancy` audit
+      entry rather than silently corrected. Stock decrements are atomic
+      Postgres `UPDATE ... WHERE quantity >= n` statements
+      (`decrementWarehouseStock`/`decrementBranchStock`), so concurrent
+      transfers racing for the last units can't drive a location negative.
+      Also adds a minimal audited stock-adjustment action (`ADJUSTMENT`
+      reason) — needed since nothing before Phase 2 had a way to put
+      initial stock into a warehouse. Verified end-to-end: full lifecycle
+      across two staff members, self-approval blocked, discrepancy
+      correctly flagged and audited, the `StockMovement` ledger reconciles
+      exactly with `WarehouseStock`/`BranchStock` totals, and cross-tenant
+      transfer access returns 404.
 - [ ] Phase 3 — Sales & partial/installment payments
 - [ ] Phase 4 — Staff invitations & per-staff permission overrides UI
 - [ ] Phase 5 — Branding/theming

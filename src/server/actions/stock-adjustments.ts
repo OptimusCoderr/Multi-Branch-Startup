@@ -1,0 +1,87 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { requireMembershipOrThrow, requirePermission } from "@/lib/auth/session";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+import { adjustWarehouseStockSchema } from "@/lib/validation/stock-adjustment.schema";
+import {
+  decrementWarehouseStock,
+  incrementWarehouseStock,
+  recordStockMovement,
+  InsufficientStockError,
+} from "@/server/services/inventory-service";
+import { writeAuditLog } from "@/server/services/audit-service";
+
+type ActionResult = { error: string } | { error: "" };
+
+/**
+ * Manual correction to a warehouse's stock count — the on-ramp for initial
+ * stock (there is no other way for units to enter a warehouse outside of
+ * this and Phase 3's future purchase-receiving flow) and for reconciling
+ * shrinkage/damage/miscounts. Gated behind WAREHOUSES_MANAGE rather than a
+ * new permission, since correcting a warehouse's stock is part of managing
+ * it; still fully audited like every other stock movement.
+ */
+export async function adjustWarehouseStock(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+  const membership = await requireMembershipOrThrow();
+  await requirePermission(membership.membershipId, PERMISSIONS.WAREHOUSES_MANAGE);
+
+  const parsed = adjustWarehouseStockSchema.safeParse({
+    productId: formData.get("productId"),
+    warehouseId: formData.get("warehouseId"),
+    delta: formData.get("delta"),
+    reason: formData.get("reason"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid adjustment." };
+  }
+
+  const db = getScopedPrisma(membership.companyId);
+  const h = await headers();
+  const ipAddress = h.get("x-forwarded-for");
+  const userAgent = h.get("user-agent");
+  const { productId, warehouseId, delta, reason } = parsed.data;
+
+  try {
+    await db.$transaction(async (tx) => {
+      if (delta > 0) {
+        await incrementWarehouseStock(tx, productId, warehouseId, delta);
+      } else {
+        await decrementWarehouseStock(tx, productId, warehouseId, -delta);
+      }
+
+      await recordStockMovement(tx, {
+        companyId: membership.companyId,
+        productId,
+        locationType: "WAREHOUSE",
+        warehouseId,
+        quantityDelta: delta,
+        reason: "ADJUSTMENT",
+        referenceType: "ManualAdjustment",
+        referenceId: membership.membershipId,
+        performedByMembershipId: membership.membershipId,
+      });
+
+      await writeAuditLog(tx, {
+        companyId: membership.companyId,
+        actorMembershipId: membership.membershipId,
+        action: "stock.adjusted",
+        entityType: "WarehouseStock",
+        entityId: `${productId}:${warehouseId}`,
+        metadata: { productId, warehouseId, delta, reason: reason ?? null },
+        ipAddress,
+        userAgent,
+      });
+    });
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      return { error: err.message };
+    }
+    return { error: "Could not adjust stock." };
+  }
+
+  revalidatePath("/stock");
+  return { error: "" };
+}

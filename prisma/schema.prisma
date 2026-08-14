@@ -1,6 +1,6 @@
-// Prisma schema — tenancy/identity/RBAC (Phase 0) + catalog & stock (Phase 1).
-// StockTransfer, Sale, Payment, ... are added in later phases per the build
-// roadmap.
+// Prisma schema — tenancy/identity/RBAC (Phase 0) + catalog & stock (Phase 1)
+// + stock transfers (Phase 2). Sale, Payment, ... land in later phases per
+// the build roadmap.
 
 generator client {
   provider = "prisma-client-js"
@@ -33,14 +33,16 @@ model Company {
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
 
-  memberships  Membership[]
-  roles        Role[]
-  invitations  Invitation[]
-  subscription Subscription?
-  auditLogs    AuditLog[]
-  products     Product[]
-  warehouses   Warehouse[]
-  branches     Branch[]
+  memberships    Membership[]
+  roles          Role[]
+  invitations    Invitation[]
+  subscription   Subscription?
+  auditLogs      AuditLog[]
+  products       Product[]
+  warehouses     Warehouse[]
+  branches       Branch[]
+  stockTransfers StockTransfer[]
+  stockMovements StockMovement[]
 
   @@index([status])
 }
@@ -331,6 +333,8 @@ model Product {
 
   warehouseStocks WarehouseStock[]
   branchStocks    BranchStock[]
+  stockTransfers  StockTransfer[]
+  stockMovements  StockMovement[]
 
   @@unique([companyId, sku])
   @@index([companyId, isActive])
@@ -347,7 +351,9 @@ model Warehouse {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  stocks WarehouseStock[]
+  stocks            WarehouseStock[]
+  outgoingTransfers StockTransfer[]  @relation("StockTransferSourceWarehouse")
+  stockMovements    StockMovement[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -365,7 +371,9 @@ model Branch {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  stocks BranchStock[]
+  stocks            BranchStock[]
+  incomingTransfers StockTransfer[] @relation("StockTransferDestinationBranch")
+  stockMovements    StockMovement[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -404,4 +412,123 @@ model BranchStock {
 
   @@unique([companyId, productId, branchId])
   @@index([companyId, branchId])
+}
+
+// ---------------------------------------------------------------------------
+// Stock transfers (Phase 2) — the accountability chain for moving stock
+// from a warehouse to a branch, or receiving it directly from an external
+// supplier at a branch.
+// ---------------------------------------------------------------------------
+
+enum StockTransferSourceType {
+  WAREHOUSE
+  EXTERNAL
+}
+
+enum StockTransferStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  IN_TRANSIT
+  RECEIVED
+  CANCELLED
+}
+
+model StockTransfer {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+
+  sourceType          StockTransferSourceType
+  sourceWarehouseId   String?
+  sourceWarehouse     Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  externalSourceName  String?
+  destinationBranchId String
+  destinationBranch   Branch                  @relation("StockTransferDestinationBranch", fields: [destinationBranchId], references: [id])
+
+  status StockTransferStatus @default(REQUESTED)
+
+  requestedByMembershipId String
+  requestedAt             DateTime @default(now())
+
+  approvedByMembershipId String?
+  approvedAt             DateTime?
+
+  rejectedByMembershipId String?
+  rejectedAt             DateTime?
+  rejectionReason        String?
+
+  dispatchedByMembershipId String?
+  dispatchedAt             DateTime?
+
+  receivedByMembershipId String?
+  receivedAt             DateTime?
+  receivedQuantity       Int?
+
+  cancelledByMembershipId String?
+  cancelledAt             DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
+
+  @@index([companyId, status])
+  @@index([companyId, productId])
+  @@index([companyId, destinationBranchId])
+  @@index([companyId, sourceWarehouseId])
+}
+
+enum StockMovementLocationType {
+  WAREHOUSE
+  BRANCH
+}
+
+enum StockMovementReason {
+  TRANSFER_IN
+  TRANSFER_OUT
+  EXTERNAL_RECEIPT
+  SALE
+  SALE_VOID_RESTOCK
+  ADJUSTMENT
+  INITIAL_STOCK
+}
+
+// Immutable, append-only ledger of every stock quantity change, ever. This
+// is the ground truth for reconciliation and audit — StockLevel tables
+// (WarehouseStock/BranchStock) are a cached projection that must always sum
+// to the same totals as this ledger. Never updated or deleted, so the app's
+// Postgres role has UPDATE/DELETE revoked on this table (see Phase 7).
+model StockMovement {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  locationType StockMovementLocationType
+  warehouseId  String?
+  warehouse    Warehouse?                @relation(fields: [warehouseId], references: [id])
+  branchId     String?
+  branch       Branch?                   @relation(fields: [branchId], references: [id])
+
+  quantityDelta Int
+  reason        StockMovementReason
+
+  referenceType   String
+  referenceId     String
+  stockTransferId String?
+  stockTransfer   StockTransfer? @relation(fields: [stockTransferId], references: [id])
+
+  performedByMembershipId String
+  createdAt               DateTime @default(now())
+
+  @@index([companyId, productId, locationType])
+  @@index([companyId, createdAt])
+  @@index([companyId, referenceType, referenceId])
 }

@@ -1,6 +1,7 @@
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { AdjustWarehouseStockForm } from "@/components/forms/adjust-warehouse-stock-form";
 
 export default async function StockPage() {
   const membership = await requireMembership();
@@ -11,18 +12,32 @@ export default async function StockPage() {
   }
 
   const db = getScopedPrisma(membership.companyId);
-  const products = await db.product.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    include: {
-      warehouseStocks: { include: { warehouse: true } },
-      branchStocks: { include: { branch: true } },
-    },
-  });
+  const canAdjust = permissions.has(PERMISSIONS.WAREHOUSES_MANAGE);
+
+  const [products, warehouses] = await Promise.all([
+    db.product.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      include: {
+        warehouseStocks: { include: { warehouse: true } },
+        branchStocks: { include: { branch: true } },
+      },
+    }),
+    canAdjust
+      ? db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } })
+      : Promise.resolve([]),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-semibold">Stock levels</h1>
+
+      {canAdjust && (
+        <AdjustWarehouseStockForm
+          products={products.map((p) => ({ id: p.id, name: p.name, sku: p.sku }))}
+          warehouses={warehouses}
+        />
+      )}
 
       {products.length === 0 ? (
         <p className="text-gray-500">No products yet.</p>

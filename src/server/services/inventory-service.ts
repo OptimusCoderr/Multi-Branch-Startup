@@ -3,8 +3,15 @@ import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "warehouse" | "branch" | "product" | "warehouseStock" | "branchStock"
+  "warehouse" | "branch" | "product" | "warehouseStock" | "branchStock" | "stockMovement"
 >;
+
+export class InsufficientStockError extends Error {
+  constructor(message = "Not enough stock available at the source location.") {
+    super(message);
+    this.name = "InsufficientStockError";
+  }
+}
 
 /**
  * Every active location gets a zeroed stock row for a brand-new product, and
@@ -51,4 +58,82 @@ export async function provisionStockForNewBranch(tx: ScopedTx, companyId: string
       skipDuplicates: true,
     });
   }
+}
+
+/**
+ * Decrements warehouse stock atomically: the WHERE clause (quantity >=
+ * requested amount) and the decrement happen in a single Postgres UPDATE
+ * statement, so two concurrent transfers/sales racing for the last units
+ * can't both succeed and drive the quantity negative — one of them will
+ * match zero rows and this throws instead.
+ */
+export async function decrementWarehouseStock(
+  tx: ScopedTx,
+  productId: string,
+  warehouseId: string,
+  quantity: number,
+) {
+  const result = await tx.warehouseStock.updateMany({
+    where: { productId, warehouseId, quantity: { gte: quantity } },
+    data: { quantity: { decrement: quantity } },
+  });
+  if (result.count === 0) throw new InsufficientStockError();
+}
+
+export async function incrementWarehouseStock(
+  tx: ScopedTx,
+  productId: string,
+  warehouseId: string,
+  quantity: number,
+) {
+  await tx.warehouseStock.updateMany({
+    where: { productId, warehouseId },
+    data: { quantity: { increment: quantity } },
+  });
+}
+
+/** See decrementWarehouseStock — same atomic guard, applied to branch stock. */
+export async function decrementBranchStock(tx: ScopedTx, productId: string, branchId: string, quantity: number) {
+  const result = await tx.branchStock.updateMany({
+    where: { productId, branchId, quantity: { gte: quantity } },
+    data: { quantity: { decrement: quantity } },
+  });
+  if (result.count === 0) throw new InsufficientStockError();
+}
+
+export async function incrementBranchStock(tx: ScopedTx, productId: string, branchId: string, quantity: number) {
+  await tx.branchStock.updateMany({
+    where: { productId, branchId },
+    data: { quantity: { increment: quantity } },
+  });
+}
+
+type RecordStockMovementInput = {
+  companyId: string;
+  productId: string;
+  quantityDelta: number;
+  reason: "TRANSFER_IN" | "TRANSFER_OUT" | "EXTERNAL_RECEIPT" | "SALE" | "SALE_VOID_RESTOCK" | "ADJUSTMENT" | "INITIAL_STOCK";
+  referenceType: string;
+  referenceId: string;
+  performedByMembershipId: string;
+  stockTransferId?: string;
+} & ({ locationType: "WAREHOUSE"; warehouseId: string } | { locationType: "BRANCH"; branchId: string });
+
+/** Appends one row to the immutable stock ledger. Never updated or deleted. */
+export async function recordStockMovement(tx: ScopedTx, input: RecordStockMovementInput) {
+  await tx.stockMovement.create({
+    data: {
+      companyId: input.companyId,
+      productId: input.productId,
+      locationType: input.locationType,
+      warehouseId: input.locationType === "WAREHOUSE" ? input.warehouseId : null,
+      branchId: input.locationType === "BRANCH" ? input.branchId : null,
+      quantityDelta: input.quantityDelta,
+      reason: input.reason,
+      referenceType: input.referenceType,
+      referenceId: input.referenceId,
+      stockTransferId: input.stockTransferId ?? null,
+      performedByMembershipId: input.performedByMembershipId,
+    },
+  });
 }

@@ -7,7 +7,7 @@ import { getSessionCookie } from "better-auth/cookies";
 // authentication and permission checks always happen server-side against
 // the database in requireMembership()/requirePermission(), because this
 // middleware can't safely make DB-backed authorization decisions.
-const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/products", "/warehouses", "/branches", "/stock"];
+const PROTECTED_PREFIXES = ["/dashboard", "/onboarding", "/products", "/warehouses", "/branches", "/stock", "/transfers"];
 const AUTH_PAGES = ["/sign-in", "/sign-up"];
 
 export function proxy(request: NextRequest) {
@@ -37,6 +37,7 @@ export const config = {
     "/warehouses/:path*",
     "/branches/:path*",
     "/stock/:path*",
+    "/transfers/:path*",
     "/sign-in",
     "/sign-up",
   ],

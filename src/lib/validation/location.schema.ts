@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const emptyToUndefined = (val: unknown) => (val === "" || val === null || val === undefined ? undefined : val);
+import { emptyToUndefined } from "./shared";
 
 export const warehouseSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),

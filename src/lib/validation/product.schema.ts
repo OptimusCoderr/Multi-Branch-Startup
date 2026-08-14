@@ -1,6 +1,5 @@
 import { z } from "zod";
-
-const emptyToUndefined = (val: unknown) => (val === "" || val === null || val === undefined ? undefined : val);
+import { emptyToUndefined } from "./shared";
 
 export const productSchema = z.object({
   sku: z

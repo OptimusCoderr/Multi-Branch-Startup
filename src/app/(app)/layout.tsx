@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { href: "/warehouses", label: "Warehouses" },
   { href: "/branches", label: "Branches" },
   { href: "/stock", label: "Stock" },
+  { href: "/transfers", label: "Transfers" },
 ];
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
