@@ -47,7 +47,23 @@ This is being built in phases, each one shipping something testable end-to-end (
       correctly flagged and audited, the `StockMovement` ledger reconciles
       exactly with `WarehouseStock`/`BranchStock` totals, and cross-tenant
       transfer access returns 404.
-- [ ] Phase 3 — Sales & partial/installment payments
+- [x] **Phase 3 — Sales & payments**: recording a sale server-computes
+      totals from current product prices and snapshots them onto each
+      `SaleLineItem` (`unitPriceAtSale`), so a later price change can never
+      rewrite a historical invoice. Stock is decremented per line item
+      through the same atomic oversell guard used by transfers. Payments
+      are an append-only ledger per sale — partial/installment payments
+      accumulate via `recordPayment()`, run under Postgres `SERIALIZABLE`
+      isolation (the amountPaid/status update is a read-then-write that a
+      simple atomic column update can't express, unlike stock decrements),
+      so two concurrent payments can't both read a stale balance and
+      jointly overpay a sale. Voiding a sale reverses inventory via a
+      compensating `StockMovement` and never deletes the original records.
+      Verified end-to-end: server-computed totals, atomic sequential
+      invoice numbering, oversell prevention, overpayment rejected,
+      partial-then-full payment status transitions, void restores stock,
+      a role without `sales.record` is blocked, and cross-tenant sale
+      access returns 404.
 - [ ] Phase 4 — Staff invitations & per-staff permission overrides UI
 - [ ] Phase 5 — Branding/theming
 - [ ] Phase 6 — Paystack subscription billing
