@@ -172,6 +172,7 @@ model Role {
 
   memberships     Membership[]
   rolePermissions RolePermission[]
+  invitations     Invitation[]
 
   @@unique([companyId, name])
 }
@@ -234,6 +235,7 @@ model Invitation {
   company               Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   email                 String
   roleId                String
+  role                  Role             @relation(fields: [roleId], references: [id])
   invitedByMembershipId String
   tokenHash             String           @unique
   status                InvitationStatus @default(PENDING)

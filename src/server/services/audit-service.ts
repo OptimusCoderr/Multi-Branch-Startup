@@ -1,6 +1,16 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
-import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+
+// Deliberately a minimal structural type (not derived from getScopedPrisma's
+// extended client type) so this accepts both a tenant-scoped transaction
+// client and the raw prisma client's transaction — the latter is used by
+// the handful of actions (onboarding, invitation acceptance) that run
+// before a companyId scope exists yet.
+type AuditLogWriter = {
+  auditLog: {
+    create: (args: { data: Prisma.AuditLogUncheckedCreateInput }) => Promise<unknown>;
+  };
+};
 
 type WriteAuditLogInput = {
   companyId: string;
@@ -18,10 +28,7 @@ type WriteAuditLogInput = {
  * transaction as the mutation it's recording wherever possible, so the
  * audit trail can never drift from what actually happened.
  */
-export async function writeAuditLog(
-  tx: Pick<ReturnType<typeof getScopedPrisma>, "auditLog">,
-  input: WriteAuditLogInput,
-) {
+export async function writeAuditLog(tx: AuditLogWriter, input: WriteAuditLogInput) {
   await tx.auditLog.create({
     data: {
       companyId: input.companyId,

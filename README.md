@@ -64,7 +64,29 @@ This is being built in phases, each one shipping something testable end-to-end (
       partial-then-full payment status transitions, void restores stock,
       a role without `sales.record` is blocked, and cross-tenant sale
       access returns 404.
-- [ ] Phase 4 — Staff invitations & per-staff permission overrides UI
+- [x] **Phase 4 — Staff & RBAC UI**: email-invite flow (token stored only
+      as a SHA-256 hash, never in plaintext), an accept page that lets a
+      brand-new or existing user join without going through company
+      onboarding, and a staff detail page where an Owner/Admin can change
+      a staff member's role and grant/deny individual permissions on top
+      of it — the override UI for the RBAC system every prior phase has
+      been enforcing. No email provider is wired up yet, so invites
+      surface as a copyable link in the UI rather than an actual email.
+      Suspending or removing a staff member deletes their sessions outright
+      (not just an app-layer block) so access is cut immediately. Guards:
+      can't suspend/remove yourself, can't leave a company with zero
+      active Owners. Verified end-to-end: a granted/denied permission
+      takes effect on the affected staff member's very next request with
+      no re-login required, a suspended staff member's next request lands
+      on `/sign-in`, and cross-tenant staff access returns 404.
+      Along the way, found and fixed a real infinite-redirect-loop bug:
+      `proxy.ts` was bouncing "signed in" (cookie-present) visitors away
+      from `/sign-in`, but a forcibly-revoked session leaves an orphaned
+      cookie that looks present but isn't valid — `/dashboard`'s real
+      session check would bounce back to `/sign-in`, which would bounce
+      back to `/dashboard`, forever. Fixed by only using the middleware's
+      cookie check to gate protected routes, never to redirect away from
+      the sign-in page.
 - [ ] Phase 5 — Branding/theming
 - [ ] Phase 6 — Paystack subscription billing
 - [ ] Phase 7 — Security & audit hardening (rate limiting, Postgres RLS, IDOR sweep)
