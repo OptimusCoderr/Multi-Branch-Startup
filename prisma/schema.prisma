@@ -1,0 +1,309 @@
+// Prisma schema — Phase 0 (foundation): tenancy, identity, RBAC, billing skeleton.
+// Domain models (Product, Warehouse, Branch, StockTransfer, Sale, Payment, ...)
+// are added in later phases per the build roadmap.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+enum CompanyStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model Company {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  status    CompanyStatus @default(TRIAL)
+  currency  String        @default("NGN")
+  timezone  String        @default("Africa/Lagos")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deletedAt DateTime?
+
+  memberships  Membership[]
+  roles        Role[]
+  invitations  Invitation[]
+  subscription Subscription?
+  auditLogs    AuditLog[]
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Better Auth core tables (managed by the Better Auth Prisma adapter)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions    Session[]
+  accounts    Account[]
+  memberships Membership[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime? @default(now())
+  updatedAt  DateTime? @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Staff / RBAC
+// ---------------------------------------------------------------------------
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+// A Membership is a User acting as staff within one Company. This is the
+// entity referenced everywhere else in the app ("who requested this
+// transfer", "who recorded this sale") instead of User directly, so
+// permissions and identity are always tenant-scoped.
+
+model Membership {
+  id          String           @id @default(cuid())
+  companyId   String
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId      String?
+  role        Role?            @relation(fields: [roleId], references: [id])
+  status      MembershipStatus @default(ACTIVE)
+  displayName String?
+  jobTitle    String?
+
+  invitedByMembershipId String?
+  invitedAt             DateTime?
+  joinedAt              DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissionOverrides MembershipPermissionOverride[]
+
+  @@unique([userId, companyId])
+  @@index([companyId, status])
+}
+
+// Per-company role templates (a bundle of default permissions).
+
+model Role {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  isSystem    Boolean  @default(false)
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships     Membership[]
+  rolePermissions RolePermission[]
+
+  @@unique([companyId, name])
+}
+
+// Fixed, code-defined permission catalog — seeded, not company-editable.
+// Kept in sync with src/lib/auth/permissions.ts (PERMISSIONS catalog).
+
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  category    String
+  description String
+
+  rolePermissions     RolePermission[]
+  membershipOverrides MembershipPermissionOverride[]
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+enum PermissionEffect {
+  GRANT
+  DENY
+}
+
+// Per-staff, admin-modifiable grant/deny on top of the staff member's role.
+// Effective permission = (role's permissions ∪ GRANT overrides) − DENY overrides.
+
+model MembershipPermissionOverride {
+  id                    String           @id @default(cuid())
+  membershipId          String
+  membership            Membership       @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  permissionId          String
+  permission            Permission       @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  effect                PermissionEffect
+  grantedByMembershipId String
+  reason                String?
+  createdAt             DateTime         @default(now())
+
+  @@unique([membershipId, permissionId])
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model Invitation {
+  id                    String           @id @default(cuid())
+  companyId             String
+  company               Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email                 String
+  roleId                String
+  invitedByMembershipId String
+  tokenHash             String           @unique
+  status                InvitationStatus @default(PENDING)
+  expiresAt             DateTime
+  createdAt             DateTime         @default(now())
+
+  @@index([companyId, email])
+}
+
+// ---------------------------------------------------------------------------
+// Billing skeleton (full Paystack wiring lands in Phase 6)
+// ---------------------------------------------------------------------------
+
+enum BillingInterval {
+  MONTHLY
+}
+
+model Plan {
+  id               String          @id @default(cuid())
+  name             String          @unique
+  paystackPlanCode String?         @unique
+  priceKobo        Int
+  billingInterval  BillingInterval @default(MONTHLY)
+  features         Json
+  isActive         Boolean         @default(true)
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  INCOMPLETE
+}
+
+model Subscription {
+  id                       String             @id @default(cuid())
+  companyId                String             @unique
+  company                  Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  planId                   String
+  plan                     Plan               @relation(fields: [planId], references: [id])
+  paystackSubscriptionCode String?
+  paystackCustomerCode     String?
+  status                   SubscriptionStatus @default(TRIALING)
+  currentPeriodStart       DateTime?
+  currentPeriodEnd         DateTime?
+  cancelAtPeriodEnd        Boolean            @default(false)
+  trialEndsAt              DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (security backbone — append-only)
+// ---------------------------------------------------------------------------
+
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+model AuditLog {
+  id                String         @id @default(cuid())
+  companyId         String
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actorMembershipId String?
+  actorType         AuditActorType @default(USER)
+  action            String
+  entityType        String
+  entityId          String
+  metadata          Json?
+  ipAddress         String?
+  userAgent         String?
+  createdAt         DateTime       @default(now())
+
+  @@index([companyId, createdAt])
+  @@index([companyId, entityType, entityId])
+  @@index([companyId, action])
+}
