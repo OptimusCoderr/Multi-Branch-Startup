@@ -19,6 +19,7 @@ export type AuthenticatedMembership = {
   companySlug: string;
   companyName: string;
   companyStatus: string;
+  companyCurrency: string;
   roleId: string | null;
   roleName: string | null;
 };
@@ -58,6 +59,7 @@ export async function getCurrentMembership(): Promise<AuthenticatedMembership | 
     companySlug: membership.company.slug,
     companyName: membership.company.name,
     companyStatus: membership.company.status,
+    companyCurrency: membership.company.currency,
     roleId: membership.roleId,
     roleName: membership.role?.name ?? null,
   };

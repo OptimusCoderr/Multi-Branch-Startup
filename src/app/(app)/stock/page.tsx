@@ -1,0 +1,74 @@
+import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
+import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { PERMISSIONS } from "@/lib/auth/permissions";
+
+export default async function StockPage() {
+  const membership = await requireMembership();
+  const permissions = await computeEffectivePermissions(membership.membershipId);
+
+  if (!permissions.has(PERMISSIONS.STOCK_LEVELS_VIEW)) {
+    return <p className="text-gray-500">You don&apos;t have permission to view stock levels.</p>;
+  }
+
+  const db = getScopedPrisma(membership.companyId);
+  const products = await db.product.findMany({
+    where: { isActive: true },
+    orderBy: { name: "asc" },
+    include: {
+      warehouseStocks: { include: { warehouse: true } },
+      branchStocks: { include: { branch: true } },
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-2xl font-semibold">Stock levels</h1>
+
+      {products.length === 0 ? (
+        <p className="text-gray-500">No products yet.</p>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {products.map((product) => (
+            <div key={product.id} className="rounded-lg border border-gray-200 p-4">
+              <p className="font-medium">
+                {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
+              </p>
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase text-gray-400">Warehouses</p>
+                  <ul className="mt-1 flex flex-col gap-1 text-sm">
+                    {product.warehouseStocks.length === 0 ? (
+                      <li className="text-gray-400">No warehouses yet</li>
+                    ) : (
+                      product.warehouseStocks.map((stock) => (
+                        <li key={stock.id} className="flex justify-between">
+                          <span>{stock.warehouse.name}</span>
+                          <span className="font-mono">{stock.quantity}</span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase text-gray-400">Branches</p>
+                  <ul className="mt-1 flex flex-col gap-1 text-sm">
+                    {product.branchStocks.length === 0 ? (
+                      <li className="text-gray-400">No branches yet</li>
+                    ) : (
+                      product.branchStocks.map((stock) => (
+                        <li key={stock.id} className="flex justify-between">
+                          <span>{stock.branch.name}</span>
+                          <span className="font-mono">{stock.quantity}</span>
+                        </li>
+                      ))
+                    )}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

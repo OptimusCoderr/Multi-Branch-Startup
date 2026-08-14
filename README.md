@@ -18,7 +18,18 @@ This is being built in phases, each one shipping something testable end-to-end (
       subscription plans, tenant-isolated Prisma client (`getScopedPrisma`), sign-up →
       company creation → trial subscription flow, authenticated dashboard shell, audit
       logging on company creation.
-- [ ] Phase 1 — Products, Warehouses, Branches catalog
+- [x] **Phase 1 — Catalog**: Product / Warehouse / Branch CRUD, each scoped by
+      `getScopedPrisma` and gated by `requirePermission`. Creating a product
+      auto-provisions a zeroed stock row at every existing warehouse and
+      branch (and vice versa) via `inventory-service.ts`, kept correct by
+      splitting per-location stock into `WarehouseStock` / `BranchStock`
+      rather than one polymorphic table — Postgres treats `NULL` as
+      distinct from `NULL` in unique constraints, so a shared nullable-FK
+      table couldn't actually guarantee one row per product/location.
+      Verified end-to-end: stock provisioning on both creation orders,
+      cross-tenant access returns 404, and a Cashier-role staff member is
+      blocked from product/warehouse mutations at both the UI and the
+      Server Action layer.
 - [ ] Phase 2 — Stock transfers with accountability (request/approve/dispatch/receive)
 - [ ] Phase 3 — Sales & partial/installment payments
 - [ ] Phase 4 — Staff invitations & per-staff permission overrides UI
