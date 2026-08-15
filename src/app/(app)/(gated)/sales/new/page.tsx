@@ -12,12 +12,17 @@ export default async function NewSalePage() {
   }
 
   const db = getScopedPrisma(membership.companyId);
-  const [branches, products] = await Promise.all([
+  const [branches, products, customers] = await Promise.all([
     db.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true, unitPrice: true },
+    }),
+    db.customer.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, phone: true },
     }),
   ]);
 
@@ -27,6 +32,7 @@ export default async function NewSalePage() {
       <CreateSaleForm
         branches={branches}
         products={products.map((p) => ({ ...p, unitPrice: p.unitPrice.toString() }))}
+        customers={customers}
         currency={membership.companyCurrency}
       />
     </div>

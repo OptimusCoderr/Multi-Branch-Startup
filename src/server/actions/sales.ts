@@ -56,9 +56,11 @@ export async function createSale(_prev: { error: string }, formData: FormData): 
 
   const parsed = createSaleSchema.safeParse({
     branchId: formData.get("branchId"),
+    customerId: formData.get("customerId"),
     customerName: formData.get("customerName"),
     customerPhone: formData.get("customerPhone"),
     customerEmail: formData.get("customerEmail"),
+    dueDate: formData.get("dueDate"),
     lineItems,
   });
   if (!parsed.success) {

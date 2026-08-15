@@ -8,9 +8,11 @@ export const saleLineItemSchema = z.object({
 
 export const createSaleSchema = z.object({
   branchId: z.string().min(1, "Select a branch"),
+  customerId: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   customerName: z.preprocess(emptyToUndefined, z.string().trim().max(200).optional()),
   customerPhone: z.preprocess(emptyToUndefined, z.string().trim().max(30).optional()),
   customerEmail: z.preprocess(emptyToUndefined, z.string().trim().email("Enter a valid email").optional()),
+  dueDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
   lineItems: z.array(saleLineItemSchema).min(1, "Add at least one product"),
 });
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;

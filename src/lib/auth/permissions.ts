@@ -27,6 +27,10 @@ export const PERMISSIONS = {
   SALES_OVERRIDE_PRICE: "sales.override_price",
   PAYMENTS_RECORD: "payments.record",
 
+  // Customers & debt
+  CUSTOMERS_VIEW: "customers.view",
+  CUSTOMERS_MANAGE: "customers.manage",
+
   // Staff & access control
   STAFF_INVITE: "staff.invite",
   STAFF_REMOVE: "staff.remove",
@@ -71,6 +75,9 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.SALES_OVERRIDE_PRICE, category: "sales", description: "Override a product's price on a sale" },
   { key: PERMISSIONS.PAYMENTS_RECORD, category: "sales", description: "Record a payment against a sale" },
 
+  { key: PERMISSIONS.CUSTOMERS_VIEW, category: "customers", description: "View customers and their outstanding balances" },
+  { key: PERMISSIONS.CUSTOMERS_MANAGE, category: "customers", description: "Create and edit customer records" },
+
   { key: PERMISSIONS.STAFF_INVITE, category: "staff", description: "Invite new staff members" },
   { key: PERMISSIONS.STAFF_REMOVE, category: "staff", description: "Remove or suspend staff members" },
   { key: PERMISSIONS.STAFF_MANAGE_ROLES, category: "staff", description: "Assign roles to staff members" },
@@ -99,6 +106,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL,
     PERMISSIONS.SALES_RECORD,
     PERMISSIONS.PAYMENTS_RECORD,
+    PERMISSIONS.CUSTOMERS_VIEW,
+    PERMISSIONS.CUSTOMERS_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
   ],
   "Warehouse Manager": [
@@ -113,6 +122,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.STOCK_LEVELS_VIEW,
     PERMISSIONS.SALES_RECORD,
     PERMISSIONS.PAYMENTS_RECORD,
+    PERMISSIONS.CUSTOMERS_VIEW,
+    PERMISSIONS.CUSTOMERS_MANAGE,
   ],
 };
 

@@ -15,6 +15,7 @@ type ScopedTx = Pick<
   | "warehouse"
   | "branch"
   | "stockMovement"
+  | "customer"
 >;
 
 export class SaleValidationError extends Error {
@@ -51,14 +52,35 @@ export async function createSale(
   membershipId: string,
   input: {
     branchId: string;
+    customerId?: string;
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
+    dueDate?: Date;
     lineItems: { productId: string; quantity: number }[];
   },
 ) {
   if (input.lineItems.length === 0) {
     throw new SaleValidationError("A sale needs at least one line item.");
+  }
+
+  // When an existing customer is selected, their contact details are
+  // snapshotted onto the Sale (same philosophy as line-item price
+  // snapshotting) so the invoice's displayed contact info never silently
+  // changes if the Customer record is edited later — but the sale still
+  // stays linked via customerId for live balance aggregation.
+  let customerName = input.customerName;
+  let customerPhone = input.customerPhone;
+  let customerEmail = input.customerEmail;
+
+  if (input.customerId) {
+    const customer = await tx.customer.findUnique({ where: { id: input.customerId } });
+    if (!customer || !customer.isActive) {
+      throw new SaleValidationError("Selected customer is unavailable.");
+    }
+    customerName = customer.name;
+    customerPhone = customer.phone ?? undefined;
+    customerEmail = customer.email ?? undefined;
   }
 
   const productIds = [...new Set(input.lineItems.map((li) => li.productId))];
@@ -94,9 +116,11 @@ export async function createSale(
       companyId,
       branchId: input.branchId,
       saleNumber,
-      customerName: input.customerName ?? null,
-      customerPhone: input.customerPhone ?? null,
-      customerEmail: input.customerEmail ?? null,
+      customerId: input.customerId ?? null,
+      customerName: customerName ?? null,
+      customerPhone: customerPhone ?? null,
+      customerEmail: customerEmail ?? null,
+      dueDate: input.dueDate ?? null,
       status: "CONFIRMED",
       subtotal,
       discountTotal: 0,

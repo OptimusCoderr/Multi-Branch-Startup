@@ -168,6 +168,39 @@ This is being built in phases, each one shipping something testable end-to-end (
       vulnerabilities); and a dedicated accessibility audit (existing
       forms already use semantic `<label>`-wrapped inputs throughout, but
       this hasn't had a focused pass).
+- [x] **Phase 8 — Customers & debt management**: a `Customer` model that
+      Sales can optionally link to, so a business can see who owes them
+      money across every invoice rather than only per-sale. Outstanding
+      balance is deliberately never stored as a column — it's always
+      derived fresh from `Sale.grandTotal - Sale.amountPaid` the same way
+      the sale detail page already computed it (`customer-service.ts`),
+      so a cached "debt" figure can never drift from the payment ledger
+      that's the actual source of truth. Selecting an existing customer on
+      the sale form snapshots their name/phone/email onto the `Sale` at
+      the moment of sale (same philosophy as line-item price
+      snapshotting), while still keeping the live `customerId` link for
+      balance aggregation — editing a customer's phone number later never
+      silently rewrites a historical invoice's displayed contact info. A
+      sale can optionally carry a `dueDate` (credit-sale terms), which
+      drives the "overdue" flag on the customers list and detail pages —
+      the foundation a later automated-reminder feature would read from,
+      not built yet. Two new permissions (`customers.view`,
+      `customers.manage`) are enforced server-side on every page and
+      Server Action, not just hidden buttons; granted by default to
+      Owner/Admin/Branch Manager/Cashier (the roles that actually deal
+      with customers) but not Warehouse Manager. Verified end-to-end: a
+      credit sale linked to a customer correctly shows as overdue once its
+      due date passes, a partial payment reduces both the sale's and the
+      customer's aggregated outstanding balance correctly, a role without
+      `customers.view` is blocked from the customers list and the
+      new-customer page (both the UI message and, implicitly, every
+      query behind it), and a second company cannot reach the first
+      company's customer by ID guessing (404).
+      **Deliberately out of scope for this phase**, left for a later one:
+      supplier-side payables/expense management, automated debtor
+      reminders (SMS/WhatsApp/email) once a balance goes overdue, and
+      per-plan feature/seat limits — all raised as follow-on ideas but not
+      requested to be built yet.
 
 ## Getting started
 
