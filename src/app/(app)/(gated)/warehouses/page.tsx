@@ -3,19 +3,40 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { deactivateWarehouse } from "@/server/actions/warehouses";
+import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
 
 export default async function WarehousesPage() {
   const membership = await requireMembership();
   const permissions = await computeEffectivePermissions(membership.membershipId);
   const db = getScopedPrisma(membership.companyId);
-  const warehouses = await db.warehouse.findMany({ orderBy: { name: "asc" } });
+  const [warehouses, { maxWarehouses }] = await Promise.all([
+    db.warehouse.findMany({ orderBy: { name: "asc" } }),
+    getPlanFeaturesForCompany(membership.companyId),
+  ]);
 
   const canManage = permissions.has(PERMISSIONS.WAREHOUSES_MANAGE);
+  const activeCount = warehouses.filter((w) => w.isActive).length;
+  const atLimit = maxWarehouses !== undefined && activeCount >= maxWarehouses;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Warehouses</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Warehouses</h1>
+          {maxWarehouses !== undefined && (
+            <p className={`mt-1 text-sm ${atLimit ? "font-medium text-amber-700" : "text-gray-500"}`}>
+              {activeCount} of {maxWarehouses} used on your plan
+              {atLimit && (
+                <>
+                  {" — "}
+                  <Link href="/settings/billing" className="underline">
+                    upgrade for more
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
+        </div>
         {canManage && (
           <Link href="/warehouses/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
             New warehouse

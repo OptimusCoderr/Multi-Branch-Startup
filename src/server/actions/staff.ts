@@ -11,6 +11,7 @@ import { inviteStaffSchema, updateStaffRoleSchema } from "@/lib/validation/staff
 import * as staffService from "@/server/services/staff-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { assertUnderStaffLimit, PlanLimitError } from "@/server/services/plan-limit-service";
 
 type ErrorResult = { error: string };
 type InviteResult = { error: string; inviteUrl?: string };
@@ -21,7 +22,9 @@ async function requestMeta() {
 }
 
 function friendlyError(err: unknown, fallback: string): string {
-  if (err instanceof staffService.StaffActionError || err instanceof RateLimitError) return err.message;
+  if (err instanceof staffService.StaffActionError || err instanceof RateLimitError || err instanceof PlanLimitError) {
+    return err.message;
+  }
   return fallback;
 }
 
@@ -45,6 +48,13 @@ export async function inviteStaff(_prev: InviteResult, formData: FormData): Prom
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
+
+  try {
+    await assertUnderStaffLimit(db, membership.companyId);
+  } catch (err) {
+    return { error: friendlyError(err, "Could not verify your plan's staff seat limit.") };
+  }
+
   let token = "";
 
   try {

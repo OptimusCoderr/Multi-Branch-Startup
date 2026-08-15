@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { warehouseSchema } from "@/lib/validation/location.schema";
 import { provisionStockForNewWarehouse } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { assertUnderWarehouseLimit, PlanLimitError } from "@/server/services/plan-limit-service";
 
 type ActionResult = { error: string } | never;
 
@@ -31,6 +32,12 @@ export async function createWarehouse(_prev: { error: string }, formData: FormDa
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
+
+  try {
+    await assertUnderWarehouseLimit(db, membership.companyId);
+  } catch (err) {
+    return { error: err instanceof PlanLimitError ? err.message : "Could not verify your plan's warehouse limit." };
+  }
 
   const existing = await db.warehouse.findFirst({ where: { name: parsed.data.name } });
   if (existing) {

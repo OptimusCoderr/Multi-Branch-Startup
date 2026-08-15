@@ -235,6 +235,39 @@ This is being built in phases, each one shipping something testable end-to-end (
       that both exist, but not asked for yet), receipt/attachment
       uploads, and multi-currency expenses (amounts are recorded in the
       company's single configured currency, same as Sales).
+- [x] **Phase 10 — Tier-based plan limits**: `Plan.features`
+      (`maxBranches`/`maxWarehouses`/`maxStaff`) existed since Phase 0 but
+      was purely advertising — shown on the billing page, never actually
+      enforced. `plan-limit-service.ts` closes that gap: `createBranch`,
+      `createWarehouse`, and `inviteStaff` now each assert the company is
+      under its plan's cap *before* creating anything, called from the
+      Server Action itself rather than only hidden behind a disabled
+      button — the same "never trust the UI alone" discipline this
+      codebase has applied to permissions and subscription gating since
+      Phase 0. A missing key in `features` means uncapped on that
+      dimension, not zero, so a plan can leave any one of the three
+      limits open-ended. Staff seats count `ACTIVE` memberships plus
+      `PENDING` invitations — a pending invite already reserves a seat —
+      deliberately *not* `Membership.status === "INVITED"`, which turned
+      up as a real, if harmless, latent bug while building this: that
+      status value is defined in the schema but never actually set
+      anywhere in the invite flow (a Membership row isn't created until
+      accept-time; the pending state lives on the `Invitation` row
+      instead). The branches/warehouses/staff list pages now show a live
+      "X of Y used" indicator with an upgrade link once a company hits a
+      cap, so the limit is visible before someone hits a wall, not only
+      as an error message after. Verified end-to-end by temporarily
+      tightening a live plan's limits: the first branch/warehouse/staff
+      seat under a cap succeeds and the usage indicator updates, the next
+      one is rejected server-side with a clear message and no record is
+      created, and restoring the plan's real limits afterward confirmed
+      Growth/Starter both still read correctly.
+      **Deliberately out of scope**: self-serve plan upgrades that
+      auto-relax a limit mid-session (a company already over a new,
+      lower limit after a downgrade isn't force-corrected — existing
+      resources stay as-is, only new creation is blocked), and per-feature
+      (rather than per-count) gating, e.g. a tier that hides branding
+      customization entirely rather than capping a number.
 
 ## Getting started
 

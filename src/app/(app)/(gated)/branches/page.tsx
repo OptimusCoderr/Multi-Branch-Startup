@@ -3,19 +3,40 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { deactivateBranch } from "@/server/actions/branches";
+import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
 
 export default async function BranchesPage() {
   const membership = await requireMembership();
   const permissions = await computeEffectivePermissions(membership.membershipId);
   const db = getScopedPrisma(membership.companyId);
-  const branches = await db.branch.findMany({ orderBy: { name: "asc" } });
+  const [branches, { maxBranches }] = await Promise.all([
+    db.branch.findMany({ orderBy: { name: "asc" } }),
+    getPlanFeaturesForCompany(membership.companyId),
+  ]);
 
   const canManage = permissions.has(PERMISSIONS.BRANCHES_MANAGE);
+  const activeCount = branches.filter((b) => b.isActive).length;
+  const atLimit = maxBranches !== undefined && activeCount >= maxBranches;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Branches</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Branches</h1>
+          {maxBranches !== undefined && (
+            <p className={`mt-1 text-sm ${atLimit ? "font-medium text-amber-700" : "text-gray-500"}`}>
+              {activeCount} of {maxBranches} used on your plan
+              {atLimit && (
+                <>
+                  {" — "}
+                  <Link href="/settings/billing" className="underline">
+                    upgrade for more
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
+        </div>
         {canManage && (
           <Link href="/branches/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
             New branch

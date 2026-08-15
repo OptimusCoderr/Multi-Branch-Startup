@@ -1,5 +1,6 @@
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
+import { parsePlanFeatures } from "@/lib/billing/plan-features";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/db/prisma";
@@ -58,7 +59,7 @@ export default async function BillingSettingsPage() {
         <p className="text-sm font-medium text-gray-700">Plans</p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {plans.map((plan) => {
-            const features = plan.features as { maxBranches?: number; maxWarehouses?: number; maxStaff?: number };
+            const features = parsePlanFeatures(plan.features);
             const isCurrent = subscription?.planId === plan.id && subscription.status === "ACTIVE";
             return (
               <div key={plan.id} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">

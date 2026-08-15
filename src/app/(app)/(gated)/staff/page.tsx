@@ -4,6 +4,7 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { InviteStaffForm } from "@/components/forms/invite-staff-form";
 import { revokeInvitation } from "@/server/actions/staff";
+import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
 
 const STATUS_STYLES: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
@@ -28,7 +29,7 @@ export default async function StaffPage() {
     return <p className="text-gray-500">You don&apos;t have permission to view staff management.</p>;
   }
 
-  const [members, invitations, roles] = await Promise.all([
+  const [members, invitations, roles, { maxStaff }] = await Promise.all([
     db.membership.findMany({
       where: { status: { in: ["ACTIVE", "SUSPENDED"] } },
       include: { user: true, role: true },
@@ -38,11 +39,30 @@ export default async function StaffPage() {
       ? db.invitation.findMany({ where: { status: "PENDING" }, include: { role: true }, orderBy: { createdAt: "desc" } })
       : Promise.resolve([]),
     db.role.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    getPlanFeaturesForCompany(membership.companyId),
   ]);
+
+  const seatsUsed = members.filter((m) => m.status === "ACTIVE").length + invitations.length;
+  const atLimit = maxStaff !== undefined && seatsUsed >= maxStaff;
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Staff</h1>
+      <div>
+        <h1 className="text-2xl font-semibold">Staff</h1>
+        {maxStaff !== undefined && (
+          <p className={`mt-1 text-sm ${atLimit ? "font-medium text-amber-700" : "text-gray-500"}`}>
+            {seatsUsed} of {maxStaff} seats used on your plan
+            {atLimit && (
+              <>
+                {" — "}
+                <Link href="/settings/billing" className="underline">
+                  upgrade for more
+                </Link>
+              </>
+            )}
+          </p>
+        )}
+      </div>
 
       {canInvite && <InviteStaffForm roles={roles} />}
 

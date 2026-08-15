@@ -9,6 +9,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { branchSchema } from "@/lib/validation/location.schema";
 import { provisionStockForNewBranch } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { assertUnderBranchLimit, PlanLimitError } from "@/server/services/plan-limit-service";
 
 type ActionResult = { error: string } | never;
 
@@ -32,6 +33,12 @@ export async function createBranch(_prev: { error: string }, formData: FormData)
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
+
+  try {
+    await assertUnderBranchLimit(db, membership.companyId);
+  } catch (err) {
+    return { error: err instanceof PlanLimitError ? err.message : "Could not verify your plan's branch limit." };
+  }
 
   const existing = await db.branch.findFirst({ where: { name: parsed.data.name } });
   if (existing) {
