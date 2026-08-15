@@ -663,3 +663,32 @@ model BrandingSettings {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
+
+// ---------------------------------------------------------------------------
+// Subscription billing (Phase 6)
+// ---------------------------------------------------------------------------
+
+enum PaystackEventStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+// Platform-level, not tenant-scoped (a webhook arrives before we can
+// necessarily resolve which company it belongs to). Stores every raw
+// webhook payload keyed by Paystack's own event id, so a retried delivery
+// is a no-op rather than double-applying a state change — Paystack (like
+// most webhook providers) retries on anything other than a fast 2xx, so
+// idempotency here isn't optional.
+model PaystackEvent {
+  id              String              @id @default(cuid())
+  paystackEventId String              @unique
+  eventType       String
+  payload         Json
+  status          PaystackEventStatus @default(RECEIVED)
+  processedAt     DateTime?
+  error           String?
+  createdAt       DateTime            @default(now())
+
+  @@index([eventType])
+}

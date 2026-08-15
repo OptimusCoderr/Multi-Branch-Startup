@@ -102,7 +102,34 @@ This is being built in phases, each one shipping something testable end-to-end (
       the Compact preset visibly reduces padding, and a second company with
       no branding configured shows neither the color nor the logo — no
       cross-tenant leakage.
-- [ ] Phase 6 — Paystack subscription billing
+- [x] **Phase 6 — Paystack billing**: `/api/webhooks/paystack` verifies
+      Paystack's HMAC-SHA512 signature before trusting anything in the
+      payload, and records every delivery in `PaystackEvent` keyed by a
+      hash of the raw body so a retried delivery is a no-op instead of
+      double-applying a state change. Routes that need a usable
+      subscription (products, warehouses, branches, stock, transfers,
+      sales, staff) live under a nested `(gated)` route group whose layout
+      redirects to `/billing-required` when the subscription isn't active;
+      `/dashboard` and `/settings/billing` stay reachable either way so a
+      company can see what's wrong and fix it. `PAST_DUE` gets a 7-day
+      grace period past the end of the last paid period before it gates;
+      `CANCELLED` gates immediately. v1 bills through Paystack's
+      Transactions API (verify-on-redirect, renew-by-webhook) rather than
+      its Subscriptions API, which would need a saved card authorization
+      for true auto-renewal — a deliberate scope trim, not an oversight,
+      and a natural next step once there's a live Paystack account to
+      build it against. No real Paystack account is configured in this
+      dev environment, so checkout initiation surfaces a clear
+      "billing is not configured" message rather than failing silently.
+      Verified end-to-end (webhook payloads signed locally with the same
+      HMAC scheme Paystack uses, since no live account is available):
+      trial access works, `charge.success` activates a subscription,
+      replaying the identical webhook payload is idempotent (checked via
+      unchanged `processedAt`, not just a 200), an invalid signature is
+      rejected before any DB write, `invoice.payment_failed` moves a
+      subscription to `PAST_DUE`, the grace period is honored on both
+      sides of its boundary, and `/dashboard`/`/settings/billing` remain
+      reachable while every other route redirects to `/billing-required`.
 - [ ] Phase 7 — Security & audit hardening (rate limiting, Postgres RLS, IDOR sweep)
 
 ## Getting started
