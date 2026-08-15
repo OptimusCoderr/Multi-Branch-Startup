@@ -31,6 +31,10 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_MANAGE: "customers.manage",
 
+  // Expenses
+  EXPENSES_VIEW: "expenses.view",
+  EXPENSES_MANAGE: "expenses.manage",
+
   // Staff & access control
   STAFF_INVITE: "staff.invite",
   STAFF_REMOVE: "staff.remove",
@@ -78,6 +82,9 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.CUSTOMERS_VIEW, category: "customers", description: "View customers and their outstanding balances" },
   { key: PERMISSIONS.CUSTOMERS_MANAGE, category: "customers", description: "Create and edit customer records" },
 
+  { key: PERMISSIONS.EXPENSES_VIEW, category: "expenses", description: "View recorded business expenses" },
+  { key: PERMISSIONS.EXPENSES_MANAGE, category: "expenses", description: "Record, categorize, and void expenses" },
+
   { key: PERMISSIONS.STAFF_INVITE, category: "staff", description: "Invite new staff members" },
   { key: PERMISSIONS.STAFF_REMOVE, category: "staff", description: "Remove or suspend staff members" },
   { key: PERMISSIONS.STAFF_MANAGE_ROLES, category: "staff", description: "Assign roles to staff members" },
@@ -108,6 +115,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,
     PERMISSIONS.CUSTOMERS_MANAGE,
+    PERMISSIONS.EXPENSES_VIEW,
+    PERMISSIONS.EXPENSES_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
   ],
   "Warehouse Manager": [

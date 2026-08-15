@@ -34,20 +34,22 @@ model Company {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  memberships      Membership[]
-  roles            Role[]
-  invitations      Invitation[]
-  subscription     Subscription?
-  auditLogs        AuditLog[]
-  products         Product[]
-  warehouses       Warehouse[]
-  branches         Branch[]
-  stockTransfers   StockTransfer[]
-  stockMovements   StockMovement[]
-  sales            Sale[]
-  payments         Payment[]
-  brandingSettings BrandingSettings?
-  customers        Customer[]
+  memberships       Membership[]
+  roles             Role[]
+  invitations       Invitation[]
+  subscription      Subscription?
+  auditLogs         AuditLog[]
+  products          Product[]
+  warehouses        Warehouse[]
+  branches          Branch[]
+  stockTransfers    StockTransfer[]
+  stockMovements    StockMovement[]
+  sales             Sale[]
+  payments          Payment[]
+  brandingSettings  BrandingSettings?
+  customers         Customer[]
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
 
   @@index([status])
 }
@@ -383,6 +385,7 @@ model Branch {
   incomingTransfers StockTransfer[] @relation("StockTransferDestinationBranch")
   stockMovements    StockMovement[]
   sales             Sale[]
+  expenses          Expense[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -572,6 +575,75 @@ model Customer {
 
   @@index([companyId, isActive])
   @@index([companyId, name])
+}
+
+// ---------------------------------------------------------------------------
+// Expense management (Phase 9) — company-defined categories (the same
+// business can track "Rent"/"Salaries"/"Restocking" or whatever fits how
+// they operate) and the expense records themselves. Never hard-deleted —
+// a correction is a documented void (voidedByMembershipId/voidedAt/
+// voidReason), same accountability pattern as voiding a Sale, so the
+// expense ledger can't silently lose history the way a DELETE would.
+// ---------------------------------------------------------------------------
+
+model ExpenseCategory {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name     String
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  expenses Expense[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+enum ExpenseRecurrenceInterval {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+model Expense {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   ExpenseCategory @relation(fields: [categoryId], references: [id])
+
+  // Null = a company-wide expense (e.g. head-office rent) rather than tied
+  // to one branch's operations.
+  branchId String?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+
+  amount      Decimal  @db.Decimal(12, 2)
+  expenseDate DateTime @default(now())
+  description String?
+
+  // A label for reporting/filtering, not a scheduler — this phase does not
+  // auto-generate future expense rows from a recurring one (that would
+  // need a scheduled job, which nothing in this codebase runs yet).
+  isRecurring        Boolean                    @default(false)
+  recurrenceInterval ExpenseRecurrenceInterval?
+
+  recordedByMembershipId String
+
+  voidedByMembershipId String?
+  voidedAt             DateTime?
+  voidReason           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, expenseDate])
+  @@index([companyId, categoryId])
+  @@index([companyId, branchId])
 }
 
 // ---------------------------------------------------------------------------

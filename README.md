@@ -201,6 +201,40 @@ This is being built in phases, each one shipping something testable end-to-end (
       reminders (SMS/WhatsApp/email) once a balance goes overdue, and
       per-plan feature/seat limits — all raised as follow-on ideas but not
       requested to be built yet.
+- [x] **Phase 9 — Expense management**: company-defined `ExpenseCategory`
+      records (seven sensible defaults — Rent, Utilities, Salaries,
+      Restocking & purchases, Transport & logistics, Marketing,
+      Miscellaneous — seeded at onboarding the same way default Roles are,
+      then freely renamed/archived/added-to per company) and the `Expense`
+      records themselves, optionally scoped to one branch or left
+      company-wide (head-office rent, for example). Like every other
+      financial record in this app, an expense is never hard-deleted —
+      correcting one is a documented void (`voidedByMembershipId`/
+      `voidedAt`/`voidReason`), the same accountability pattern Phase 3
+      established for voiding a Sale, so the expense ledger can't silently
+      lose history the way a DELETE would. `isRecurring`/
+      `recurrenceInterval` are a reporting label on this phase, not a
+      scheduler — deliberately not auto-generating future expense rows,
+      since nothing in this codebase runs a scheduled job yet (the same
+      honest scope trim as `reconcile-stock.ts` staying on-demand rather
+      than cron-driven). Two new permissions (`expenses.view`,
+      `expenses.manage`), enforced server-side on every page and Server
+      Action, granted by default to Owner/Admin/Branch Manager but not
+      Warehouse Manager or Cashier — expense recording is a management
+      concern, not a front-of-house one, unlike customer/debt tracking
+      from Phase 8. Verified end-to-end: default categories are present
+      immediately after sign-up, a company-wide and a branch-scoped
+      expense both record and display correctly, the recurring label and
+      interval show on the list, the "this month" total correctly sums
+      only non-voided expenses (confirmed by voiding one and watching the
+      total drop by exactly its amount rather than to zero), and a role
+      without `expenses.view` is blocked from both the expenses list and
+      the new-expense page.
+      **Deliberately out of scope for this phase**: a combined profit/loss
+      view joining Sale revenue against Expense costs (cheap to add now
+      that both exist, but not asked for yet), receipt/attachment
+      uploads, and multi-currency expenses (amounts are recorded in the
+      company's single configured currency, same as Sales).
 
 ## Getting started
 

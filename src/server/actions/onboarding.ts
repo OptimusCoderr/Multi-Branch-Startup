@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getSession } from "@/lib/auth/session";
 import { createCompanySchema, slugify } from "@/lib/validation/onboarding.schema";
 import { DEFAULT_ROLE_PERMISSIONS, SYSTEM_ROLE_NAMES } from "@/lib/auth/permissions";
+import { DEFAULT_EXPENSE_CATEGORIES } from "@/lib/expenses/default-categories";
 
 type ActionResult = { error: string } | never;
 
@@ -95,6 +96,10 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
         status: "ACTIVE",
         joinedAt: now,
       },
+    });
+
+    await tx.expenseCategory.createMany({
+      data: DEFAULT_EXPENSE_CATEGORIES.map((name) => ({ companyId: company.id, name })),
     });
 
     await tx.subscription.create({

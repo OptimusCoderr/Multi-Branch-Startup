@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { href: "/transfers", label: "Transfers" },
   { href: "/sales", label: "Sales" },
   { href: "/customers", label: "Customers" },
+  { href: "/expenses", label: "Expenses" },
   { href: "/staff", label: "Staff" },
   { href: "/settings/branding", label: "Settings" },
 ];
