@@ -20,7 +20,7 @@ export default async function ProductsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Products</h1>
         {canCreate && (
-          <Link href="/products/new" className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white">
+          <Link href="/products/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
             New product
           </Link>
         )}
@@ -58,7 +58,7 @@ export default async function ProductsPage() {
                   <td className="py-2 text-right">
                     <div className="flex justify-end gap-3">
                       {canEdit && (
-                        <Link href={`/products/${p.id}`} className="text-blue-600 hover:underline">
+                        <Link href={`/products/${p.id}`} className="text-[var(--brand-primary)] hover:underline">
                           Edit
                         </Link>
                       )}

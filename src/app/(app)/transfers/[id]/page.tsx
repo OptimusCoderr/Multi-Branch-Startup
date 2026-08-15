@@ -113,7 +113,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             {canApprove && !isSelfApproval && (
               <div className="flex flex-col gap-3">
                 <form action={approveTransfer.bind(null, transfer.id)}>
-                  <button type="submit" className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white">
+                  <button type="submit" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
                     Approve
                   </button>
                 </form>
@@ -134,7 +134,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           <>
             {canDispatch && (
               <form action={dispatchTransfer.bind(null, transfer.id)}>
-                <button type="submit" className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white">
+                <button type="submit" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
                   Mark as dispatched
                 </button>
               </form>

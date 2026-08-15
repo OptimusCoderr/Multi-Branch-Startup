@@ -69,7 +69,7 @@ export default async function StaffPage() {
                   <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[m.status] ?? ""}`}>{m.status}</span>
                 </td>
                 <td className="py-2 text-right">
-                  <Link href={`/staff/${m.id}`} className="text-blue-600 hover:underline">
+                  <Link href={`/staff/${m.id}`} className="text-[var(--brand-primary)] hover:underline">
                     Manage
                   </Link>
                 </td>

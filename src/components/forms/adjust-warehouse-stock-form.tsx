@@ -54,7 +54,7 @@ export function AdjustWarehouseStockForm({
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-[var(--brand-primary)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
       >
         {isPending ? "Saving…" : "Apply"}
       </button>

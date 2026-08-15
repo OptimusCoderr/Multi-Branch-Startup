@@ -114,7 +114,7 @@ export function CreateSaleForm({
             </div>
           );
         })}
-        <button type="button" onClick={addRow} className="self-start text-sm text-blue-600 hover:underline">
+        <button type="button" onClick={addRow} className="self-start text-sm text-[var(--brand-primary)] hover:underline">
           + Add product
         </button>
       </div>
@@ -126,7 +126,7 @@ export function CreateSaleForm({
       <button
         type="submit"
         disabled={isPending || validLineItems.length === 0}
-        className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
         {isPending ? "Recording…" : "Record sale"}
       </button>

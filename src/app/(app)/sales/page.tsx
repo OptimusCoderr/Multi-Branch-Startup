@@ -29,7 +29,7 @@ export default async function SalesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Sales</h1>
         {canRecord && (
-          <Link href="/sales/new" className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white">
+          <Link href="/sales/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
             New sale
           </Link>
         )}
@@ -65,7 +65,7 @@ export default async function SalesPage() {
                     </span>
                   </td>
                   <td className="py-2 text-right">
-                    <Link href={`/sales/${s.id}`} className="text-blue-600 hover:underline">
+                    <Link href={`/sales/${s.id}`} className="text-[var(--brand-primary)] hover:underline">
                       View
                     </Link>
                   </td>

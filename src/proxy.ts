@@ -17,6 +17,7 @@ const PROTECTED_PREFIXES = [
   "/transfers",
   "/sales",
   "/staff",
+  "/settings",
 ];
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -51,5 +52,6 @@ export const config = {
     "/transfers/:path*",
     "/sales/:path*",
     "/staff/:path*",
+    "/settings/:path*",
   ],
 };

@@ -31,7 +31,7 @@ export function ReceiveTransferForm({ transferId, expectedQuantity }: { transfer
       <button
         type="submit"
         disabled={isPending}
-        className="self-start rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="self-start rounded-md bg-[var(--brand-primary)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
       >
         {isPending ? "Recording…" : "Confirm receipt"}
       </button>

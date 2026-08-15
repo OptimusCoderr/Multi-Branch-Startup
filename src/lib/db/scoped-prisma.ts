@@ -21,6 +21,7 @@ export const TENANT_SCOPED_MODELS = [
   "StockMovement",
   "Sale",
   "Payment",
+  "BrandingSettings",
 ] as const;
 
 type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

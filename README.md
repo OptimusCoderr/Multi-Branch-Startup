@@ -87,7 +87,21 @@ This is being built in phases, each one shipping something testable end-to-end (
       back to `/dashboard`, forever. Fixed by only using the middleware's
       cookie check to gate protected routes, never to redirect away from
       the sign-in page.
-- [ ] Phase 5 — Branding/theming
+- [x] **Phase 5 — Branding/theming**: a `/settings/branding` page (primary/
+      secondary color, logo URL, layout preset) writes to a per-company
+      `BrandingSettings` row. The authenticated app shell reads it fresh on
+      every render and injects `--brand-primary`/`--brand-secondary` as CSS
+      custom properties, consumed via Tailwind's arbitrary-value syntax
+      (`bg-[var(--brand-primary)]`) on primary actions and links across the
+      app — scoped to the authenticated area only; the marketing/sign-in/
+      invite pages stay neutrally branded since no company context exists
+      yet there. `layoutPreset` (Default/Compact) is a real, if modest,
+      structural difference (header/content padding), not just a cosmetic
+      no-op. Verified end-to-end: a company's chosen color and logo render
+      correctly (confirmed via computed styles, not just stored values),
+      the Compact preset visibly reduces padding, and a second company with
+      no branding configured shows neither the color nor the logo — no
+      cross-tenant leakage.
 - [ ] Phase 6 — Paystack subscription billing
 - [ ] Phase 7 — Security & audit hardening (rate limiting, Postgres RLS, IDOR sweep)
 

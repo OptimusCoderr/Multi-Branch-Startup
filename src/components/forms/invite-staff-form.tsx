@@ -38,7 +38,7 @@ export function InviteStaffForm({ roles }: { roles: { id: string; name: string }
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {isPending ? "Inviting…" : "Send invite"}
         </button>
@@ -53,7 +53,7 @@ export function InviteStaffForm({ roles }: { roles: { id: string; name: string }
           </p>
           <div className="mt-1 flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs">{state.inviteUrl}</code>
-            <button type="button" onClick={copyLink} className="text-blue-600 hover:underline">
+            <button type="button" onClick={copyLink} className="text-[var(--brand-primary)] hover:underline">
               {copied ? "Copied!" : "Copy"}
             </button>
           </div>

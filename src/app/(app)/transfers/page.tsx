@@ -40,7 +40,7 @@ export default async function TransfersPage() {
             </Link>
           )}
           {canRequest && (
-            <Link href="/transfers/new" className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white">
+            <Link href="/transfers/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
               Request transfer
             </Link>
           )}
@@ -77,7 +77,7 @@ export default async function TransfersPage() {
                     </span>
                   </td>
                   <td className="py-2 text-right">
-                    <Link href={`/transfers/${t.id}`} className="text-blue-600 hover:underline">
+                    <Link href={`/transfers/${t.id}`} className="text-[var(--brand-primary)] hover:underline">
                       View
                     </Link>
                   </td>

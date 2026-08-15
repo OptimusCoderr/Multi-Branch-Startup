@@ -34,18 +34,19 @@ model Company {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
 
-  memberships    Membership[]
-  roles          Role[]
-  invitations    Invitation[]
-  subscription   Subscription?
-  auditLogs      AuditLog[]
-  products       Product[]
-  warehouses     Warehouse[]
-  branches       Branch[]
-  stockTransfers StockTransfer[]
-  stockMovements StockMovement[]
-  sales          Sale[]
-  payments       Payment[]
+  memberships      Membership[]
+  roles            Role[]
+  invitations      Invitation[]
+  subscription     Subscription?
+  auditLogs        AuditLog[]
+  products         Product[]
+  warehouses       Warehouse[]
+  branches         Branch[]
+  stockTransfers   StockTransfer[]
+  stockMovements   StockMovement[]
+  sales            Sale[]
+  payments         Payment[]
+  brandingSettings BrandingSettings?
 
   @@index([status])
 }
@@ -640,4 +641,25 @@ model Payment {
 
   @@index([companyId, saleId])
   @@index([companyId, paidAt])
+}
+
+// ---------------------------------------------------------------------------
+// Branding / theming (Phase 5)
+// ---------------------------------------------------------------------------
+
+enum LayoutPreset {
+  DEFAULT
+  COMPACT
+}
+
+model BrandingSettings {
+  id             String       @id @default(cuid())
+  companyId      String       @unique
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  primaryColor   String       @default("#171717")
+  secondaryColor String?
+  logoUrl        String?
+  layoutPreset   LayoutPreset @default(DEFAULT)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }
