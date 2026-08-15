@@ -8,6 +8,7 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import * as billingService from "@/server/services/billing-service";
 import { PaystackNotConfiguredError } from "@/lib/paystack/client";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { startCheckoutSchema } from "@/lib/validation/billing.schema";
 
 type ActionResult = { error: string };
 
@@ -15,10 +16,11 @@ export async function startSubscriptionCheckout(_prev: ActionResult, formData: F
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.BILLING_MANAGE);
 
-  const planId = String(formData.get("planId") ?? "");
-  if (!planId) {
-    return { error: "Select a plan." };
+  const parsed = startCheckoutSchema.safeParse({ planId: formData.get("planId") });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid plan." };
   }
+  const { planId } = parsed.data;
 
   const session = await getSession();
   if (!session) {

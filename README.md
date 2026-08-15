@@ -130,7 +130,44 @@ This is being built in phases, each one shipping something testable end-to-end (
       subscription to `PAST_DUE`, the grace period is honored on both
       sides of its boundary, and `/dashboard`/`/settings/billing` remain
       reachable while every other route redirects to `/billing-required`.
-- [ ] Phase 7 — Security & audit hardening (rate limiting, Postgres RLS, IDOR sweep)
+- [x] **Phase 7 — Security & audit hardening**: the application connects at
+      runtime as a separate, least-privilege Postgres role
+      (`inventory_runtime`, `prisma/grants.sql`) rather than the schema
+      owner — it structurally cannot `UPDATE`/`DELETE` the append-only
+      `AuditLog`/`StockMovement` tables or touch `_prisma_migrations`,
+      confirmed by actually attempting those statements as that role and
+      watching Postgres reject them (`permission denied for table`), not
+      just by reading the grant statements. Adds security headers (CSP,
+      `X-Frame-Options: DENY`, `X-Content-Type-Options`, `Referrer-Policy`,
+      `Permissions-Policy`, HSTS) in `next.config.ts`, and an in-memory
+      rate limiter (`src/lib/rate-limit.ts`) on staff invitations and
+      sale/payment recording — documented as single-instance-only, with a
+      shared store (Upstash Redis) as the noted upgrade for a
+      multi-instance serverless deployment. Closed a real gap found during
+      a Zod-coverage sweep of every Server Action (`startSubscriptionCheckout`
+      was validating its input by hand instead of through a schema, unlike
+      everywhere else). Added `scripts/reconcile-stock.ts`, which sums the
+      `StockMovement` ledger per product/location and compares it against
+      the cached `WarehouseStock`/`BranchStock` quantities — verified it
+      actually catches drift by deliberately corrupting a cached value and
+      confirming the script flagged it, not just that it passed on clean
+      data. A consolidated cross-tenant IDOR sweep (one company builds one
+      of every resource type; a second company attempts direct access to
+      each by ID) confirmed 404 across products, warehouses, branches,
+      transfers, sales, and staff, plus no leakage into any list view —
+      formalizing the per-phase checks done throughout into one pass.
+      **Deliberately deferred**, called out rather than silently skipped:
+      Postgres Row-Level Security as a second independent enforcement
+      layer beneath `getScopedPrisma` (a real architectural undertaking —
+      wiring a `SET LOCAL` tenant context into every query path, not just
+      transactional writes — layered on top of application-layer scoping
+      that's already been verified clean across seven phases of IDOR
+      testing, rather than the primary defense); `AuditLog` hash-chaining
+      for tamper-evidence; a dependency-scanning CI pipeline (no CI is
+      configured for this repo yet — `npm audit` currently reports zero
+      vulnerabilities); and a dedicated accessibility audit (existing
+      forms already use semantic `<label>`-wrapped inputs throughout, but
+      this hasn't had a focused pass).
 
 ## Getting started
 
@@ -151,6 +188,23 @@ npm run dev
 
 Generate a `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
 
+### Least-privilege runtime role
+
+The app is designed to connect at runtime as a role separate from the one
+that owns the schema and runs migrations, so a bug or a leaked runtime
+credential can't rewrite the append-only audit trail (see Phase 7 above).
+Set this up once per environment, after running migrations:
+
+```bash
+psql "$DATABASE_URL" -c "CREATE ROLE inventory_runtime WITH LOGIN PASSWORD '<generate a real secret>';"
+npm run db:grants
+```
+
+Then set `RUNTIME_DATABASE_URL` in `.env` to that role's connection string.
+This step is optional for a quick local try (the app falls back to
+`DATABASE_URL` if `RUNTIME_DATABASE_URL` is unset) but should never be
+skipped in a real deployment.
+
 ### Scripts
 
 - `npm run dev` — start the dev server
@@ -159,6 +213,10 @@ Generate a `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
 - `npm run lint` — ESLint
 - `npm run prisma:migrate` — run a new Prisma migration
 - `npm run db:seed` — re-run the seed script (idempotent — safe to re-run)
+- `npm run db:grants` — apply `prisma/grants.sql` (see above)
+- `npm run reconcile:stock` — verify the `StockMovement` ledger still
+  agrees with cached `WarehouseStock`/`BranchStock` quantities; exits
+  non-zero and prints details on any mismatch
 
 ## Architecture notes
 
@@ -176,3 +234,12 @@ Generate a `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
 - **Audit logging**: `AuditLog` is append-only and written for every sensitive mutation via
   `writeAuditLog()` (`src/server/services/audit-service.ts`), ideally inside the same DB
   transaction as the mutation it records.
+- **Defense in depth at the database**: even with `getScopedPrisma` and `requirePermission`
+  both enforced correctly, the app's own DB credential (`RUNTIME_DATABASE_URL`) cannot
+  `UPDATE`/`DELETE` `AuditLog` or `StockMovement` — see `prisma/grants.sql`. This is a second,
+  independent layer: a bug in application code hits a Postgres permission error, not a
+  successfully rewritten audit trail.
+- **Rate limiting**: `src/lib/rate-limit.ts` is an in-memory limiter applied to staff
+  invitations and sale/payment recording, on top of Better Auth's own built-in rate limiting
+  on `/api/auth/*`. It's correct for a single Node.js process; a multi-instance serverless
+  deployment needs a shared store (Upstash Redis) behind the same `checkRateLimit()` interface.

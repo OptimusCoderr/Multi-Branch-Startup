@@ -11,7 +11,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:grants": "psql \"${DATABASE_URL%%\\?*}\" -v ON_ERROR_STOP=1 -f prisma/grants.sql",
+    "reconcile:stock": "tsx scripts/reconcile-stock.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

@@ -10,6 +10,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { inviteStaffSchema, updateStaffRoleSchema } from "@/lib/validation/staff.schema";
 import * as staffService from "@/server/services/staff-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
 
 type ErrorResult = { error: string };
 type InviteResult = { error: string; inviteUrl?: string };
@@ -20,13 +21,22 @@ async function requestMeta() {
 }
 
 function friendlyError(err: unknown, fallback: string): string {
-  if (err instanceof staffService.StaffActionError) return err.message;
+  if (err instanceof staffService.StaffActionError || err instanceof RateLimitError) return err.message;
   return fallback;
 }
 
 export async function inviteStaff(_prev: InviteResult, formData: FormData): Promise<InviteResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.STAFF_INVITE);
+
+  try {
+    // Invitations send an email in a fully configured deployment — capping
+    // this stops a compromised or careless Owner/Admin account from being
+    // used to spam-invite (or enumerate) email addresses.
+    checkRateLimit(`staff.invite:${membership.membershipId}`, { max: 20, windowMs: 60 * 60 * 1000 });
+  } catch (err) {
+    return { error: friendlyError(err, "Too many invitations sent recently.") };
+  }
 
   const parsed = inviteStaffSchema.safeParse({ email: formData.get("email"), roleId: formData.get("roleId") });
   if (!parsed.success) {

@@ -11,6 +11,7 @@ import { createSaleSchema, recordPaymentSchema, voidSaleSchema } from "@/lib/val
 import * as saleService from "@/server/services/sale-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
 
 type ActionResult = { error: string } | never;
 
@@ -20,7 +21,12 @@ async function requestMeta() {
 }
 
 function friendlyError(err: unknown, fallback: string): string {
-  if (err instanceof saleService.SaleValidationError || err instanceof saleService.SaleNotFoundError || err instanceof InsufficientStockError) {
+  if (
+    err instanceof saleService.SaleValidationError ||
+    err instanceof saleService.SaleNotFoundError ||
+    err instanceof InsufficientStockError ||
+    err instanceof RateLimitError
+  ) {
     return err.message;
   }
   if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034") {
@@ -32,6 +38,14 @@ function friendlyError(err: unknown, fallback: string): string {
 export async function createSale(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.SALES_RECORD);
+
+  try {
+    // Generous — this is a legitimate high-frequency POS action — but caps
+    // runaway loops/abuse rather than normal checkout usage.
+    checkRateLimit(`sale.create:${membership.membershipId}`, { max: 120, windowMs: 60 * 1000 });
+  } catch (err) {
+    return { error: friendlyError(err, "Too many sales recorded recently.") };
+  }
 
   let lineItems: unknown;
   try {
@@ -82,6 +96,12 @@ export async function createSale(_prev: { error: string }, formData: FormData): 
 export async function recordPayment(saleId: string, _prev: { error: string }, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.PAYMENTS_RECORD);
+
+  try {
+    checkRateLimit(`payment.record:${membership.membershipId}`, { max: 120, windowMs: 60 * 1000 });
+  } catch (err) {
+    return { error: friendlyError(err, "Too many payments recorded recently.") };
+  }
 
   const parsed = recordPaymentSchema.safeParse({
     amount: formData.get("amount"),
