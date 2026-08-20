@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { prisma } from "@/lib/db/prisma";
 
 const PAST_DUE_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -35,6 +36,10 @@ export function isSubscriptionActive(subscription: GateSubscription | null, now:
   }
 }
 
-export async function getSubscriptionForCompany(companyId: string) {
+// Memoized per request (React's cache(), not a cross-request cache) — the
+// (app) layout (via getPlanFeaturesForCompany) and the nested (gated)
+// layout both need this on every gated page load, and without dedup that
+// was two identical Subscription+Plan queries per request instead of one.
+export const getSubscriptionForCompany = cache(async (companyId: string) => {
   return prisma.subscription.findUnique({ where: { companyId }, include: { plan: true } });
-}
+});

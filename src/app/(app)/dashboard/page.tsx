@@ -4,14 +4,8 @@ import { requireMembership } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { formatMoney } from "@/lib/format";
-import { getPeriodSummary, getOutstandingDebt, startOfCurrentMonth } from "@/server/services/report-service";
+import { getPeriodSummary, getOutstandingDebt, startOfCurrentMonth, startOfToday } from "@/server/services/report-service";
 import { getCustomerBalances } from "@/server/services/customer-service";
-
-function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 function StatCard({
   icon: Icon,
@@ -28,7 +22,16 @@ function StatCard({
 }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ backgroundColor: `${tint}1a`, color: tint }}>
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-xl"
+        // color-mix() rather than string-concatenating an alpha hex suffix
+        // (`${tint}1a`) — that only produces valid CSS when tint is a hex
+        // literal; the "Today's sales" card passes a CSS var()
+        // (var(--brand-primary)), which `${tint}1a` mangles into
+        // "var(--brand-primary)1a", an invalid value the browser silently
+        // drops. color-mix() works uniformly for both hex and var() tints.
+        style={{ backgroundColor: `color-mix(in srgb, ${tint} 12%, transparent)`, color: tint }}
+      >
         <Icon size={18} strokeWidth={2.25} />
       </div>
       <div>

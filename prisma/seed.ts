@@ -63,18 +63,31 @@ async function main() {
   // (which always generates a fresh random password, shown once), this
   // uses a fixed password from .env on purpose, since the whole point is
   // a predictable local login. Safe to re-run: an existing account's
-  // password is left untouched, only its platform role is (re)confirmed.
+  // password is left untouched, only its platform role is (re)confirmed —
+  // and ONLY if it was already platform staff (or is a brand-new account
+  // this run just created). If ADMIN_EMAIL happens to collide with an
+  // unrelated ordinary account that signed up normally (e.g. someone on a
+  // shared/staging DB who never overrode .env.example's admin@example.com
+  // default), re-seeding must never silently upgrade that stranger's
+  // account to SUPER_ADMIN.
   const adminEmail = process.env.ADMIN_EMAIL;
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
     console.log(`Seeding local admin account (${adminEmail})...`);
     let user = await prisma.user.findUnique({ where: { email: adminEmail } });
+    let justCreated = false;
     if (!user) {
       const result = await auth.api.signUpEmail({ body: { email: adminEmail, name: "Admin", password: adminPassword } });
       user = await prisma.user.findUnique({ where: { id: result.user.id } });
+      justCreated = true;
     }
-    if (user) {
+    if (user && (justCreated || user.platformRole)) {
       await prisma.user.update({ where: { id: user.id }, data: { platformRole: "SUPER_ADMIN" } });
+    } else if (user) {
+      console.warn(
+        `ADMIN_EMAIL (${adminEmail}) already belongs to an existing account that isn't platform staff — leaving it alone. ` +
+          `Use scripts/create-platform-admin.ts, or pick a different ADMIN_EMAIL, if you meant to grant it access.`,
+      );
     }
   } else {
     console.log("ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping local admin account (see .env.example).");

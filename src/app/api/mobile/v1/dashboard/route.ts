@@ -3,18 +3,16 @@ import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { requireMobileMembership, handleApiError } from "@/lib/api/mobile-auth";
 import { getCustomerBalances } from "@/server/services/customer-service";
+import { startOfToday } from "@/server/services/report-service";
 
 export async function GET() {
   try {
     const membership = await requireMobileMembership();
     const db = getScopedPrisma(membership.companyId);
 
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
     const [todaysSales, customers] = await Promise.all([
       db.sale.findMany({
-        where: { createdAt: { gte: startOfToday }, status: { not: "VOIDED" } },
+        where: { createdAt: { gte: startOfToday() }, status: { not: "VOIDED" } },
         select: { grandTotal: true },
       }),
       db.customer.findMany({ where: { isActive: true }, select: { id: true } }),

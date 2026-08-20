@@ -50,7 +50,7 @@ const NAV_LINKS: { href: string; label: string; icon: LucideIcon; planFeatureKey
   { href: "/settings/branding", label: "Settings", icon: Settings },
 ];
 
-export function AppNav({ planFeatures }: { planFeatures: PlanFeatures }) {
+export function AppNav({ planFeatures, canManageBilling }: { planFeatures: PlanFeatures; canManageBilling: boolean }) {
   const pathname = usePathname();
 
   return (
@@ -62,13 +62,27 @@ export function AppNav({ planFeatures }: { planFeatures: PlanFeatures }) {
         const Icon = link.icon;
 
         if (lockedByPlan) {
+          const title = canManageBilling
+            ? `${link.label} isn't included on your current plan — upgrade to unlock it.`
+            : `${link.label} isn't included on your company's current plan. Ask an Owner or Admin to upgrade.`;
+          const lockedClassName = "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium text-gray-300 grayscale";
+
+          // Only link to billing for someone who can actually act on it —
+          // otherwise this is a dead end (/settings/billing itself blocks
+          // anyone without BILLING_MANAGE), so it's just a greyed-out,
+          // non-interactive label explaining why the feature is locked.
+          if (!canManageBilling) {
+            return (
+              <span key={link.href} title={title} className={lockedClassName}>
+                <Icon size={16} strokeWidth={2} />
+                {link.label}
+                <Lock size={11} strokeWidth={2.5} />
+              </span>
+            );
+          }
+
           return (
-            <Link
-              key={link.href}
-              href="/settings/billing"
-              title={`${link.label} isn't included on your current plan — upgrade to unlock it.`}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium text-gray-300 grayscale transition-colors hover:bg-gray-50 hover:text-gray-400"
-            >
+            <Link key={link.href} href="/settings/billing" title={title} className={`${lockedClassName} transition-colors hover:bg-gray-50 hover:text-gray-400`}>
               <Icon size={16} strokeWidth={2} />
               {link.label}
               <Lock size={11} strokeWidth={2.5} />
