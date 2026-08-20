@@ -318,6 +318,57 @@ This is being built in phases, each one shipping something testable end-to-end (
       service are structured to add one without reshaping either), and a
       full receivables-collections workflow (payment plans, escalating
       message tiers by days overdue) beyond a single reminder message.
+- [x] **Phase 12 — Mobile app foundation**: an Expo (React Native +
+      TypeScript, Expo Router) companion app in `mobile/`, for
+      already-onboarded staff to record sales, take payments, check
+      stock, and manage customers/debt from a phone. It's a second
+      client for the same backend, not a second implementation of it —
+      a new JSON API layer under `src/app/api/mobile/v1/*` calls the
+      exact same `server/services/*` functions, `requirePermission`
+      checks, and `getScopedPrisma` tenant isolation every web Server
+      Action already uses, through a thin HTTP-status-mapping wrapper
+      (`lib/api/mobile-auth.ts`) rather than a parallel authorization
+      system. Mobile auth runs through `@better-auth/expo` (the
+      `expo()`/`bearer()` plugins added to `better-auth.ts` specifically
+      for this): React Native has no browser cookie jar, so the Expo
+      client emulates one on `expo-secure-store`, and the mobile app
+      reads it back out to authenticate its own API calls — the same
+      DB-backed session every other client uses, so suspending a staff
+      member or revoking a permission takes effect on their phone's next
+      request exactly like it does in a browser. Upgrading `better-auth`
+      to the version `@better-auth/expo` requires (^1.7.1, from ^1.6.28)
+      turned up a real, if narrow, breaking change: the `Account` table
+      gained a required `issuer` column with a new
+      `[issuer, accountId]` unique index — missed at first (a 500 on
+      sign-up), traced to the exact new-field diff in Better Auth's own
+      schema source, and fixed with a proper migration rather than
+      papering over it.
+      **Verified without a device** (this sandbox has no iOS/Android
+      simulator): `npx expo export` successfully bundles the entire app
+      (1700+ modules) into real Hermes bytecode for both iOS and Android
+      with zero errors, which catches the large majority of real
+      breakage short of an actual render; every `/api/mobile/v1/*`
+      endpoint was exercised directly with a real bearer token —
+      sign-up, sign-in, `/me` resolving correct permissions and
+      subscription status, creating a sale and recording a partial
+      payment (with the exact same overpayment-rejection message the
+      web app produces, confirming it's the same service code path, not
+      a reimplementation), and creating a customer; and a second
+      company's bearer token was confirmed unable to read the first
+      company's sale or customer (404, no data in list views) — the same
+      cross-tenant isolation guarantee every other phase has verified,
+      now proven for this API layer too. Also had to fix the root
+      `tsconfig.json`/`eslint.config.mjs` to exclude `mobile/`, a
+      separate TypeScript project with its own tsconfig and globals that
+      was otherwise getting swept into the Next.js app's typecheck and
+      corrupting unrelated type resolution.
+      **Deliberately out of scope for this phase**: company sign-up and
+      onboarding on mobile (an Owner is expected to do initial setup —
+      creating the company, adding branches/products, inviting staff —
+      on the web, same as every company has so far), and mobile CRUD for
+      products/warehouses/branches, stock transfers, staff, billing,
+      branding, and expenses — all still web-only for now, staged for
+      later phases the same way the web app itself was staged.
 
 ## Getting started
 

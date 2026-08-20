@@ -99,6 +99,12 @@ model Session {
 
 model Account {
   id                    String    @id @default(cuid())
+  // Added when better-auth was bumped to ^1.7.1 to pull in @better-auth/expo
+  // for mobile auth — the Prisma adapter now requires this column (paired
+  // with accountId in a unique index) to distinguish which credential
+  // issuer an account row came from (e.g. "local:credential" for
+  // email/password vs. an OAuth provider's issuer URL).
+  issuer                String
   accountId             String
   providerId            String
   userId                String
@@ -113,6 +119,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@unique([issuer, accountId])
   @@index([userId])
   @@map("account")
 }

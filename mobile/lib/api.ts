@@ -1,0 +1,136 @@
+import { authClient, apiBaseUrl } from "./auth-client";
+
+export class ApiRequestError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const cookie = await authClient.getCookie();
+
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      cookie,
+      ...options.headers,
+    },
+  });
+
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new ApiRequestError(body?.error ?? "Something went wrong.", response.status);
+  }
+
+  return body as T;
+}
+
+export type Me = {
+  membershipId: string;
+  companyId: string;
+  companyName: string;
+  companyCurrency: string;
+  roleName: string | null;
+  permissions: string[];
+  subscriptionActive: boolean;
+  subscriptionStatus: string | null;
+};
+
+export type DashboardSummary = {
+  companyName: string;
+  companyCurrency: string;
+  todaysSalesCount: number;
+  todaysSalesTotal: string;
+  totalOutstandingDebt: string;
+  debtorCount: number;
+};
+
+export type Branch = { id: string; name: string; address: string | null; phone: string | null };
+export type Product = { id: string; sku: string; name: string; description: string | null; unitPrice: string };
+
+export type StockProduct = {
+  id: string;
+  sku: string;
+  name: string;
+  warehouseStocks: { warehouseId: string; warehouseName: string; quantity: number }[];
+  branchStocks: { branchId: string; branchName: string; quantity: number }[];
+};
+
+export type SaleSummary = {
+  id: string;
+  saleNumber: string;
+  branchName: string;
+  customerName: string | null;
+  status: string;
+  grandTotal: string;
+  amountPaid: string;
+  createdAt: string;
+};
+
+export type SaleDetail = {
+  id: string;
+  saleNumber: string;
+  branchName: string;
+  customerName: string | null;
+  customerPhone: string | null;
+  status: string;
+  subtotal: string;
+  grandTotal: string;
+  amountPaid: string;
+  dueDate: string | null;
+  createdAt: string;
+  lineItems: { productName: string; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
+  payments: { id: string; amount: string; mode: string; paidAt: string }[];
+};
+
+export type CustomerSummary = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  outstanding: string;
+  overdueSaleCount: number;
+};
+
+export type CustomerDetail = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  remindersEnabled: boolean;
+  outstanding: string;
+  openSaleCount: number;
+  overdueSaleCount: number;
+  sales: { id: string; saleNumber: string; branchName: string; status: string; grandTotal: string; amountPaid: string; dueDate: string | null }[];
+};
+
+export const api = {
+  me: () => request<Me>("/api/mobile/v1/me"),
+  dashboard: () => request<DashboardSummary>("/api/mobile/v1/dashboard"),
+  branches: () => request<{ branches: Branch[] }>("/api/mobile/v1/branches"),
+  products: () => request<{ products: Product[] }>("/api/mobile/v1/products"),
+  stock: () => request<{ products: StockProduct[] }>("/api/mobile/v1/stock"),
+
+  sales: () => request<{ sales: SaleSummary[] }>("/api/mobile/v1/sales"),
+  sale: (id: string) => request<SaleDetail>(`/api/mobile/v1/sales/${id}`),
+  createSale: (input: {
+    branchId: string;
+    customerId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    lineItems: { productId: string; quantity: number }[];
+  }) => request<{ saleId: string }>("/api/mobile/v1/sales", { method: "POST", body: JSON.stringify(input) }),
+  recordPayment: (saleId: string, input: { amount: number; mode: string; reference?: string; notes?: string }) =>
+    request<{ paymentId: string }>(`/api/mobile/v1/sales/${saleId}/payments`, { method: "POST", body: JSON.stringify(input) }),
+
+  customers: () => request<{ customers: CustomerSummary[] }>("/api/mobile/v1/customers"),
+  customer: (id: string) => request<CustomerDetail>(`/api/mobile/v1/customers/${id}`),
+  createCustomer: (input: { name: string; phone?: string; email?: string }) =>
+    request<{ customerId: string }>("/api/mobile/v1/customers", { method: "POST", body: JSON.stringify(input) }),
+};
