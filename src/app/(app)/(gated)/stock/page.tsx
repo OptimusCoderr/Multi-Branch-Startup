@@ -14,7 +14,7 @@ export default async function StockPage() {
   const db = getScopedPrisma(membership.companyId);
   const canAdjust = permissions.has(PERMISSIONS.WAREHOUSES_MANAGE);
 
-  const [products, warehouses] = await Promise.all([
+  const [products, warehouses, warehouseCount] = await Promise.all([
     db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
@@ -26,7 +26,12 @@ export default async function StockPage() {
     canAdjust
       ? db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } })
       : Promise.resolve([]),
+    // Independent of `canAdjust` — that query above is scoped to a
+    // permission, not to whether the company has any warehouses at all,
+    // so it can't answer "does this company use warehouses" on its own.
+    db.warehouse.count({ where: { isActive: true } }),
   ]);
+  const showWarehouseColumn = warehouseCount > 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,22 +53,24 @@ export default async function StockPage() {
               <p className="font-medium">
                 {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
               </p>
-              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase text-gray-400">Warehouses</p>
-                  <ul className="mt-1 flex flex-col gap-1 text-sm">
-                    {product.warehouseStocks.length === 0 ? (
-                      <li className="text-gray-400">No warehouses yet</li>
-                    ) : (
-                      product.warehouseStocks.map((stock) => (
-                        <li key={stock.id} className="flex justify-between">
-                          <span>{stock.warehouse.name}</span>
-                          <span className="font-mono">{stock.quantity}</span>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                </div>
+              <div className={`mt-3 grid grid-cols-1 gap-4 ${showWarehouseColumn ? "sm:grid-cols-2" : ""}`}>
+                {showWarehouseColumn && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase text-gray-400">Warehouses</p>
+                    <ul className="mt-1 flex flex-col gap-1 text-sm">
+                      {product.warehouseStocks.length === 0 ? (
+                        <li className="text-gray-400">None</li>
+                      ) : (
+                        product.warehouseStocks.map((stock) => (
+                          <li key={stock.id} className="flex justify-between">
+                            <span>{stock.warehouse.name}</span>
+                            <span className="font-mono">{stock.quantity}</span>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                )}
                 <div>
                   <p className="text-xs font-semibold uppercase text-gray-400">Branches</p>
                   <ul className="mt-1 flex flex-col gap-1 text-sm">
