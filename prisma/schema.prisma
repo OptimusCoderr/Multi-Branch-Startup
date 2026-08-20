@@ -79,18 +79,27 @@ model User {
 
   // Platform-level, not company-level — deliberately NOT a Membership/Role
   // grant, since those are always scoped to one Company by getScopedPrisma.
-  // A platform admin has no company at all; requirePlatformAdmin()
-  // (src/lib/auth/session.ts) checks this flag directly against the raw
-  // `prisma` singleton, bypassing tenant scoping entirely on purpose for
-  // the one narrow /admin surface that legitimately needs to see across
-  // every company. View-only by design — see /admin's own read-only queries.
-  isPlatformAdmin Boolean @default(false)
+  // Someone with a platform role has no company at all; requireSuperAdmin()/
+  // requirePlatformStaff() (src/lib/auth/session.ts) check this directly
+  // against the raw `prisma` singleton, bypassing tenant scoping entirely
+  // on purpose for the one narrow /admin surface that legitimately needs
+  // to see across every company. SUPER_ADMIN can see every company
+  // (view-only) and manage the SUPPORT_AGENT roster; SUPPORT_AGENT can
+  // also see every company (same view-only data) and generate password
+  // reset links for locked-out users, but cannot grant platform access to
+  // anyone else. Null means "not platform staff" — an ordinary user.
+  platformRole PlatformRole?
 
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]
 
   @@map("user")
+}
+
+enum PlatformRole {
+  SUPER_ADMIN
+  SUPPORT_AGENT
 }
 
 model Session {
@@ -346,6 +355,30 @@ model AuditLog {
   @@index([companyId, createdAt])
   @@index([companyId, entityType, entityId])
   @@index([companyId, action])
+}
+
+/**
+ * The platform-level counterpart to AuditLog — for actions taken by
+ * SUPER_ADMIN/SUPPORT_AGENT users that don't belong to any one company
+ * (generating a password reset link for a locked-out user, promoting or
+ * demoting platform staff). Deliberately NOT company-scoped and NOT a
+ * TENANT_SCOPED_MODEL. Same append-only accountability discipline as
+ * AuditLog: actorUserId is a plain string field, not a relation, so
+ * deleting a User account never cascades into rewriting history;
+ * prisma/grants.sql revokes UPDATE/DELETE on it the same way.
+ */
+model PlatformAuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String
+  action       String
+  targetEmail  String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorUserId])
 }
 
 // ---------------------------------------------------------------------------

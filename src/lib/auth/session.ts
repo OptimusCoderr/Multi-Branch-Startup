@@ -97,22 +97,50 @@ export async function requireMembershipOrThrow(): Promise<AuthenticatedMembershi
 }
 
 /**
- * For the /admin surface only: redirects to /sign-in if unauthenticated,
- * to /dashboard if signed in but not a platform admin. Deliberately
- * separate from requireMembership() — a platform admin isn't a member of
- * any company, and this check reads User.isPlatformAdmin directly via the
- * raw `prisma` singleton rather than going through getScopedPrisma, which
- * always scopes to one companyId and would be the wrong tool for a page
- * that legitimately needs to see across every company.
+ * For the /admin surface: redirects to /sign-in if unauthenticated, to
+ * /dashboard if signed in but not any kind of platform staff (SUPER_ADMIN
+ * or SUPPORT_AGENT). Deliberately separate from requireMembership() —
+ * platform staff aren't members of any company, and this reads
+ * User.platformRole directly via the raw `prisma` singleton rather than
+ * going through getScopedPrisma, which always scopes to one companyId and
+ * would be the wrong tool for a page that legitimately needs to see across
+ * every company. Returns the resolved role so callers (the /admin layout,
+ * mainly) can show SUPER_ADMIN-only UI (the support-team roster) without a
+ * second query.
  */
-export async function requirePlatformAdmin() {
+export async function requirePlatformStaff(): Promise<{ userId: string; email: string; role: "SUPER_ADMIN" | "SUPPORT_AGENT" }> {
   const session = await getSession();
   if (!session) redirect("/sign-in");
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isPlatformAdmin: true } });
-  if (!user?.isPlatformAdmin) redirect("/dashboard");
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { platformRole: true } });
+  if (!user?.platformRole) redirect("/dashboard");
 
-  return session;
+  return { userId: session.user.id, email: session.user.email, role: user.platformRole };
+}
+
+/** For the support-team-roster page: SUPER_ADMIN only, everyone else (including SUPPORT_AGENT) bounced to /admin. */
+export async function requireSuperAdmin(): Promise<{ userId: string; email: string }> {
+  const staff = await requirePlatformStaff();
+  if (staff.role !== "SUPER_ADMIN") redirect("/admin");
+  return staff;
+}
+
+/** Server Action counterpart to requirePlatformStaff() — throws instead of redirecting. */
+export async function requirePlatformStaffOrThrow(): Promise<{ userId: string; email: string; role: "SUPER_ADMIN" | "SUPPORT_AGENT" }> {
+  const session = await getSession();
+  if (!session) throw new AuthorizationError("Not signed in.");
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { platformRole: true } });
+  if (!user?.platformRole) throw new AuthorizationError("Not platform staff.");
+
+  return { userId: session.user.id, email: session.user.email, role: user.platformRole };
+}
+
+/** Server Action counterpart to requireSuperAdmin() — throws instead of redirecting. */
+export async function requireSuperAdminOrThrow(): Promise<{ userId: string; email: string }> {
+  const staff = await requirePlatformStaffOrThrow();
+  if (staff.role !== "SUPER_ADMIN") throw new AuthorizationError("Only a super admin can do this.");
+  return staff;
 }
 
 /**

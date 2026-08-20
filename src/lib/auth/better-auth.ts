@@ -3,6 +3,7 @@ import { bearer } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/db/prisma";
+import { recordResetPasswordUrl } from "@/lib/auth/reset-password-capture";
 
 // The mobile app's custom URL scheme, for deep-linking back after
 // browser-based auth flows (magic links, OAuth) and for the expo()
@@ -20,6 +21,13 @@ export const auth = betterAuth({
     enabled: true,
     requireEmailVerification: false, // flip on once an email provider is wired up (Phase 4+)
     minPasswordLength: 10,
+    // No email provider configured — same situation as staff invites. The
+    // link is captured here instead of sent, for a support agent's
+    // "generate a reset link" tool (src/server/actions/platform-admin.ts)
+    // to hand directly to a locked-out user.
+    sendResetPassword: async ({ url }) => {
+      recordResetPasswordUrl(url);
+    },
   },
   session: {
     // Server-side (DB-backed) sessions, not stateless JWTs, so an admin
