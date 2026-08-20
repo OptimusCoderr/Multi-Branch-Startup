@@ -2,7 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 
-type ScopedClient = Pick<ReturnType<typeof getScopedPrisma>, "sale">;
+type ScopedClient = Pick<ReturnType<typeof getScopedPrisma>, "sale" | "creditNote">;
 
 export type CustomerBalance = {
   outstanding: Prisma.Decimal;
@@ -14,9 +14,10 @@ const ZERO_BALANCE: CustomerBalance = { outstanding: new Prisma.Decimal(0), open
 
 /**
  * A customer's outstanding balance is never stored — it's always derived
- * fresh from Sale.grandTotal - Sale.amountPaid (the same source of truth
- * the sale detail page uses), so it can never drift from the payment
- * ledger the way a cached "debt" column could.
+ * fresh from Sale.grandTotal - Sale.amountPaid - (issued CreditNotes
+ * against that sale) (the same source of truth the sale detail page
+ * uses), so it can never drift from the payment/credit-note ledgers the
+ * way a cached "debt" column could.
  */
 export async function getCustomerBalances(db: ScopedClient, customerIds: string[]): Promise<Map<string, CustomerBalance>> {
   const balances = new Map<string, CustomerBalance>();
@@ -24,14 +25,25 @@ export async function getCustomerBalances(db: ScopedClient, customerIds: string[
 
   const sales = await db.sale.findMany({
     where: { customerId: { in: customerIds }, status: { not: "VOIDED" } },
-    select: { customerId: true, grandTotal: true, amountPaid: true, dueDate: true },
+    select: { id: true, customerId: true, grandTotal: true, amountPaid: true, dueDate: true },
   });
+  if (sales.length === 0) return balances;
+
+  const creditNotes = await db.creditNote.findMany({
+    where: { saleId: { in: sales.map((s) => s.id) }, status: "ISSUED" },
+    select: { saleId: true, amount: true },
+  });
+  const creditedBySaleId = new Map<string, Prisma.Decimal>();
+  for (const cn of creditNotes) {
+    creditedBySaleId.set(cn.saleId, (creditedBySaleId.get(cn.saleId) ?? new Prisma.Decimal(0)).add(cn.amount));
+  }
 
   const now = new Date();
 
   for (const sale of sales) {
     if (!sale.customerId) continue;
-    const outstandingOnSale = sale.grandTotal.sub(sale.amountPaid);
+    const credited = creditedBySaleId.get(sale.id) ?? new Prisma.Decimal(0);
+    const outstandingOnSale = sale.grandTotal.sub(sale.amountPaid).sub(credited);
     if (outstandingOnSale.lte(0)) continue;
 
     const current = balances.get(sale.customerId) ?? { ...ZERO_BALANCE };

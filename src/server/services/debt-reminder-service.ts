@@ -6,7 +6,7 @@ import { writeAuditLog } from "@/server/services/audit-service";
 
 type ScopedClient = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "company" | "customer" | "sale" | "debtReminder" | "auditLog" | "$transaction"
+  "company" | "customer" | "sale" | "creditNote" | "debtReminder" | "auditLog" | "$transaction"
 >;
 
 // Don't re-message the same customer more than once every few days even
@@ -35,13 +35,24 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
       customerId: { not: null },
       dueDate: { lt: cutoff },
     },
-    select: { customerId: true, grandTotal: true, amountPaid: true },
+    select: { id: true, customerId: true, grandTotal: true, amountPaid: true },
   });
+  if (overdueSales.length === 0) return [];
+
+  const creditNotes = await db.creditNote.findMany({
+    where: { saleId: { in: overdueSales.map((s) => s.id) }, status: "ISSUED" },
+    select: { saleId: true, amount: true },
+  });
+  const creditedBySaleId = new Map<string, Prisma.Decimal>();
+  for (const cn of creditNotes) {
+    creditedBySaleId.set(cn.saleId, (creditedBySaleId.get(cn.saleId) ?? new Prisma.Decimal(0)).add(cn.amount));
+  }
 
   const outstandingByCustomer = new Map<string, Prisma.Decimal>();
   for (const sale of overdueSales) {
     if (!sale.customerId) continue;
-    const outstanding = sale.grandTotal.sub(sale.amountPaid);
+    const credited = creditedBySaleId.get(sale.id) ?? new Prisma.Decimal(0);
+    const outstanding = sale.grandTotal.sub(sale.amountPaid).sub(credited);
     if (outstanding.lte(0)) continue;
     outstandingByCustomer.set(sale.customerId, (outstandingByCustomer.get(sale.customerId) ?? new Prisma.Decimal(0)).add(outstanding));
   }

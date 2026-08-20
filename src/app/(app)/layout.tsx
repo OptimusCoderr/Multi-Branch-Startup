@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-gray-50" style={themeStyle}>
       <header
         data-layout={branding.layoutPreset}
-        className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 data-[layout=COMPACT]:py-2"
+        className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 data-[layout=COMPACT]:py-2 print:hidden"
       >
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
@@ -67,7 +67,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       </header>
       <main
         data-layout={branding.layoutPreset}
-        className="mx-auto max-w-5xl px-6 py-8 data-[layout=COMPACT]:py-4"
+        className="mx-auto max-w-5xl px-6 py-8 data-[layout=COMPACT]:py-4 print:max-w-none print:p-0"
       >
         {children}
       </main>
