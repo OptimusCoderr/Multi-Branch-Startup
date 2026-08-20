@@ -12,10 +12,10 @@
 -- The application connects at runtime as a *different* Postgres role from
 -- the one that owns the schema and runs migrations (whatever DATABASE_URL
 -- points to). This role cannot UPDATE, DELETE, or TRUNCATE the append-only
--- AuditLog / StockMovement tables, cannot DELETE PaystackEvent rows, and
--- has no access at all to _prisma_migrations or any DDL — so a bug in
--- application code, or a leaked runtime credential, structurally cannot
--- rewrite audit history or run schema migrations.
+-- AuditLog / StockMovement / DebtReminder tables, cannot DELETE
+-- PaystackEvent rows, and has no access at all to _prisma_migrations or
+-- any DDL — so a bug in application code, or a leaked runtime credential,
+-- structurally cannot rewrite audit history or run schema migrations.
 --
 -- Prerequisite: the role must already exist —
 --   CREATE ROLE inventory_runtime WITH LOGIN PASSWORD '<a real generated secret>';
@@ -30,6 +30,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO inventory
 -- erase history, even via a bug or a compromised runtime credential.
 REVOKE UPDATE, DELETE, TRUNCATE ON "AuditLog" FROM inventory_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON "StockMovement" FROM inventory_runtime;
+REVOKE UPDATE, DELETE, TRUNCATE ON "DebtReminder" FROM inventory_runtime;
 
 -- PaystackEvent legitimately needs UPDATE (RECEIVED -> PROCESSED/FAILED)
 -- but should never be deleted — it's the webhook audit trail.

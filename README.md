@@ -268,6 +268,56 @@ This is being built in phases, each one shipping something testable end-to-end (
       resources stay as-is, only new creation is blocked), and per-feature
       (rather than per-count) gating, e.g. a tier that hides branding
       customization entirely rather than capping a number.
+- [x] **Phase 11 — Automated debtor reminders**: SMS reminders for
+      customers with an overdue balance, off by default per company
+      (`Company.debtReminderEnabled`/`debtReminderDaysOverdue`) and
+      further opt-out-able per customer (`Customer.remindersEnabled`) —
+      both must be true for a message to send, so turning the feature on
+      never silently starts messaging a customer who was never asked.
+      `debt-reminder-service.ts` finds every customer with a non-voided
+      sale whose `dueDate` is past the company's threshold and an
+      outstanding balance, skips anyone reminded within the last 3 days
+      regardless of the company's threshold (so a 1-day setting can't spam
+      daily), and — via `sms-client.ts`, a thin wrapper around Termii
+      structured exactly like `paystack/client.ts`'s "not configured"
+      pattern from Phase 6 — sends and records every attempt as an
+      append-only `DebtReminder` row (status `SENT`/`FAILED`, the exact
+      message, the provider response or error), the same accountability
+      pattern as `AuditLog`/`StockMovement`; `prisma/grants.sql` now
+      revokes `UPDATE`/`DELETE` on it too. Two trigger paths share the
+      same service: `vercel.json` schedules `/api/cron/debt-reminders`
+      daily (a plain Route Handler, not a Server Action, protected by a
+      `CRON_SECRET` bearer token since Vercel's scheduler isn't a signed-in
+      browser — this is the first thing in the app with real scheduled
+      automation, closing the gap Phase 9 explicitly deferred), and a
+      "Send reminders now" button on the customers page lets staff with
+      `customers.manage` trigger the same logic on demand, rate-limited
+      the same way other cost-bearing actions are. Verified end-to-end
+      without a real Termii account (none is configured in this dev
+      environment, matching how Phase 6 tested Paystack): the cron route
+      correctly 401s with no/wrong secret and 200s with the right one;
+      with only a placeholder key it finds candidates but sends nothing
+      and writes no `DebtReminder` rows (a real config problem, not a
+      per-message failure, so nothing is logged as attempted); swapping in
+      a real-shaped-but-invalid key drives the actual send path and
+      confirms a `FAILED` row and audit entry get written with Termii's
+      rejection reason even when Termii's response isn't valid JSON;
+      re-running immediately after finds zero candidates, confirming the
+      3-day cooldown; and — most directly — a company with two overdue
+      customers, one opted out, reports exactly one candidate, not two,
+      proving the opt-out filter runs at the query level rather than being
+      a UI-only checkbox. Also fixed a real bug found while building this:
+      the settings form's "enabled" checkbox used React-controlled state
+      that silently fell out of sync with the just-saved value after the
+      page's server data refreshed (the save itself was always correct,
+      confirmed via direct DB inspection — this was a display-only bug);
+      switched it to an uncontrolled input, since nothing else in the form
+      needed to react to that value live.
+      **Deliberately out of scope**: WhatsApp/email channels (the
+      `DebtReminderChannel` enum only has `SMS` today, but the schema and
+      service are structured to add one without reshaping either), and a
+      full receivables-collections workflow (payment plans, escalating
+      message tiers by days overdue) beyond a single reminder message.
 
 ## Getting started
 
@@ -336,10 +386,10 @@ skipped in a real deployment.
   transaction as the mutation it records.
 - **Defense in depth at the database**: even with `getScopedPrisma` and `requirePermission`
   both enforced correctly, the app's own DB credential (`RUNTIME_DATABASE_URL`) cannot
-  `UPDATE`/`DELETE` `AuditLog` or `StockMovement` — see `prisma/grants.sql`. This is a second,
-  independent layer: a bug in application code hits a Postgres permission error, not a
-  successfully rewritten audit trail.
+  `UPDATE`/`DELETE` `AuditLog`, `StockMovement`, or `DebtReminder` — see `prisma/grants.sql`.
+  This is a second, independent layer: a bug in application code hits a Postgres permission
+  error, not a successfully rewritten audit trail.
 - **Rate limiting**: `src/lib/rate-limit.ts` is an in-memory limiter applied to staff
-  invitations and sale/payment recording, on top of Better Auth's own built-in rate limiting
-  on `/api/auth/*`. It's correct for a single Node.js process; a multi-instance serverless
+  invitations, sale/payment recording, and on-demand debt-reminder sends, on top of Better
+  Auth's own built-in rate limiting on `/api/auth/*`. It's correct for a single Node.js process; a multi-instance serverless
   deployment needs a shared store (Upstash Redis) behind the same `checkRateLimit()` interface.

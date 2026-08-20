@@ -30,9 +30,16 @@ model Company {
   currency    String        @default("NGN")
   timezone    String        @default("Africa/Lagos")
   saleCounter Int           @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  deletedAt   DateTime?
+
+  // Off by default — sending automated messages to a company's customers
+  // is a consent-adjacent action that shouldn't silently turn on for an
+  // existing company just because this feature shipped.
+  debtReminderEnabled     Boolean @default(false)
+  debtReminderDaysOverdue Int     @default(7)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   memberships       Membership[]
   roles             Role[]
@@ -50,6 +57,7 @@ model Company {
   customers         Customer[]
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
+  debtReminders     DebtReminder[]
 
   @@index([status])
 }
@@ -567,14 +575,57 @@ model Customer {
   creditLimit Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
 
+  // Per-customer opt-out from automated debt reminders, independent of
+  // the company-wide debtReminderEnabled switch — both must be true for a
+  // reminder to actually send.
+  remindersEnabled Boolean @default(true)
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  sales Sale[]
+  sales         Sale[]
+  debtReminders DebtReminder[]
 
   @@index([companyId, isActive])
   @@index([companyId, name])
+}
+
+enum DebtReminderChannel {
+  SMS
+}
+
+enum DebtReminderStatus {
+  SENT
+  FAILED
+}
+
+// Append-only log of every reminder attempt — never updated or deleted,
+// same accountability pattern as AuditLog/StockMovement, so "did we
+// actually message this customer, and what did we say" is always
+// answerable, and so the cooldown check (don't re-remind too often) has
+// ground truth to read from.
+model DebtReminder {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  channel             DebtReminderChannel @default(SMS)
+  message             String
+  outstandingSnapshot Decimal             @db.Decimal(12, 2)
+  status              DebtReminderStatus
+  providerResponse    Json?
+  error               String?
+
+  triggeredByMembershipId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, customerId, createdAt])
+  @@index([companyId, createdAt])
 }
 
 // ---------------------------------------------------------------------------

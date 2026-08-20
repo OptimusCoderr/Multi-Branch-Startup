@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { getCustomerBalances } from "@/server/services/customer-service";
 import { archiveCustomer } from "@/server/actions/customers";
+import { SendRemindersButton } from "@/components/forms/send-reminders-button";
 
 export default async function CustomersPage() {
   const membership = await requireMembership();
@@ -17,7 +18,10 @@ export default async function CustomersPage() {
   const db = getScopedPrisma(membership.companyId);
   const currency = membership.companyCurrency;
 
-  const customers = await db.customer.findMany({ orderBy: { name: "asc" } });
+  const [customers, company] = await Promise.all([
+    db.customer.findMany({ orderBy: { name: "asc" } }),
+    db.company.findUnique({ where: { id: membership.companyId } }),
+  ]);
   const balances = await getCustomerBalances(db, customers.map((c) => c.id));
 
   const totalOutstanding = [...balances.values()].reduce((sum, b) => sum.add(b.outstanding), new Prisma.Decimal(0));
@@ -36,6 +40,19 @@ export default async function CustomersPage() {
           </Link>
         )}
       </div>
+
+      {canCreate &&
+        (company?.debtReminderEnabled ? (
+          <SendRemindersButton />
+        ) : (
+          <p className="text-sm text-gray-500">
+            Automated debt reminders are off.{" "}
+            <Link href="/settings/debt-reminders" className="text-[var(--brand-primary)] hover:underline">
+              Turn them on
+            </Link>
+            .
+          </p>
+        ))}
 
       <div className="grid grid-cols-3 gap-4">
         <div className="rounded-lg border border-gray-200 p-4">

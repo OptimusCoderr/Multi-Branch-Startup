@@ -5,6 +5,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/db/prisma";
 import { CheckoutButton } from "@/components/forms/checkout-button";
+import { SettingsNav } from "@/components/layout/settings-nav";
 
 const STATUS_STYLES: Record<string, string> = {
   TRIALING: "bg-yellow-100 text-yellow-700",
@@ -31,6 +32,7 @@ export default async function BillingSettingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <SettingsNav current="/settings/billing" />
       <h1 className="text-2xl font-semibold">Billing</h1>
 
       {subscription && (
