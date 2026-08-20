@@ -15,6 +15,19 @@ async function main() {
 
   console.log("Seeding subscription plans...");
   await prisma.plan.upsert({
+    where: { name: "Solo" },
+    update: {},
+    create: {
+      name: "Solo",
+      priceKobo: 500_000, // NGN 5,000/mo
+      billingInterval: "MONTHLY",
+      // maxWarehouses: 0 is a real cap, not "uncapped" — parsePlanFeatures()
+      // and assertUnderWarehouseLimit() both special-case 0 correctly
+      // (checked via `typeof === "number"` / `!== undefined`, not truthiness).
+      features: { maxBranches: 1, maxWarehouses: 0, maxStaff: 2 },
+    },
+  });
+  await prisma.plan.upsert({
     where: { name: "Starter" },
     update: {},
     create: {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -16,10 +16,17 @@ export default function NewSaleScreen() {
   const { data: branchesData } = useQuery({ queryKey: ["branches"], queryFn: api.branches });
   const { data: productsData } = useQuery({ queryKey: ["products"], queryFn: api.products });
 
+  const branches = branchesData?.branches ?? [];
   const [branchId, setBranchId] = useState<string | null>(null);
   const [customerName, setCustomerName] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // A single-shop owner has exactly one branch and shouldn't have to tap a
+  // picker with one option in it every time they record a sale.
+  useEffect(() => {
+    if (branches.length === 1 && branchId === null) setBranchId(branches[0].id);
+  }, [branches, branchId]);
 
   const total = useMemo(() => lineItems.reduce((sum, li) => sum + li.unitPrice * li.quantity, 0), [lineItems]);
 
@@ -65,16 +72,22 @@ export default function NewSaleScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, gap: 16 }}>
-      <View>
-        <Text style={styles.label}>Branch</Text>
-        <View style={styles.chipRow}>
-          {(branchesData?.branches ?? []).map((b) => (
-            <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipSelected]}>
-              <Text style={[styles.chipText, branchId === b.id && styles.chipTextSelected]}>{b.name}</Text>
-            </Pressable>
-          ))}
+      {branches.length > 1 && (
+        <View>
+          <Text style={styles.label}>Branch</Text>
+          <View style={styles.chipRow}>
+            {branches.map((b) => (
+              <Pressable key={b.id} onPress={() => setBranchId(b.id)} style={[styles.chip, branchId === b.id && styles.chipSelected]}>
+                <Text style={[styles.chipText, branchId === b.id && styles.chipTextSelected]}>{b.name}</Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
-      </View>
+      )}
+
+      {branches.length === 0 && (
+        <Text style={styles.muted}>No branches yet — create one on the web app before recording a sale.</Text>
+      )}
 
       <View>
         <Text style={styles.label}>Customer name (optional)</Text>

@@ -1,0 +1,508 @@
+# Testing Guide
+
+A practical, step-by-step guide to setting up this app from scratch and verifying that
+every feature actually works — not just that it builds. Every command and UI flow below
+has been run against a real local instance while writing this doc.
+
+If you just want automated sanity checks, jump to [Automated checks](#automated-checks).
+If you want to click through the app yourself, start at [Environment setup](#environment-setup)
+and follow [Manual walkthrough](#manual-walkthrough) in order. If you want to script your
+own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke-tests).
+
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Environment setup](#environment-setup)
+- [Automated checks](#automated-checks)
+- [Manual walkthrough](#manual-walkthrough)
+  1. [Sign-up, onboarding, and tenant isolation](#1-sign-up-onboarding-and-tenant-isolation)
+  2. [Staff, roles, and permissions](#2-staff-roles-and-permissions)
+  3. [Products, warehouses, branches](#3-products-warehouses-branches)
+  4. [Stock transfers](#4-stock-transfers)
+  5. [Sales and payments](#5-sales-and-payments)
+  6. [Credit notes and printing](#6-credit-notes-and-printing)
+  7. [Customers and debt](#7-customers-and-debt)
+  8. [Expenses](#8-expenses)
+  9. [Plan limits](#9-plan-limits)
+  10. [Automated debt reminders](#10-automated-debt-reminders)
+  11. [Branding](#11-branding)
+  12. [Billing (Paystack)](#12-billing-paystack)
+  13. [Security & accountability](#13-security--accountability)
+- [Mobile app](#mobile-app)
+- [Writing your own smoke tests](#writing-your-own-smoke-tests)
+- [Troubleshooting](#troubleshooting)
+- [What this guide can't verify for you](#what-this-guide-cant-verify-for-you)
+
+## Prerequisites
+
+- Node.js 20+
+- PostgreSQL 16 (a local install, or Docker — anything reachable at a `DATABASE_URL`)
+- For mobile testing: an Expo Go app on a phone, or Xcode/Android Studio for a
+  simulator/emulator (see [Mobile app](#mobile-app))
+
+## Environment setup
+
+```bash
+npm install
+cp .env.example .env
+```
+
+Open `.env` and fill in:
+
+- `DATABASE_URL` — your Postgres connection string
+- `BETTER_AUTH_SECRET` — generate with `openssl rand -base64 32`
+
+Everything else in `.env.example` (`PAYSTACK_SECRET_KEY`, `TERMII_API_KEY`, `CRON_SECRET`,
+`RUNTIME_DATABASE_URL`) has a working fallback or "not configured" path for local testing —
+see the relevant section below for what to do about each.
+
+```bash
+npx prisma migrate dev
+npm run db:seed
+npm run dev
+```
+
+The app is now running at `http://localhost:3000`. `db:seed` is idempotent — safe to
+re-run any time (e.g. after pulling a change that adds a new plan or permission).
+
+### Least-privilege database role (optional locally, required in production)
+
+The app is designed to connect at runtime as a role that structurally cannot tamper with
+the append-only audit trail — see [Security & accountability](#13-security--accountability)
+to actually verify this. To set it up:
+
+```bash
+# psql doesn't understand Prisma's `?schema=public` query parameter, so
+# it has to be stripped from the URL first — every psql example in this
+# doc does the same.
+psql "${DATABASE_URL%%\?*}" -c "CREATE ROLE inventory_runtime WITH LOGIN PASSWORD '<pick a password>';"
+npm run db:grants
+```
+
+Then set `RUNTIME_DATABASE_URL` in `.env` to that role's connection string and restart
+`npm run dev`. If you skip this, the app falls back to `DATABASE_URL` — fine for a quick
+try, but skip the grants-enforcement check in section 13 if you do.
+
+## Automated checks
+
+Run these first — they catch a large class of problems in seconds, before you click
+through anything by hand.
+
+```bash
+npm run typecheck          # tsc --noEmit
+npm run lint                # ESLint
+npm run build                # production build — also catches issues typecheck/lint miss
+npx prisma validate           # schema is internally consistent
+npm run reconcile:stock        # StockMovement ledger agrees with cached stock quantities
+```
+
+`reconcile:stock` needs at least one company with some stock movement history to be a
+meaningful check — on a freshly seeded, empty database it'll just report 0 rows checked.
+
+For the mobile app:
+
+```bash
+cd mobile
+npm install
+npm run typecheck
+npx expo export --platform ios --platform android   # confirms Metro can bundle the whole app
+rm -rf dist                                            # clean up the export output afterward
+```
+
+## Manual walkthrough
+
+Each section below is a self-contained checklist: what to click, and what should happen.
+They build on each other in order (later sections assume earlier ones are done), so it's
+easiest to work straight through with one browser session. Where a `name`/`placeholder`
+attribute is given, that's for anyone scripting these steps with Playwright — see
+[Writing your own smoke tests](#writing-your-own-smoke-tests).
+
+### 1. Sign-up, onboarding, and tenant isolation
+
+1. Go to `/sign-up`, create an account (name, email, password), then fill in a company
+   name on the onboarding screen that follows. You land on `/dashboard` as the company's
+   **Owner**.
+2. **Sign out and repeat with a second, unrelated email** to create a second company. This
+   second company is your tenant-isolation control group for every section below — after
+   creating any resource (a product, a sale, a customer...) as Company A, sign in as
+   Company B and confirm:
+   - It doesn't appear in Company B's list views.
+   - Reusing Company A's resource URL directly while signed in as Company B (e.g. copy a
+     sale's `/sales/<id>` URL from Company A's session and paste it into Company B's
+     browser) returns a 404, not the resource.
+
+   This is the single most important check in this whole guide — it's the difference
+   between "multi-tenant" and "multi-tenant in name only." Do it for at least products,
+   sales, and customers.
+
+### 2. Staff, roles, and permissions
+
+1. As Owner, go to `/staff` → invite a colleague by email, picking a role (Owner, Admin,
+   Branch Manager, Warehouse Manager, or Cashier — the seeded system roles). No email
+   provider is configured by default, so the invite surfaces as a copyable link instead of
+   an actual email — copy it.
+2. Open the invite link in a private/incognito window, accept it, set a password. You're
+   now signed in as that staff member with their role's default permissions.
+3. Back as Owner, open that staff member's detail page (`/staff/[id]`) and **deny** a
+   permission their role normally grants (e.g. deny `sales.record` on a Cashier).
+4. Switch to the staff member's session and confirm the denied action is blocked — **on
+   their very next request, with no re-login.** This is a DB-backed permission check, not
+   a cached JWT claim, so it should take effect immediately.
+5. Suspend or remove the staff member from `/staff`, then confirm their *next* request
+   redirects to `/sign-in` — suspension force-invalidates their sessions outright, not just
+   an app-layer flag.
+
+### 3. Products, warehouses, branches
+
+1. `/branches/new` — create a branch (`input[name="name"]`).
+2. `/products/new` — create a product (`input[name="sku"]`, `input[name="name"]`,
+   `input[name="unitPrice"]`). Confirm it now shows a zeroed stock row for the branch you
+   just made (visible on `/stock`).
+3. `/warehouses/new` — create a warehouse. Confirm the *existing* product now also shows a
+   zeroed row there — stock provisioning runs symmetrically in both directions (new
+   product → all existing locations; new location → all existing products).
+4. As a role without the right permission (a Cashier trying to create a product, say),
+   confirm the create action is blocked both in the UI and if you try the underlying
+   Server Action directly.
+
+### 4. Stock transfers
+
+Two independent intake paths — test both:
+
+1. **External delivery** (no warehouse involved): `/transfers/new-external` — pick a
+   product and destination branch, set a quantity, give it a source name
+   (`input[name="externalSourceName"]`). This goes straight to `RECEIVED` and increments
+   branch stock in one step. This is also the path a business with **zero warehouses**
+   uses to stock branches at all — confirm it still works for a company that's never
+   created a warehouse.
+2. **Warehouse-sourced transfer**: `/transfers/new` — request a transfer from a warehouse
+   to a branch. As a *different* staff member than the requester, approve it, dispatch it,
+   then receive it. Confirm:
+   - The requester cannot also approve their own request (self-approval is blocked by
+     default).
+   - Warehouse stock decrements at dispatch, branch stock increments at receipt — not
+     both at once.
+   - Receiving a *different* quantity than requested is recorded as-is and flagged as a
+     discrepancy, not silently corrected.
+3. With **zero warehouses**, visit `/transfers/new` directly — it should explain there are
+   no warehouses and point you to `/transfers/new-external` or `/warehouses/new`, not show
+   a broken form with an empty source dropdown.
+
+### 5. Sales and payments
+
+1. `/sales/new` — pick a branch, add a walk-in customer name, add one or more line items,
+   submit. Confirm the total is server-computed (matches what the form showed) and stock
+   decremented by exactly the quantities sold.
+2. Try to oversell (quantity greater than available stock) — should be rejected, not
+   allowed to go negative.
+3. On the sale detail page, record a **partial** payment, then another partial payment
+   that completes it. Confirm the status transitions `CONFIRMED` → `PARTIALLY_PAID` →
+   `PAID`, and that an overpayment attempt (more than the remaining balance) is rejected.
+4. Void a sale (as a role with `sales.void`) and confirm stock is restored via a
+   compensating movement — the original sale record stays, just marked `VOIDED`, never
+   deleted.
+5. With **zero branches** (a brand-new company before creating one), visit `/sales/new`
+   directly — should explain there's no branch yet and link to `/branches/new`, not show a
+   broken required dropdown.
+
+### 6. Credit notes and printing
+
+1. On a sale's detail page (as a role with `credit_notes.issue` — Owner/Admin by default),
+   issue a partial credit note with an amount and reason. Confirm the sale's outstanding
+   balance drops by exactly that amount, and a sequential `CN-NNNNNN` number is assigned.
+2. Try to issue a credit note for **more** than the currently-outstanding balance — should
+   be rejected with a clear message.
+3. Void the credit note (`credit_notes.void`) and confirm the outstanding balance reverts
+   to what it was before — the sale itself is untouched.
+4. Visit `/sales/[id]/print` and `/credit-notes/[id]/print` — both should render a clean,
+   app-chrome-free invoice/credit-note (use your browser's print preview to confirm the
+   nav/header actually disappears, not just that the page loads).
+
+### 7. Customers and debt
+
+1. `/customers/new` — create a customer, then record a sale linked to them with a future
+   `dueDate` (check "This is a credit sale" on the sale form) instead of paying in full.
+2. Confirm `/customers` shows their outstanding balance, and once the due date passes, an
+   "overdue" flag.
+3. Issue a credit note against one of their sales and confirm the customer's aggregated
+   outstanding balance drops accordingly — this is computed live from
+   `grandTotal - amountPaid - creditedTotal` across all their sales, never a stored,
+   potentially-stale column.
+
+### 8. Expenses
+
+1. `/expenses/new` — record an expense against one of the seeded default categories (Rent,
+   Utilities, Salaries, etc.), either company-wide or scoped to a branch.
+2. Void an expense and confirm the "this month" total on `/expenses` drops by exactly its
+   amount — not to zero, and not still counting it.
+
+### 9. Plan limits
+
+The seeded plans: **Solo** (₦5,000/mo — 1 branch, 0 warehouses, 2 staff), **Starter**
+(₦15,000/mo — 2 branches, 1 warehouse, 10 staff), **Growth** (₦40,000/mo — 10 branches, 5
+warehouses, 50 staff). New companies trial on Starter-level limits regardless of which
+plan they eventually pick.
+
+To actually test a cap being hit without waiting to organically grow a company that big,
+temporarily tighten a plan's limits directly in the database, e.g.:
+
+```sql
+UPDATE "Plan" SET features = '{"maxBranches": 1, "maxWarehouses": 0, "maxStaff": 1}' WHERE name = 'Starter';
+```
+
+Then confirm: the branches/warehouses/staff pages show a live "X of Y used" indicator, the
+first resource under the cap succeeds, the next one is rejected **server-side** (not just
+a disabled button — try calling the Server Action past the point the UI would block you),
+and no record is created on rejection. Restore the plan's real limits afterward.
+
+### 10. Automated debt reminders
+
+No real Termii account is needed to verify the plumbing:
+
+1. `/settings/debt-reminders` — enable reminders for the company, set a days-overdue
+   threshold.
+2. With `TERMII_API_KEY` unset/placeholder (the `.env.example` default), trigger a send —
+   either the "Send reminders now" button on `/customers`, or manually hit the cron route:
+
+   ```bash
+   curl http://localhost:3000/api/cron/debt-reminders \
+     -H "Authorization: Bearer $CRON_SECRET"
+   ```
+
+   (No/wrong `Authorization` header should get a `401`; the correct `CRON_SECRET` from
+   `.env` gets a `200`.) With a placeholder key, it should find candidates but send
+   nothing and write no `DebtReminder` rows — a configuration problem, not a per-message
+   failure, so nothing gets logged as attempted.
+3. Re-run immediately — it should find zero candidates for the same customer (a 3-day
+   cooldown applies regardless of the configured threshold, so a 1-day setting can't spam
+   daily).
+4. Opt one customer out (`Customer.remindersEnabled` off, via their detail page) and
+   confirm they're excluded from the candidate list even though they're otherwise overdue.
+
+### 11. Branding
+
+`/settings/branding` — set a primary color, secondary color, and logo URL. Confirm the
+color shows up on primary buttons/links across the app (check computed styles, not just
+that you saved a value), and that a **second company** with no branding configured shows
+neither color — no cross-tenant leakage of theme.
+
+### 12. Billing (Paystack)
+
+No real Paystack account is needed to test the webhook plumbing — sign locally with the
+same HMAC-SHA512 scheme Paystack uses:
+
+```bash
+SECRET=$(grep PAYSTACK_SECRET_KEY .env | cut -d'"' -f2)
+BODY='{"event":"charge.success","data":{"reference":"test_ref","metadata":{"companyId":"<a real company id>","planId":"<a real plan id>"}}}'
+SIG=$(echo -n "$BODY" | openssl dgst -sha512 -hmac "$SECRET" | sed 's/^.* //')
+
+curl -i -X POST http://localhost:3000/api/webhooks/paystack \
+  -H "Content-Type: application/json" \
+  -H "x-paystack-signature: $SIG" \
+  -d "$BODY"
+```
+
+Grab a real `companyId`/`planId` first (the webhook silently no-ops without a
+company/plan it recognizes):
+
+```bash
+psql "${DATABASE_URL%%\?*}" -c 'SELECT id, name FROM "Plan";'
+psql "${DATABASE_URL%%\?*}" -c 'SELECT id FROM "Company" LIMIT 1;'
+```
+
+Confirm:
+
+- A tampered signature (or none at all) is rejected with `401` **before** the payload is
+  parsed or touched.
+- The identical payload sent twice is idempotent — check `PaystackEvent.processedAt`
+  doesn't change on the second delivery, not just that you get a `200` both times.
+- `invoice.payment_failed` moves the subscription to `PAST_DUE`, and `/dashboard`/
+  `/settings/billing` stay reachable while every other route redirects to
+  `/billing-required` — confirm the grace period boundary (7 days past
+  `currentPeriodEnd`) on both sides.
+- `/settings/billing` lists all three plans with correct prices/limits — this is also
+  where the Solo plan's "No warehouse" wording is worth double-checking (it's a real bug
+  class: a plan capped at exactly `0` of something is easy to accidentally render as a
+  literal `"0"` instead of hiding/relabeling the line — see the git history around the
+  Solo plan's introduction if you want the specifics).
+
+### 13. Security & accountability
+
+- **Least-privilege DB role** (skip if you didn't set up `RUNTIME_DATABASE_URL`): as the
+  `inventory_runtime` role, attempt to directly `UPDATE`/`DELETE` a row in `AuditLog`,
+  `StockMovement`, or `DebtReminder` — it should fail with a Postgres permission error,
+  not succeed.
+
+  ```bash
+  psql "${RUNTIME_DATABASE_URL%%\?*}" -c 'DELETE FROM "AuditLog" WHERE id = (SELECT id FROM "AuditLog" LIMIT 1);'
+  # expect: ERROR:  permission denied for table AuditLog
+  ```
+- **Audit log coverage**: there's no in-app page to browse `AuditLog` — inspect it
+  directly (`psql` or Prisma Studio: `npx prisma studio`). Confirm a row was written for
+  things you did above: staff invited, a permission changed, a sale recorded, a transfer's
+  state changed, a credit note issued.
+- **Rate limiting**: rapidly submit the same sale/payment/staff-invite action many times in
+  a row (a simple loop, or spam-clicking) — should eventually get a clear rate-limit
+  error rather than either silently succeeding unboundedly or crashing.
+- **Security headers**: `curl -I http://localhost:3000/` and confirm `Content-Security-Policy`,
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`,
+  and `Referrer-Policy` are all present.
+
+## Mobile app
+
+```bash
+cd mobile
+npm install
+```
+
+Set `expo.extra.apiBaseUrl` in `mobile/app.json` to point at your running backend — use
+your machine's LAN IP (not `localhost`) if testing on a **physical** device, since
+`localhost` on the phone means the phone itself.
+
+**Two ways to run it**, depending on what you're testing:
+
+- `npm start` (plain Expo Go, scan the QR code) — works for every screen **except**
+  Bluetooth printing, which is a native module Expo Go can't load.
+- `npm run android` / `npm run ios` (`expo run:android`/`expo run:ios`, a Development
+  Build) — needed once you touch printing; this generates a native project on first run
+  via the `react-native-ble-plx` config plugin, builds it, and installs it on a
+  device/emulator/simulator.
+
+Sign in with an account from an already-onboarded company (mobile doesn't do company
+sign-up/onboarding — that's web-only). Walk through: dashboard, recording a sale (confirm
+the branch picker is skipped entirely for a single-branch company, shown for multiple),
+recording a payment, viewing/creating customers, issuing/voiding a credit note, and
+printing (needs the Development Build + a real Bluetooth thermal printer — see the caveat
+below).
+
+### Testing the mobile API directly with curl
+
+Useful for isolating "is this a backend bug or a UI bug" without touching the app at all:
+
+```bash
+EMAIL="you@example.com"        # an already-onboarded account
+PASSWORD="..."
+
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/sign-in/email \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+
+curl http://localhost:3000/api/mobile/v1/me -H "Authorization: Bearer $TOKEN"
+curl http://localhost:3000/api/mobile/v1/dashboard -H "Authorization: Bearer $TOKEN"
+curl http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN"
+```
+
+`/me` and `/dashboard` should stay reachable (`200`) even with an inactive subscription;
+every other `/api/mobile/v1/*` route should `402` in that case — confirm this by
+temporarily setting `Subscription.status = 'CANCELLED'` for the test company in `psql`.
+
+### Bluetooth printer testing — needs real hardware
+
+This cannot be verified without a physical 58mm/80mm BLE thermal receipt printer and a
+real device with Bluetooth. What can be checked without hardware:
+
+```bash
+cd mobile
+npx expo prebuild --platform android --no-install
+grep -A1 BLUETOOTH android/app/src/main/AndroidManifest.xml   # confirm scan/connect permissions landed
+rm -rf android                                                  # clean up — this is a managed-workflow app
+```
+
+Beyond that, pair a real printer via the app's Settings tab and confirm a test print
+actually comes out. If it doesn't, check the printer uses BLE (not classic Bluetooth
+SPP — iOS can't talk to that at all from a third-party app) and that
+`mobile/lib/bluetooth-printer.ts`'s "first writable characteristic" heuristic actually
+found the right one for your printer's chipset.
+
+## Writing your own smoke tests
+
+Every feature in this guide was actually exercised with disposable Playwright scripts
+during development — not committed, written fresh, run, then deleted. That's the pattern
+worth reusing:
+
+```js
+import { chromium } from "playwright";
+
+const BASE = "http://localhost:3000";
+const password = "supersecurepassword123";
+const email = `test+${Date.now()}@example.com`;
+
+function assert(cond, msg) {
+  if (!cond) throw new Error("ASSERTION FAILED: " + msg);
+  console.log("OK: " + msg);
+}
+
+const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium" });
+const page = await browser.newPage();
+
+await page.goto(`${BASE}/sign-up`);
+await page.fill('form input:not([type])', "Test Owner");
+await page.fill('input[type="email"]', email);
+await page.fill('input[type="password"]', password);
+await page.click('button[type="submit"]');
+await page.waitForSelector('input[name="companyName"]', { timeout: 15000 });
+await page.fill('input[name="companyName"]', "Test Co");
+await page.click('button[type="submit"]');
+await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+
+// ... your assertions here ...
+
+await browser.close();
+```
+
+Pitfalls that actually cost time while building this app — worth knowing before you hit
+them yourself:
+
+- **Use `page.locator("body").innerText()`, not `page.textContent("body")`.**
+  `textContent()` includes the literal text of `<script>` tags, and Next.js embeds its
+  streaming-SSR hydration payload as inline scripts that linger in the DOM after a Server
+  Action updates the visible page — so a *correctly* updated page can still contain stale
+  JSON text from a moment earlier, making `textContent()` assertions flaky in a way that
+  has nothing to do with app correctness. `innerText()` only reflects rendered text.
+  Relatedly: `innerText()` also reflects CSS `text-transform: uppercase`, so a label
+  written as `Branches` in JSX may come back as `BRANCHES`.
+- **Scope form-field locators when multiple forms share field names on one page.** A sale
+  detail page can have `RecordPaymentForm`, `VoidSaleForm`, and `IssueCreditNoteForm` all
+  using `input[name="amount"]`/`input[name="reason"]` — an unscoped `page.fill()` silently
+  fills the wrong form's field. Scope to the specific form first:
+  `page.locator("form", { has: page.locator('button:has-text("...")') })`.
+- **`:has-text()` does substring matching.** `button:has-text("Void")` matches both "Void
+  sale" and "Void" — use `page.getByRole("button", { name: "Void", exact: true })` when
+  button labels overlap.
+- **A rejected mutation doesn't consume a sequential number.** If you're testing that
+  `CN-000002`/`INV-000002`-style numbering is correct, remember a validation failure (e.g.
+  an over-credit attempt) never increments the counter — the next successful one still
+  gets the next number, not one further along.
+- Always `rm` your scratch script when done — nothing in this repo's history should be a
+  leftover one-off test file.
+
+## Troubleshooting
+
+- **`Can't reach database server at localhost:5432`** — Postgres isn't running.
+  `pg_lsclusters` to check; `pg_ctlcluster 16 main start` (adjust the version to match
+  what's installed) to bring it up.
+- **Playwright can't find a browser** — this repo doesn't bundle one; point
+  `chromium.launch({ executablePath: ... })` at whatever Chromium/Chrome is actually
+  installed in your environment.
+- **A migration "was modified after it was applied"** — you edited an already-applied
+  migration file. Don't do this on a real database; on a disposable local dev database
+  only, `npx prisma migrate reset --force` starts clean (destroys all local data — never
+  run this against anything you care about).
+- **Mobile: "Unable to resolve module react-native-ble-plx"** in Expo Go — expected. That
+  module needs a Development Build (`expo run:android`/`ios`), not Expo Go.
+
+## What this guide can't verify for you
+
+- **Real Paystack checkout** (a live redirect through Paystack's hosted checkout page) —
+  the webhook-signing approach above verifies the receiving end, not the actual checkout
+  UX. Needs a real Paystack test-mode account.
+- **Real Termii SMS delivery** — the cron/manual-trigger flow above verifies the app finds
+  the right candidates and calls out correctly, but confirming an SMS actually arrives
+  needs a real Termii account and a real phone number.
+- **Bluetooth printer pairing and printing** — needs real hardware, as noted above; nothing
+  in a CI or sandboxed environment can substitute for an actual print coming out of an
+  actual printer.
+- **True concurrency races** (two people recording a sale on the very last unit of stock at
+  the exact same instant) — the atomic-`UPDATE`-based guards are correct by inspection and
+  by the database transaction guarantees they rely on, but reproducing an actual race
+  needs concurrent load, not sequential clicking.

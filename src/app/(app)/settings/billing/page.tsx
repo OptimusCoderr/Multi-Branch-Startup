@@ -71,9 +71,15 @@ export default async function BillingSettingsPage() {
                   <span className="text-sm font-normal text-gray-500">/mo</span>
                 </p>
                 <ul className="text-sm text-gray-500">
-                  {features.maxBranches && <li>Up to {features.maxBranches} branches</li>}
-                  {features.maxWarehouses && <li>Up to {features.maxWarehouses} warehouses</li>}
-                  {features.maxStaff && <li>Up to {features.maxStaff} staff</li>}
+                  {features.maxBranches !== undefined && (
+                    <li>
+                      Up to {features.maxBranches} branch{features.maxBranches === 1 ? "" : "es"}
+                    </li>
+                  )}
+                  {features.maxWarehouses !== undefined && (
+                    <li>{features.maxWarehouses === 0 ? "No warehouse" : `Up to ${features.maxWarehouses} warehouses`}</li>
+                  )}
+                  {features.maxStaff !== undefined && <li>Up to {features.maxStaff} staff</li>}
                 </ul>
                 {isCurrent ? (
                   <span className="mt-2 self-start rounded-md bg-gray-100 px-3 py-1.5 text-sm text-gray-500">Current plan</span>

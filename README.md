@@ -453,7 +453,10 @@ credential can't rewrite the append-only audit trail (see Phase 7 above).
 Set this up once per environment, after running migrations:
 
 ```bash
-psql "$DATABASE_URL" -c "CREATE ROLE inventory_runtime WITH LOGIN PASSWORD '<generate a real secret>';"
+# psql doesn't understand Prisma's `?schema=public` query parameter on the
+# connection string, so it has to be stripped first (same trick db:grants
+# uses internally).
+psql "${DATABASE_URL%%\?*}" -c "CREATE ROLE inventory_runtime WITH LOGIN PASSWORD '<generate a real secret>';"
 npm run db:grants
 ```
 

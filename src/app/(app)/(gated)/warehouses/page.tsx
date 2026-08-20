@@ -45,7 +45,12 @@ export default async function WarehousesPage() {
       </div>
 
       {warehouses.length === 0 ? (
-        <p className="text-gray-500">No warehouses yet.</p>
+        <p className="text-gray-500">
+          No warehouses yet — and that&apos;s fine. Plenty of single-branch shops never need one and
+          stock their branch directly (Transfers &rarr; Record external delivery). Add a warehouse
+          here only if you want a separate storage or distribution point that feeds multiple
+          branches.
+        </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">

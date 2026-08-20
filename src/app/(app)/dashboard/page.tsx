@@ -1,11 +1,29 @@
 import Link from "next/link";
 import { requireMembership } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
+import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 
 export default async function DashboardPage() {
   const membership = await requireMembership();
-  const subscription = await getSubscriptionForCompany(membership.companyId);
+  const db = getScopedPrisma(membership.companyId);
+  const [subscription, branchCount, warehouseCount] = await Promise.all([
+    getSubscriptionForCompany(membership.companyId),
+    db.branch.count({ where: { isActive: true } }),
+    db.warehouse.count({ where: { isActive: true } }),
+  ]);
   const active = isSubscriptionActive(subscription);
+
+  // Same copy for everyone reads like a checklist of features a
+  // single-branch, no-warehouse shop doesn't have and doesn't need —
+  // describe what this company is actually set up to do instead.
+  const managed = [
+    "products",
+    branchCount > 1 ? "branches" : "your branch",
+    ...(warehouseCount > 0 ? ["warehouses", "stock transfers"] : []),
+    "sales",
+    "staff",
+  ];
+  const summary = managed.length > 1 ? `${managed.slice(0, -1).join(", ")}, and ${managed.at(-1)}` : managed[0];
 
   return (
     <div className="flex flex-col gap-4">
@@ -28,10 +46,7 @@ export default async function DashboardPage() {
       )}
 
       <h1 className="text-2xl font-semibold">Welcome to {membership.companyName}</h1>
-      <p className="text-gray-500">
-        Manage products, warehouses, branches, stock transfers, sales, and staff from the
-        navigation above.
-      </p>
+      <p className="text-gray-500">Manage {summary} from the navigation above.</p>
     </div>
   );
 }
