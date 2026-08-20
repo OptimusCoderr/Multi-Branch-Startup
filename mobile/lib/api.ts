@@ -71,6 +71,18 @@ export type SaleSummary = {
   createdAt: string;
 };
 
+export type CreditNote = {
+  id: string;
+  creditNoteNumber: string;
+  amount: string;
+  reason: string;
+  status: "ISSUED" | "VOIDED";
+  issuedByName: string;
+  voidedByName: string | null;
+  voidReason: string | null;
+  createdAt: string;
+};
+
 export type SaleDetail = {
   id: string;
   saleNumber: string;
@@ -78,6 +90,7 @@ export type SaleDetail = {
   customerName: string | null;
   customerPhone: string | null;
   status: string;
+  voidReason: string | null;
   subtotal: string;
   grandTotal: string;
   amountPaid: string;
@@ -85,6 +98,7 @@ export type SaleDetail = {
   createdAt: string;
   lineItems: { productName: string; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
   payments: { id: string; amount: string; mode: string; paidAt: string }[];
+  creditNotes: CreditNote[];
 };
 
 export type CustomerSummary = {
@@ -128,6 +142,10 @@ export const api = {
   }) => request<{ saleId: string }>("/api/mobile/v1/sales", { method: "POST", body: JSON.stringify(input) }),
   recordPayment: (saleId: string, input: { amount: number; mode: string; reference?: string; notes?: string }) =>
     request<{ paymentId: string }>(`/api/mobile/v1/sales/${saleId}/payments`, { method: "POST", body: JSON.stringify(input) }),
+  issueCreditNote: (saleId: string, input: { amount: number; reason: string }) =>
+    request<{ creditNoteId: string }>(`/api/mobile/v1/sales/${saleId}/credit-notes`, { method: "POST", body: JSON.stringify(input) }),
+  voidCreditNote: (creditNoteId: string, input: { reason: string }) =>
+    request<{ ok: true }>(`/api/mobile/v1/credit-notes/${creditNoteId}/void`, { method: "POST", body: JSON.stringify(input) }),
 
   customers: () => request<{ customers: CustomerSummary[] }>("/api/mobile/v1/customers"),
   customer: (id: string) => request<CustomerDetail>(`/api/mobile/v1/customers/${id}`),

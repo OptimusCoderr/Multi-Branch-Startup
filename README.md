@@ -369,6 +369,62 @@ This is being built in phases, each one shipping something testable end-to-end (
       products/warehouses/branches, stock transfers, staff, billing,
       branding, and expenses — all still web-only for now, staged for
       later phases the same way the web app itself was staged.
+- [x] **Phase 13 — Credit notes + printing**: a new `CreditNote` document
+      type (`credit-note-service.ts`) — sequential `CN-NNNNNN` numbering via
+      the same atomic-counter pattern as `Sale.saleNumber`, void-not-delete
+      accountability — that reduces a sale's outstanding balance
+      (`grandTotal - amountPaid - creditedTotal`) without touching stock or
+      the sale record itself, capped at the currently-outstanding amount
+      the same overcorrection guard `recordPayment()` applies in the
+      opposite direction. `customer-service.ts` and
+      `debt-reminder-service.ts` both now subtract credited amounts before
+      computing a customer's outstanding balance, so a credited sale
+      correctly drops out of the debtor-reminder pipeline instead of still
+      being chased for money that's been written off. Two new permissions
+      (`credit_notes.issue`, `credit_notes.void`), granted by default to
+      Owner/Admin only — same precedent as `sales.void`. On the web,
+      printing is plain `window.print()` gated by Tailwind's `print:`
+      variant (the app chrome disappears, the invoice/credit-note stays) —
+      works with any printer already paired at the OS level, no Bluetooth
+      needed there. On mobile, printing means an actual 58mm/80mm Bluetooth
+      thermal receipt printer: a pure ESC/POS command-builder
+      (`mobile/lib/escpos.ts`, no native dependency) plus a BLE transport
+      (`mobile/lib/bluetooth-printer.ts`, via `react-native-ble-plx`) that
+      scans, lets the user pick their printer from a list (there's no
+      single UUID standard across printer vendors, so this is scan-and-pick
+      rather than a hardcoded service UUID), discovers the first writable
+      characteristic, and writes ESC/POS bytes to it in MTU-safe chunks —
+      the same pairing pattern real-world ESC/POS-over-BLE printer
+      integrations use. This is the first native module in the mobile app,
+      so it moves from Expo Go to a Development Build
+      (`expo run:android`/`expo run:ios`, via the `react-native-ble-plx`
+      config plugin) for anything touching printing; every other screen
+      still runs fine in plain Expo Go. Verified end-to-end on web
+      (Playwright): issuing a partial credit note correctly reduces
+      outstanding, over-crediting past the outstanding balance is rejected,
+      a customer's aggregated debt reflects credit notes issued against
+      their sales, both the invoice and credit-note print views render
+      correctly, and voiding a credit note correctly reverts the sale's
+      outstanding balance back to its pre-credit amount — the last check
+      surfaced a genuine Playwright pitfall worth noting: `textContent()`
+      on the page body picked up literal JSON text left over in an inert
+      `<script>` tag (Next.js's streaming-SSR hydration payload from a
+      full-page load moments earlier, never removed from the DOM), making
+      a *correctly reverted* page look stale; switching the assertion to
+      `innerText` (rendered text only, excludes script tags) fixed it —
+      confirmed via an isolated reproduction that the underlying
+      issue/void logic was correct throughout, this was purely a
+      test-script artifact. **Verified without hardware** on mobile (this
+      sandbox has no Bluetooth radio or physical printer): `npx expo
+      export` bundles cleanly with the new native dependency, `npx expo
+      prebuild --platform android` confirms the config plugin correctly
+      writes the Android manifest permissions
+      (`BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN` with `neverForLocation`, so no
+      location permission is needed on Android 12+), and the ESC/POS byte
+      encoder was checked against the actual command bytes with plain
+      Node — but real pairing and printing on a physical printer has not
+      been done and needs a human with real hardware to confirm. See
+      `mobile/README.md` for the full verification breakdown.
 
 ## Getting started
 

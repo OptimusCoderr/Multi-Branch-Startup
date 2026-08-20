@@ -24,6 +24,7 @@ export default function AppLayout() {
         <Tabs.Screen name="sales" options={{ title: "Sales" }} />
         <Tabs.Screen name="stock" options={{ title: "Stock" }} />
         <Tabs.Screen name="customers" options={{ title: "Customers" }} />
+        <Tabs.Screen name="printer" options={{ title: "Settings" }} />
       </Tabs>
     </View>
   );
