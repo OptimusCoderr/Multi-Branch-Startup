@@ -28,6 +28,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   11. [Branding](#11-branding)
   12. [Billing (Paystack)](#12-billing-paystack)
   13. [Security & accountability](#13-security--accountability)
+  14. [Platform admin & support](#14-platform-admin--support)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -53,8 +54,9 @@ Open `.env` and fill in:
 - `BETTER_AUTH_SECRET` — generate with `openssl rand -base64 32`
 
 Everything else in `.env.example` (`PAYSTACK_SECRET_KEY`, `TERMII_API_KEY`, `CRON_SECRET`,
-`RUNTIME_DATABASE_URL`) has a working fallback or "not configured" path for local testing —
-see the relevant section below for what to do about each.
+`RUNTIME_DATABASE_URL`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`) has a working fallback, "not
+configured" path, or sensible default for local testing — see the relevant section below
+for what to do about each.
 
 ```bash
 npx prisma migrate dev
@@ -63,7 +65,13 @@ npm run dev
 ```
 
 The app is now running at `http://localhost:3000`. `db:seed` is idempotent — safe to
-re-run any time (e.g. after pulling a change that adds a new plan or permission).
+re-run any time (e.g. after pulling a change that adds a new plan or permission). It also
+creates a super-admin login from `ADMIN_EMAIL`/`ADMIN_PASSWORD` in `.env`
+(`.env.example`'s defaults: `admin@example.com` / `LocalAdmin123!`) — sign in with those
+and visit `/admin` immediately, no separate setup step. That's a fixed, predictable
+credential deliberately meant for local use only — see
+[Platform admin & support](#14-platform-admin--support) below, and never set those two
+variables to anything real outside local dev.
 
 ### Least-privilege database role (optional locally, required in production)
 
@@ -341,16 +349,44 @@ Confirm:
   psql "${RUNTIME_DATABASE_URL%%\?*}" -c 'DELETE FROM "AuditLog" WHERE id = (SELECT id FROM "AuditLog" LIMIT 1);'
   # expect: ERROR:  permission denied for table AuditLog
   ```
-- **Audit log coverage**: there's no in-app page to browse `AuditLog` — inspect it
-  directly (`psql` or Prisma Studio: `npx prisma studio`). Confirm a row was written for
-  things you did above: staff invited, a permission changed, a sale recorded, a transfer's
-  state changed, a credit note issued.
+- **Audit log coverage**: `/audit-log` (a role needs `AUDIT_LOG_VIEW`) lists the
+  per-company trail with an entity-type filter. Confirm a row was written for things you
+  did above: staff invited, a permission changed, a sale recorded, a transfer's state
+  changed, a credit note issued. For anything not shown there, `psql`/Prisma Studio
+  (`npx prisma studio`) still work directly against the `AuditLog` table.
 - **Rate limiting**: rapidly submit the same sale/payment/staff-invite action many times in
   a row (a simple loop, or spam-clicking) — should eventually get a clear rate-limit
   error rather than either silently succeeding unboundedly or crashing.
 - **Security headers**: `curl -I http://localhost:3000/` and confirm `Content-Security-Policy`,
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`,
   and `Referrer-Policy` are all present.
+
+### 14. Platform admin & support
+
+Platform staff (`User.platformRole`) are entirely separate from any company's
+Membership/Role system — they see across every company via `/admin`, not as a member of
+one.
+
+1. Sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env` (seeded automatically by
+   `npm run db:seed` — see [Environment setup](#environment-setup)) and visit `/admin`.
+   Confirm it lists every company you've created while testing, with plan/subscription
+   status and branch/warehouse/staff counts — but no access to any company's actual sales,
+   products, or staff data (view-only by design).
+2. `/admin/team` (super admin only) — add a new person by email as a **Support agent**. If
+   the email has no account yet, one is created and a password shown once — copy it.
+3. Sign in as that support agent. Confirm they can reach `/admin` (companies) and
+   `/admin/support`, but visiting `/admin/team` directly redirects them back to `/admin` —
+   they can't grant platform access to anyone, including themselves.
+4. `/admin/support` — the password-reset tool. Enter a real test user's email, generate a
+   reset link, and confirm it actually works: open the link in a private window, set a new
+   password, sign in with it. The old password should no longer work. An email with no
+   account should clearly say so, not silently fail.
+5. Back as the super admin, remove the support agent's access from `/admin/team`.
+   Confirm their *next* request to `/admin` bounces them to `/dashboard` (or `/onboarding`
+   if they have no company either) — signing in still works, they just lose platform
+   access.
+6. `/admin/audit-log` — confirm every action above (support agent added, a reset link
+   generated, access removed) shows up, attributed to the right person.
 
 ## Mobile app
 

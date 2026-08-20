@@ -2,13 +2,17 @@ import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import { requireMembership } from "@/lib/auth/session";
 import { getBrandingSettings } from "@/lib/branding";
+import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 import { LogoPlaceholder } from "@/components/logo-placeholder";
 import { AppNav } from "@/components/layout/app-nav";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const membership = await requireMembership();
-  const branding = await getBrandingSettings(membership.companyId);
+  const [branding, planFeatures] = await Promise.all([
+    getBrandingSettings(membership.companyId),
+    getPlanFeaturesForCompany(membership.companyId),
+  ]);
 
   // Company-picked colors flow through as CSS custom properties, consumed
   // by Tailwind's arbitrary-value syntax (bg-[var(--brand-primary)]) on
@@ -52,7 +56,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <SignOutButton />
         </div>
         <div className="px-6 pb-3 data-[layout=COMPACT]:pb-1.5" data-layout={branding.layoutPreset}>
-          <AppNav />
+          <AppNav planFeatures={planFeatures} />
         </div>
         {/* A quiet brand accent — the one place a company's color pairing
             shows up even when the rest of the chrome stays neutral. */}

@@ -1,4 +1,3 @@
-import "server-only";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 /**
@@ -10,6 +9,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * immediately after — the link is handed to a support agent to share with
  * the locked-out user directly, the same "no email provider, share the
  * link yourself" pattern as staff invites.
+ *
+ * Deliberately NOT `import "server-only"` — better-auth.ts (which this
+ * feeds into) is imported by plain tsx scripts outside Next's build
+ * pipeline (scripts/create-platform-admin.ts, prisma/seed.ts), and
+ * `server-only` only resolves inside Next's own bundler, not under plain
+ * Node — it doesn't even exist as an installed package. Anything that
+ * chain depends on has to stay importable there.
  *
  * AsyncLocalStorage rather than a plain module-level variable: forgetPassword()
  * awaits sendResetPassword() inline (Better Auth's runInBackgroundOrAwait,
