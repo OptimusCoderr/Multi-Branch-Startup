@@ -4,9 +4,11 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
+import { AuthThemeShell, useAuthTheme } from "@/components/auth/auth-theme";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
+  const { accent } = useAuthTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -30,17 +32,19 @@ export default function SignInPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
+    <>
       <div>
-        <h1 className="text-2xl font-semibold">Sign in</h1>
+        <h1 className="font-display text-2xl font-semibold">Welcome back</h1>
+        <p className="mt-1 text-sm text-gray-500">Sign in to your account.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <label className="flex flex-col gap-1 text-sm">
           Email
           <input
             type="email"
-            className="rounded-md border border-gray-300 px-3 py-2"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
@@ -51,7 +55,8 @@ export default function SignInPage() {
           Password
           <input
             type="password"
-            className="rounded-md border border-gray-300 px-3 py-2"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -63,18 +68,27 @@ export default function SignInPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          style={{ backgroundColor: accent }}
+          className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98] disabled:opacity-50"
         >
           {isSubmitting ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
-      <p className="text-center text-sm text-gray-500">
+      <p className="mt-6 text-center text-sm text-gray-500">
         Don&apos;t have an account?{" "}
-        <Link href="/sign-up" className="font-medium text-black underline">
+        <Link href="/sign-up" className="font-semibold underline" style={{ color: accent }}>
           Create one
         </Link>
       </p>
-    </main>
+    </>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <AuthThemeShell>
+      <SignInForm />
+    </AuthThemeShell>
   );
 }

@@ -1,8 +1,10 @@
 import { Tabs } from "expo-router";
 import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { LayoutDashboard, ShoppingCart, Boxes, Users, Settings } from "lucide-react-native";
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/auth-client";
+import { theme } from "@/lib/theme";
 
 export default function AppLayout() {
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
@@ -19,12 +21,12 @@ export default function AppLayout() {
           </Pressable>
         </View>
       )}
-      <Tabs screenOptions={{ tabBarActiveTintColor: "#171717" }}>
-        <Tabs.Screen name="index" options={{ title: "Dashboard" }} />
-        <Tabs.Screen name="sales" options={{ title: "Sales" }} />
-        <Tabs.Screen name="stock" options={{ title: "Stock" }} />
-        <Tabs.Screen name="customers" options={{ title: "Customers" }} />
-        <Tabs.Screen name="printer" options={{ title: "Settings" }} />
+      <Tabs screenOptions={{ tabBarActiveTintColor: theme.primary, tabBarInactiveTintColor: "#9ca3af" }}>
+        <Tabs.Screen name="index" options={{ title: "Dashboard", tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
+        <Tabs.Screen name="sales" options={{ title: "Sales", tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} /> }} />
+        <Tabs.Screen name="stock" options={{ title: "Stock", tabBarIcon: ({ color, size }) => <Boxes color={color} size={size} /> }} />
+        <Tabs.Screen name="customers" options={{ title: "Customers", tabBarIcon: ({ color, size }) => <Users color={color} size={size} /> }} />
+        <Tabs.Screen name="printer" options={{ title: "Settings", tabBarIcon: ({ color, size }) => <Settings color={color} size={size} /> }} />
       </Tabs>
     </View>
   );

@@ -13,6 +13,7 @@ import {
 } from "@/lib/bluetooth-printer";
 import { ReceiptBuilder } from "@/lib/escpos";
 import { signOut } from "@/lib/auth-client";
+import { theme } from "@/lib/theme";
 
 export default function PrinterSettingsScreen() {
   const [savedPrinter, setSavedPrinter] = useState<SavedPrinter | null | undefined>(undefined);
@@ -160,8 +161,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
   },
-  pairLink: { color: "#171717", fontWeight: "600" },
-  submitButton: { backgroundColor: "#171717", borderRadius: 8, paddingVertical: 12, alignItems: "center" },
+  pairLink: { color: theme.primary, fontWeight: "600" },
+  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   submitButtonText: { color: "#fff", fontWeight: "600" },
   secondaryButton: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14, flex: 1, alignItems: "center" },
   secondaryButtonText: { color: "#374151", fontWeight: "600" },

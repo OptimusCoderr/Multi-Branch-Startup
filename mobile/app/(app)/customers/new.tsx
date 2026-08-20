@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
+import { theme } from "@/lib/theme";
 
 export default function NewCustomerScreen() {
   const router = useRouter();
@@ -48,6 +49,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff", padding: 16, gap: 12 },
   input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   error: { color: "#dc2626" },
-  button: { backgroundColor: "#171717", borderRadius: 8, paddingVertical: 12, alignItems: "center" },
+  button: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   buttonText: { color: "#fff", fontWeight: "600" },
 });

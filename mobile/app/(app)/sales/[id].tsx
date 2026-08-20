@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
 import { buildInvoiceReceipt, buildCreditNoteReceipt } from "@/lib/escpos";
 import { printBytes, BluetoothPrinterError } from "@/lib/bluetooth-printer";
+import { theme } from "@/lib/theme";
 
 const PAYMENT_MODES = ["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"];
 
@@ -325,14 +326,14 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
-  chipSelected: { backgroundColor: "#171717", borderColor: "#171717" },
+  chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { color: "#374151", fontSize: 12 },
   chipTextSelected: { color: "#fff" },
   error: { color: "#dc2626", fontSize: 12 },
-  submitButton: { backgroundColor: "#171717", borderRadius: 8, paddingVertical: 12, alignItems: "center" },
+  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   submitButtonText: { color: "#fff", fontWeight: "600" },
   secondaryButton: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingVertical: 10, alignItems: "center" },
   secondaryButtonText: { color: "#374151", fontWeight: "600" },
-  printButton: { borderWidth: 1, borderColor: "#171717", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  printButtonText: { color: "#171717", fontWeight: "600", fontSize: 12 },
+  printButton: { borderWidth: 1, borderColor: theme.primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
+  printButtonText: { color: theme.primary, fontWeight: "600", fontSize: 12 },
 });

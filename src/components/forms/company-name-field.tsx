@@ -32,7 +32,8 @@ export function CompanyNameField() {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={suggestion}
-        className="rounded-md border border-gray-300 px-3 py-2"
+        className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+        style={{ "--tw-ring-color": accent } as React.CSSProperties}
       />
       <span className="text-xs text-gray-500">
         Need an idea?{" "}

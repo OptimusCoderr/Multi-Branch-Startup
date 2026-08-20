@@ -1,33 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
 import Image from "next/image";
 import { requireMembership } from "@/lib/auth/session";
 import { getBrandingSettings } from "@/lib/branding";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 import { LogoPlaceholder } from "@/components/logo-placeholder";
-
-// Deliberately NOT trimmed by branch/warehouse count: a company with zero
-// warehouses today still needs "Warehouses" in nav to be the one place
-// they'd ever discover they can add one later. Hiding it would make that
-// path undiscoverable, not just decluttered. The friction this app
-// actually had for a single-shop/no-warehouse business — a broken empty
-// dropdown on /transfers/new, and dashboard copy that assumed every
-// company uses both — is fixed at the source on those pages instead.
-const NAV_LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/products", label: "Products" },
-  { href: "/warehouses", label: "Warehouses" },
-  { href: "/branches", label: "Branches" },
-  { href: "/stock", label: "Stock" },
-  { href: "/transfers", label: "Transfers" },
-  { href: "/sales", label: "Sales" },
-  { href: "/customers", label: "Customers" },
-  { href: "/expenses", label: "Expenses" },
-  { href: "/reports", label: "Reports" },
-  { href: "/audit-log", label: "Audit log" },
-  { href: "/staff", label: "Staff" },
-  { href: "/settings/branding", label: "Settings" },
-];
+import { AppNav } from "@/components/layout/app-nav";
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const membership = await requireMembership();
@@ -46,36 +23,43 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-gray-50" style={themeStyle}>
       <header
         data-layout={branding.layoutPreset}
-        className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 data-[layout=COMPACT]:py-2 print:hidden"
+        className="sticky top-0 z-10 flex flex-col bg-white/90 shadow-sm backdrop-blur print:hidden"
       >
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2">
+        <div
+          className="flex items-center justify-between px-6 pt-4 pb-2.5 data-[layout=COMPACT]:pt-2 data-[layout=COMPACT]:pb-1"
+          data-layout={branding.layoutPreset}
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
             {branding.logoUrl ? (
               <Image
                 src={branding.logoUrl}
                 alt={`${membership.companyName} logo`}
-                width={28}
-                height={28}
+                width={30}
+                height={30}
                 unoptimized
-                className="rounded"
+                className="shrink-0 rounded-lg"
               />
             ) : (
-              <LogoPlaceholder color={branding.primaryColor} />
+              <div className="shrink-0">
+                <LogoPlaceholder size={30} color={branding.primaryColor} />
+              </div>
             )}
-            <div>
-              <p className="text-sm font-semibold">{membership.companyName}</p>
+            <div className="min-w-0">
+              <p className="truncate font-display text-sm font-semibold leading-tight">{membership.companyName}</p>
               <p className="text-xs text-gray-500">{membership.roleName ?? "Staff"}</p>
             </div>
           </div>
-          <nav className="flex gap-4 text-sm text-gray-600">
-            {NAV_LINKS.map((link) => (
-              <Link key={link.href} href={link.href} className="hover:text-[var(--brand-primary)]">
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+          <SignOutButton />
         </div>
-        <SignOutButton />
+        <div className="px-6 pb-3 data-[layout=COMPACT]:pb-1.5" data-layout={branding.layoutPreset}>
+          <AppNav />
+        </div>
+        {/* A quiet brand accent — the one place a company's color pairing
+            shows up even when the rest of the chrome stays neutral. */}
+        <div
+          className="h-0.5 w-full"
+          style={{ background: "linear-gradient(90deg, var(--brand-primary), var(--brand-secondary))" }}
+        />
       </header>
       <main
         data-layout={branding.layoutPreset}
