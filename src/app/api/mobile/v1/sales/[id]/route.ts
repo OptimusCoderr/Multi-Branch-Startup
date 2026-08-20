@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { requireMobileMembership, requireMobilePermission, handleApiError, ApiError } from "@/lib/api/mobile-auth";
+import { requireMobileMembership, requireMobilePermission, requireActiveSubscription, handleApiError, ApiError } from "@/lib/api/mobile-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.SALES_RECORD);
 
     const db = getScopedPrisma(membership.companyId);

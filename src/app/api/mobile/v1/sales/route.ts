@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { requireMobileMembership, requireMobilePermission, handleApiError, ApiError } from "@/lib/api/mobile-auth";
+import { requireMobileMembership, requireMobilePermission, requireActiveSubscription, handleApiError, ApiError } from "@/lib/api/mobile-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { createSaleSchema } from "@/lib/validation/sale.schema";
 import * as saleService from "@/server/services/sale-service";
@@ -11,6 +11,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 export async function GET() {
   try {
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.SALES_RECORD);
 
     const db = getScopedPrisma(membership.companyId);
@@ -41,6 +42,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.SALES_RECORD);
 
     try {

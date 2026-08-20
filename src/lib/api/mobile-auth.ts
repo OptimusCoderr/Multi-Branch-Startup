@@ -4,6 +4,7 @@ import { getSession, getCurrentMembership, computeEffectivePermissions } from "@
 import type { AuthenticatedMembership } from "@/lib/auth/session";
 import type { PermissionKey } from "@/lib/auth/permissions";
 import { RateLimitError } from "@/lib/rate-limit";
+import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
 
 /**
  * HTTP-flavored counterpart to requireMembershipOrThrow()/requirePermission()
@@ -35,6 +36,22 @@ export async function requireMobilePermission(membershipId: string, permission: 
   const permissions = await computeEffectivePermissions(membershipId);
   if (!permissions.has(permission)) {
     throw new ApiError(`Missing required permission: ${permission}`, 403);
+  }
+}
+
+/**
+ * Mirrors the web app's (gated) route group — every resource endpoint
+ * (branches, products, stock, sales, customers) requires an active
+ * subscription, the same as products/warehouses/branches/stock/transfers/
+ * sales/staff do on web. Deliberately NOT called from /me or /dashboard,
+ * which — like web's /dashboard and /settings/billing — must stay
+ * reachable regardless of subscription status so the app can show the
+ * user what's wrong and let them fix it.
+ */
+export async function requireActiveSubscription(companyId: string): Promise<void> {
+  const subscription = await getSubscriptionForCompany(companyId);
+  if (!isSubscriptionActive(subscription)) {
+    throw new ApiError("Your company's subscription needs attention. Manage billing on the web app.", 402);
   }
 }
 

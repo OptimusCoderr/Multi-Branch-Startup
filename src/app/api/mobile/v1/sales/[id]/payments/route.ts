@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { requireMobileMembership, requireMobilePermission, handleApiError, ApiError } from "@/lib/api/mobile-auth";
+import { requireMobileMembership, requireMobilePermission, requireActiveSubscription, handleApiError, ApiError } from "@/lib/api/mobile-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { recordPaymentSchema } from "@/lib/validation/sale.schema";
 import * as saleService from "@/server/services/sale-service";
@@ -13,6 +13,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const { id: saleId } = await params;
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.PAYMENTS_RECORD);
 
     try {

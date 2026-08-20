@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { requireMobileMembership, requireMobilePermission, handleApiError, ApiError } from "@/lib/api/mobile-auth";
+import { requireMobileMembership, requireMobilePermission, requireActiveSubscription, handleApiError, ApiError } from "@/lib/api/mobile-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { customerSchema } from "@/lib/validation/customer.schema";
 import { getCustomerBalances } from "@/server/services/customer-service";
@@ -9,6 +9,7 @@ import { writeAuditLog } from "@/server/services/audit-service";
 export async function GET() {
   try {
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.CUSTOMERS_VIEW);
 
     const db = getScopedPrisma(membership.companyId);
@@ -36,6 +37,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const membership = await requireMobileMembership();
+    await requireActiveSubscription(membership.companyId);
     await requireMobilePermission(membership.membershipId, PERMISSIONS.CUSTOMERS_MANAGE);
 
     const body = await request.json().catch(() => null);
