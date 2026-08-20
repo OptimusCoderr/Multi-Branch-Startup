@@ -31,6 +31,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO inventory
 REVOKE UPDATE, DELETE, TRUNCATE ON "AuditLog" FROM inventory_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON "StockMovement" FROM inventory_runtime;
 REVOKE UPDATE, DELETE, TRUNCATE ON "DebtReminder" FROM inventory_runtime;
+REVOKE UPDATE, DELETE, TRUNCATE ON "PlatformAuditLog" FROM inventory_runtime;
 
 -- PaystackEvent legitimately needs UPDATE (RECEIVED -> PROCESSED/FAILED)
 -- but should never be deleted — it's the webhook audit trail.

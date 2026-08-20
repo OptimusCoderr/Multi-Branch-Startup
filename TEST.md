@@ -99,6 +99,10 @@ npm run reconcile:stock        # StockMovement ledger agrees with cached stock q
 `reconcile:stock` needs at least one company with some stock movement history to be a
 meaningful check — on a freshly seeded, empty database it'll just report 0 rows checked.
 
+`.github/workflows/ci.yml` runs the typecheck/lint/build steps (web) and typecheck/bundle-export
+steps (mobile) automatically on every push — this section is what to run locally before that,
+or if you don't have CI wired up in your own fork.
+
 For the mobile app:
 
 ```bash

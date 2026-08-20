@@ -13,7 +13,8 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:grants": "psql \"${DATABASE_URL%%\\?*}\" -v ON_ERROR_STOP=1 -f prisma/grants.sql",
-    "reconcile:stock": "tsx scripts/reconcile-stock.ts"
+    "reconcile:stock": "tsx scripts/reconcile-stock.ts",
+    "create:platform-admin": "tsx scripts/create-platform-admin.ts"
   },
   "dependencies": {
     "@better-auth/expo": "^1.7.1",
