@@ -8,6 +8,7 @@ export const customerSchema = z.object({
   address: z.preprocess(emptyToUndefined, z.string().trim().max(500).optional()),
   notes: z.preprocess(emptyToUndefined, z.string().trim().max(2000).optional()),
   creditLimit: z.preprocess(emptyToUndefined, z.coerce.number().nonnegative().max(1_000_000_000).optional()),
+  remindersEnabled: z.preprocess((v) => v === "on" || v === true, z.boolean()).default(true),
 });
 
 export type CustomerInput = z.infer<typeof customerSchema>;

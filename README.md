@@ -268,6 +268,163 @@ This is being built in phases, each one shipping something testable end-to-end (
       resources stay as-is, only new creation is blocked), and per-feature
       (rather than per-count) gating, e.g. a tier that hides branding
       customization entirely rather than capping a number.
+- [x] **Phase 11 — Automated debtor reminders**: SMS reminders for
+      customers with an overdue balance, off by default per company
+      (`Company.debtReminderEnabled`/`debtReminderDaysOverdue`) and
+      further opt-out-able per customer (`Customer.remindersEnabled`) —
+      both must be true for a message to send, so turning the feature on
+      never silently starts messaging a customer who was never asked.
+      `debt-reminder-service.ts` finds every customer with a non-voided
+      sale whose `dueDate` is past the company's threshold and an
+      outstanding balance, skips anyone reminded within the last 3 days
+      regardless of the company's threshold (so a 1-day setting can't spam
+      daily), and — via `sms-client.ts`, a thin wrapper around Termii
+      structured exactly like `paystack/client.ts`'s "not configured"
+      pattern from Phase 6 — sends and records every attempt as an
+      append-only `DebtReminder` row (status `SENT`/`FAILED`, the exact
+      message, the provider response or error), the same accountability
+      pattern as `AuditLog`/`StockMovement`; `prisma/grants.sql` now
+      revokes `UPDATE`/`DELETE` on it too. Two trigger paths share the
+      same service: `vercel.json` schedules `/api/cron/debt-reminders`
+      daily (a plain Route Handler, not a Server Action, protected by a
+      `CRON_SECRET` bearer token since Vercel's scheduler isn't a signed-in
+      browser — this is the first thing in the app with real scheduled
+      automation, closing the gap Phase 9 explicitly deferred), and a
+      "Send reminders now" button on the customers page lets staff with
+      `customers.manage` trigger the same logic on demand, rate-limited
+      the same way other cost-bearing actions are. Verified end-to-end
+      without a real Termii account (none is configured in this dev
+      environment, matching how Phase 6 tested Paystack): the cron route
+      correctly 401s with no/wrong secret and 200s with the right one;
+      with only a placeholder key it finds candidates but sends nothing
+      and writes no `DebtReminder` rows (a real config problem, not a
+      per-message failure, so nothing is logged as attempted); swapping in
+      a real-shaped-but-invalid key drives the actual send path and
+      confirms a `FAILED` row and audit entry get written with Termii's
+      rejection reason even when Termii's response isn't valid JSON;
+      re-running immediately after finds zero candidates, confirming the
+      3-day cooldown; and — most directly — a company with two overdue
+      customers, one opted out, reports exactly one candidate, not two,
+      proving the opt-out filter runs at the query level rather than being
+      a UI-only checkbox. Also fixed a real bug found while building this:
+      the settings form's "enabled" checkbox used React-controlled state
+      that silently fell out of sync with the just-saved value after the
+      page's server data refreshed (the save itself was always correct,
+      confirmed via direct DB inspection — this was a display-only bug);
+      switched it to an uncontrolled input, since nothing else in the form
+      needed to react to that value live.
+      **Deliberately out of scope**: WhatsApp/email channels (the
+      `DebtReminderChannel` enum only has `SMS` today, but the schema and
+      service are structured to add one without reshaping either), and a
+      full receivables-collections workflow (payment plans, escalating
+      message tiers by days overdue) beyond a single reminder message.
+- [x] **Phase 12 — Mobile app foundation**: an Expo (React Native +
+      TypeScript, Expo Router) companion app in `mobile/`, for
+      already-onboarded staff to record sales, take payments, check
+      stock, and manage customers/debt from a phone. It's a second
+      client for the same backend, not a second implementation of it —
+      a new JSON API layer under `src/app/api/mobile/v1/*` calls the
+      exact same `server/services/*` functions, `requirePermission`
+      checks, and `getScopedPrisma` tenant isolation every web Server
+      Action already uses, through a thin HTTP-status-mapping wrapper
+      (`lib/api/mobile-auth.ts`) rather than a parallel authorization
+      system. Mobile auth runs through `@better-auth/expo` (the
+      `expo()`/`bearer()` plugins added to `better-auth.ts` specifically
+      for this): React Native has no browser cookie jar, so the Expo
+      client emulates one on `expo-secure-store`, and the mobile app
+      reads it back out to authenticate its own API calls — the same
+      DB-backed session every other client uses, so suspending a staff
+      member or revoking a permission takes effect on their phone's next
+      request exactly like it does in a browser. Upgrading `better-auth`
+      to the version `@better-auth/expo` requires (^1.7.1, from ^1.6.28)
+      turned up a real, if narrow, breaking change: the `Account` table
+      gained a required `issuer` column with a new
+      `[issuer, accountId]` unique index — missed at first (a 500 on
+      sign-up), traced to the exact new-field diff in Better Auth's own
+      schema source, and fixed with a proper migration rather than
+      papering over it.
+      **Verified without a device** (this sandbox has no iOS/Android
+      simulator): `npx expo export` successfully bundles the entire app
+      (1700+ modules) into real Hermes bytecode for both iOS and Android
+      with zero errors, which catches the large majority of real
+      breakage short of an actual render; every `/api/mobile/v1/*`
+      endpoint was exercised directly with a real bearer token —
+      sign-up, sign-in, `/me` resolving correct permissions and
+      subscription status, creating a sale and recording a partial
+      payment (with the exact same overpayment-rejection message the
+      web app produces, confirming it's the same service code path, not
+      a reimplementation), and creating a customer; and a second
+      company's bearer token was confirmed unable to read the first
+      company's sale or customer (404, no data in list views) — the same
+      cross-tenant isolation guarantee every other phase has verified,
+      now proven for this API layer too. Also had to fix the root
+      `tsconfig.json`/`eslint.config.mjs` to exclude `mobile/`, a
+      separate TypeScript project with its own tsconfig and globals that
+      was otherwise getting swept into the Next.js app's typecheck and
+      corrupting unrelated type resolution.
+      **Deliberately out of scope for this phase**: company sign-up and
+      onboarding on mobile (an Owner is expected to do initial setup —
+      creating the company, adding branches/products, inviting staff —
+      on the web, same as every company has so far), and mobile CRUD for
+      products/warehouses/branches, stock transfers, staff, billing,
+      branding, and expenses — all still web-only for now, staged for
+      later phases the same way the web app itself was staged.
+- [x] **Phase 13 — Credit notes + printing**: a new `CreditNote` document
+      type (`credit-note-service.ts`) — sequential `CN-NNNNNN` numbering via
+      the same atomic-counter pattern as `Sale.saleNumber`, void-not-delete
+      accountability — that reduces a sale's outstanding balance
+      (`grandTotal - amountPaid - creditedTotal`) without touching stock or
+      the sale record itself, capped at the currently-outstanding amount
+      the same overcorrection guard `recordPayment()` applies in the
+      opposite direction. `customer-service.ts` and
+      `debt-reminder-service.ts` both now subtract credited amounts before
+      computing a customer's outstanding balance, so a credited sale
+      correctly drops out of the debtor-reminder pipeline instead of still
+      being chased for money that's been written off. Two new permissions
+      (`credit_notes.issue`, `credit_notes.void`), granted by default to
+      Owner/Admin only — same precedent as `sales.void`. On the web,
+      printing is plain `window.print()` gated by Tailwind's `print:`
+      variant (the app chrome disappears, the invoice/credit-note stays) —
+      works with any printer already paired at the OS level, no Bluetooth
+      needed there. On mobile, printing means an actual 58mm/80mm Bluetooth
+      thermal receipt printer: a pure ESC/POS command-builder
+      (`mobile/lib/escpos.ts`, no native dependency) plus a BLE transport
+      (`mobile/lib/bluetooth-printer.ts`, via `react-native-ble-plx`) that
+      scans, lets the user pick their printer from a list (there's no
+      single UUID standard across printer vendors, so this is scan-and-pick
+      rather than a hardcoded service UUID), discovers the first writable
+      characteristic, and writes ESC/POS bytes to it in MTU-safe chunks —
+      the same pairing pattern real-world ESC/POS-over-BLE printer
+      integrations use. This is the first native module in the mobile app,
+      so it moves from Expo Go to a Development Build
+      (`expo run:android`/`expo run:ios`, via the `react-native-ble-plx`
+      config plugin) for anything touching printing; every other screen
+      still runs fine in plain Expo Go. Verified end-to-end on web
+      (Playwright): issuing a partial credit note correctly reduces
+      outstanding, over-crediting past the outstanding balance is rejected,
+      a customer's aggregated debt reflects credit notes issued against
+      their sales, both the invoice and credit-note print views render
+      correctly, and voiding a credit note correctly reverts the sale's
+      outstanding balance back to its pre-credit amount — the last check
+      surfaced a genuine Playwright pitfall worth noting: `textContent()`
+      on the page body picked up literal JSON text left over in an inert
+      `<script>` tag (Next.js's streaming-SSR hydration payload from a
+      full-page load moments earlier, never removed from the DOM), making
+      a *correctly reverted* page look stale; switching the assertion to
+      `innerText` (rendered text only, excludes script tags) fixed it —
+      confirmed via an isolated reproduction that the underlying
+      issue/void logic was correct throughout, this was purely a
+      test-script artifact. **Verified without hardware** on mobile (this
+      sandbox has no Bluetooth radio or physical printer): `npx expo
+      export` bundles cleanly with the new native dependency, `npx expo
+      prebuild --platform android` confirms the config plugin correctly
+      writes the Android manifest permissions
+      (`BLUETOOTH_CONNECT`/`BLUETOOTH_SCAN` with `neverForLocation`, so no
+      location permission is needed on Android 12+), and the ESC/POS byte
+      encoder was checked against the actual command bytes with plain
+      Node — but real pairing and printing on a physical printer has not
+      been done and needs a human with real hardware to confirm. See
+      `mobile/README.md` for the full verification breakdown.
 
 ## Getting started
 
@@ -336,10 +493,10 @@ skipped in a real deployment.
   transaction as the mutation it records.
 - **Defense in depth at the database**: even with `getScopedPrisma` and `requirePermission`
   both enforced correctly, the app's own DB credential (`RUNTIME_DATABASE_URL`) cannot
-  `UPDATE`/`DELETE` `AuditLog` or `StockMovement` — see `prisma/grants.sql`. This is a second,
-  independent layer: a bug in application code hits a Postgres permission error, not a
-  successfully rewritten audit trail.
+  `UPDATE`/`DELETE` `AuditLog`, `StockMovement`, or `DebtReminder` — see `prisma/grants.sql`.
+  This is a second, independent layer: a bug in application code hits a Postgres permission
+  error, not a successfully rewritten audit trail.
 - **Rate limiting**: `src/lib/rate-limit.ts` is an in-memory limiter applied to staff
-  invitations and sale/payment recording, on top of Better Auth's own built-in rate limiting
-  on `/api/auth/*`. It's correct for a single Node.js process; a multi-instance serverless
+  invitations, sale/payment recording, and on-demand debt-reminder sends, on top of Better
+  Auth's own built-in rate limiting on `/api/auth/*`. It's correct for a single Node.js process; a multi-instance serverless
   deployment needs a shared store (Upstash Redis) behind the same `checkRateLimit()` interface.

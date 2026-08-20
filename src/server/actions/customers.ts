@@ -27,6 +27,7 @@ export async function createCustomer(_prev: { error: string }, formData: FormDat
     address: formData.get("address"),
     notes: formData.get("notes"),
     creditLimit: formData.get("creditLimit"),
+    remindersEnabled: formData.get("remindersEnabled"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid customer details." };
@@ -45,6 +46,7 @@ export async function createCustomer(_prev: { error: string }, formData: FormDat
         address: parsed.data.address ?? null,
         notes: parsed.data.notes ?? null,
         creditLimit: parsed.data.creditLimit ?? null,
+        remindersEnabled: parsed.data.remindersEnabled,
       },
     });
 
@@ -79,6 +81,7 @@ export async function updateCustomer(
     address: formData.get("address"),
     notes: formData.get("notes"),
     creditLimit: formData.get("creditLimit"),
+    remindersEnabled: formData.get("remindersEnabled"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid customer details." };
@@ -102,6 +105,7 @@ export async function updateCustomer(
         address: parsed.data.address ?? null,
         notes: parsed.data.notes ?? null,
         creditLimit: parsed.data.creditLimit ?? null,
+        remindersEnabled: parsed.data.remindersEnabled,
       },
     });
 

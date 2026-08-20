@@ -26,6 +26,8 @@ export const PERMISSIONS = {
   SALES_VOID: "sales.void",
   SALES_OVERRIDE_PRICE: "sales.override_price",
   PAYMENTS_RECORD: "payments.record",
+  CREDIT_NOTES_ISSUE: "credit_notes.issue",
+  CREDIT_NOTES_VOID: "credit_notes.void",
 
   // Customers & debt
   CUSTOMERS_VIEW: "customers.view",
@@ -78,6 +80,8 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.SALES_VOID, category: "sales", description: "Void a sale" },
   { key: PERMISSIONS.SALES_OVERRIDE_PRICE, category: "sales", description: "Override a product's price on a sale" },
   { key: PERMISSIONS.PAYMENTS_RECORD, category: "sales", description: "Record a payment against a sale" },
+  { key: PERMISSIONS.CREDIT_NOTES_ISSUE, category: "sales", description: "Issue a credit note against a sale" },
+  { key: PERMISSIONS.CREDIT_NOTES_VOID, category: "sales", description: "Void a previously issued credit note" },
 
   { key: PERMISSIONS.CUSTOMERS_VIEW, category: "customers", description: "View customers and their outstanding balances" },
   { key: PERMISSIONS.CUSTOMERS_MANAGE, category: "customers", description: "Create and edit customer records" },

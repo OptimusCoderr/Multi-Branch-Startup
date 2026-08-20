@@ -1,11 +1,14 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
-import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { getScopedPrisma, Prisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveMembershipNames } from "@/lib/auth/membership-names";
 import { formatMoney } from "@/lib/format";
 import { RecordPaymentForm } from "@/components/forms/record-payment-form";
 import { VoidSaleForm } from "@/components/forms/void-sale-form";
+import { IssueCreditNoteForm } from "@/components/forms/issue-credit-note-form";
+import { VoidCreditNoteForm } from "@/components/forms/void-credit-note-form";
 
 const STATUS_STYLES: Record<string, string> = {
   CONFIRMED: "bg-yellow-100 text-yellow-700",
@@ -27,6 +30,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       branch: true,
       lineItems: { include: { product: true } },
       payments: { orderBy: { paidAt: "asc" } },
+      creditNotes: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!sale) notFound();
@@ -35,22 +39,35 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
     sale.soldByMembershipId,
     sale.voidedByMembershipId,
     ...sale.payments.map((p) => p.recordedByMembershipId),
+    ...sale.creditNotes.flatMap((cn) => [cn.issuedByMembershipId, cn.voidedByMembershipId]),
   ]);
   const nameOf = (mid: string | null) => (mid ? (names.get(mid) ?? "Unknown") : null);
 
   const canRecordPayment = permissions.has(PERMISSIONS.PAYMENTS_RECORD);
   const canVoid = permissions.has(PERMISSIONS.SALES_VOID);
-  const outstanding = sale.grandTotal.sub(sale.amountPaid);
+  const canIssueCreditNote = permissions.has(PERMISSIONS.CREDIT_NOTES_ISSUE);
+  const canVoidCreditNote = permissions.has(PERMISSIONS.CREDIT_NOTES_VOID);
+
+  const creditedTotal = sale.creditNotes
+    .filter((cn) => cn.status === "ISSUED")
+    .reduce((sum, cn) => sum.add(cn.amount), new Prisma.Decimal(0));
+  const outstanding = sale.grandTotal.sub(sale.amountPaid).sub(creditedTotal);
   const canPay = sale.status !== "VOIDED" && sale.status !== "PAID" && outstanding.gt(0);
+  const canCreditNote = sale.status !== "VOIDED" && outstanding.gt(0);
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">{sale.saleNumber}</h1>
-          <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[sale.status] ?? ""}`}>
-            {sale.status.replace("_", " ")}
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold">{sale.saleNumber}</h1>
+            <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[sale.status] ?? ""}`}>
+              {sale.status.replace("_", " ")}
+            </span>
+          </div>
+          <Link href={`/sales/${sale.id}/print`} className="text-sm text-[var(--brand-primary)] hover:underline">
+            Print invoice
+          </Link>
         </div>
         <p className="mt-1 text-sm text-gray-500">
           {sale.branch.name} · Sold by {nameOf(sale.soldByMembershipId)} · {sale.createdAt.toLocaleString()}
@@ -93,6 +110,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           <p>Subtotal: {formatMoney(sale.subtotal.toString(), currency)}</p>
           <p className="font-semibold">Grand total: {formatMoney(sale.grandTotal.toString(), currency)}</p>
           <p>Paid: {formatMoney(sale.amountPaid.toString(), currency)}</p>
+          {creditedTotal.gt(0) && <p>Credited: {formatMoney(creditedTotal.toString(), currency)}</p>}
           {outstanding.gt(0) && sale.status !== "VOIDED" && (
             <p className="font-medium text-amber-700">Outstanding: {formatMoney(outstanding.toString(), currency)}</p>
           )}
@@ -122,6 +140,42 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       )}
 
       {canVoid && sale.status !== "VOIDED" && <VoidSaleForm saleId={sale.id} />}
+
+      {sale.creditNotes.length > 0 && (
+        <div className="rounded-lg border border-gray-200 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Credit notes</p>
+          <ul className="flex flex-col gap-2 text-sm">
+            {sale.creditNotes.map((cn) => (
+              <li key={cn.id} className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs">{cn.creditNoteNumber}</span>
+                  <div className="flex items-center gap-3">
+                    <span className={cn.status === "VOIDED" ? "text-gray-400 line-through" : "font-medium"}>
+                      {formatMoney(cn.amount.toString(), currency)}
+                    </span>
+                    <Link href={`/credit-notes/${cn.id}/print`} className="text-xs text-[var(--brand-primary)] hover:underline">
+                      Print
+                    </Link>
+                    {canVoidCreditNote && cn.status === "ISSUED" && <VoidCreditNoteForm saleId={sale.id} creditNoteId={cn.id} />}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  {cn.reason} · Issued by {nameOf(cn.issuedByMembershipId)} · {cn.createdAt.toLocaleString()}
+                </p>
+                {cn.status === "VOIDED" && (
+                  <p className="text-xs text-gray-400">
+                    Voided by {nameOf(cn.voidedByMembershipId)} on {cn.voidedAt?.toLocaleString()} — {cn.voidReason}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {canIssueCreditNote && canCreditNote && (
+        <IssueCreditNoteForm saleId={sale.id} outstanding={formatMoney(outstanding.toString(), currency)} />
+      )}
     </div>
   );
 }

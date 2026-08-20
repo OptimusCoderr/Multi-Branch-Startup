@@ -30,7 +30,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const customer = await db.customer.findUnique({ where: { id } });
   if (!customer) notFound();
 
-  const [balance, sales] = await Promise.all([
+  const [balance, sales, reminders] = await Promise.all([
     getCustomerBalance(db, customer.id),
     db.sale.findMany({
       where: { customerId: customer.id },
@@ -38,6 +38,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       include: { branch: true },
       take: 50,
     }),
+    db.debtReminder.findMany({ where: { customerId: customer.id }, orderBy: { createdAt: "desc" }, take: 10 }),
   ]);
 
   const canManage = permissions.has(PERMISSIONS.CUSTOMERS_MANAGE);
@@ -131,6 +132,28 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         )}
       </div>
 
+      {reminders.length > 0 && (
+        <div className="rounded-lg border border-gray-200 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Reminder history</p>
+          <ul className="flex flex-col gap-1 text-sm">
+            {reminders.map((r) => (
+              <li key={r.id} className="flex items-center justify-between">
+                <span className="text-gray-500">
+                  {r.createdAt.toLocaleString()} · {formatMoney(r.outstandingSnapshot.toString(), currency)}
+                </span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs ${
+                    r.status === "SENT" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {r.status}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {canManage && (
         <div className="flex flex-col gap-2">
           <h2 className="text-lg font-semibold">Edit customer</h2>
@@ -143,6 +166,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               address: customer.address,
               notes: customer.notes,
               creditLimit: customer.creditLimit?.toString() ?? null,
+              remindersEnabled: customer.remindersEnabled,
             }}
             submitLabel="Save changes"
           />
