@@ -163,11 +163,13 @@ This is being built in phases, each one shipping something testable end-to-end (
       transactional writes — layered on top of application-layer scoping
       that's already been verified clean across seven phases of IDOR
       testing, rather than the primary defense); `AuditLog` hash-chaining
-      for tamper-evidence; a dependency-scanning CI pipeline (no CI is
-      configured for this repo yet — `npm audit` currently reports zero
-      vulnerabilities); and a dedicated accessibility audit (existing
-      forms already use semantic `<label>`-wrapped inputs throughout, but
-      this hasn't had a focused pass).
+      for tamper-evidence; dependency vulnerability scanning as a CI step
+      specifically (basic CI — typecheck/lint/build — was added in Phase
+      14; `npm audit` currently reports zero vulnerabilities, checked by
+      hand rather than gated automatically on every push yet); and a
+      dedicated accessibility audit (existing forms already use semantic
+      `<label>`-wrapped inputs throughout, but this hasn't had a focused
+      pass).
 - [x] **Phase 8 — Customers & debt management**: a `Customer` model that
       Sales can optionally link to, so a business can see who owes them
       money across every invoice rather than only per-sale. Outstanding
@@ -425,6 +427,71 @@ This is being built in phases, each one shipping something testable end-to-end (
       Node — but real pairing and printing on a physical printer has not
       been done and needs a human with real hardware to confirm. See
       `mobile/README.md` for the full verification breakdown.
+- [x] **Phase 14 — Single-shop UX, platform admin/support, reports, and
+      CI**: several smaller, independently-shipped improvements bundled
+      into one entry rather than one each.
+      **Single-shop/no-warehouse UX**: the app's data model always
+      supported a business with exactly one branch and zero warehouses
+      (nothing requires either), but the UI didn't make that obvious —
+      `/transfers/new` and `/sales/new` both rendered a technically-present
+      but broken required dropdown with nothing in it for a company
+      without a warehouse/branch yet; both now explain the situation and
+      point at the path that actually works instead. Dashboard copy and
+      the mobile sale form's branch picker now adapt to what a company
+      actually has (singular "your branch," warehouses only mentioned once
+      one exists, the picker skipped entirely with only one branch) rather
+      than assuming every company is multi-branch/multi-warehouse. A new
+      **Solo** plan (₦5,000/mo — 1 branch, 0 warehouses, 2 staff) fills a
+      real pricing gap: the previous cheapest plan already provisioned for
+      2 branches + 1 warehouse. Building it surfaced a real bug —
+      `{maxWarehouses && <li>...}` on the billing page prints a literal
+      `"0"` for a plan capped at exactly zero of something (React renders
+      falsy `0`, unlike `false`/`null`/`undefined`), since no plan had ever
+      used `0` there before — fixed with an explicit `!== undefined` check.
+      **Platform admin & support**: `User.platformRole`
+      (`SUPER_ADMIN`/`SUPPORT_AGENT`/none) is a new axis entirely outside
+      the per-company Membership/Role system — someone with a platform
+      role has no company at all. A super admin gets a read-only `/admin`
+      view across every company (plan, subscription status, resource
+      counts — never a company's actual operational data) and can add or
+      remove other platform staff at `/admin/team`; a support agent gets
+      the same read-only view plus a "generate a password reset link"
+      tool at `/admin/support` for helping a locked-out user, since (like
+      staff invites) no email provider is configured — the link is
+      generated and handed to a human to share directly rather than
+      emailed, via `sendResetPassword`'s callback captured through
+      `AsyncLocalStorage` rather than a shared module-level variable,
+      which would otherwise race under concurrent requests in the same
+      process. Every platform-level action is recorded in a new
+      `PlatformAuditLog` — the platform-level counterpart to the
+      per-company `AuditLog`, same append-only guarantee.
+      **Reports and audit log UI**: `AUDIT_LOG_VIEW` and `REPORTS_VIEW`
+      have been real, granted permissions since Phase 0/7 with no page
+      behind either — `AuditLog` was only ever inspectable via `psql`.
+      New `/audit-log` (per company) and `/admin/audit-log` (platform)
+      pages fix that; a new `/reports` page adds the profit/loss view
+      Phase 9 explicitly flagged as "cheap to add now that both exist,
+      but not asked for yet" (revenue vs. expenses, this month and
+      all-time, outstanding debt as a current snapshot rather than a
+      period metric, top products by revenue) — built via `Sale`/nested
+      `lineItems`, deliberately never a top-level query against
+      `SaleLineItem` directly, since that model has no `companyId` column
+      of its own and isn't in `TENANT_SCOPED_MODELS`, so `getScopedPrisma`
+      would silently run it unscoped across every company's data.
+      **CI**: `.github/workflows/ci.yml` runs typecheck/lint/build for the
+      web app and typecheck/bundle-export for the mobile app on every push
+      — the dependency-scanning pipeline Phase 7 explicitly deferred is
+      narrower now (CI itself exists; `npm audit` still isn't wired into
+      it as an automated gate). Deliberately no live Postgres service
+      container or end-to-end tests in this pipeline yet — verified the
+      web build step actually succeeds without a real database by hiding
+      `.env` and running it with only placeholder env vars, the same
+      values a real CI run would see. Also added `TEST.md`, a comprehensive
+      setup-and-testing guide — every command in it was actually run
+      against a live local instance while writing it, which caught a real
+      pre-existing bug in the README's own documented `psql "$DATABASE_URL"`
+      command (`psql` doesn't understand Prisma's `?schema=public` query
+      parameter and fails outright; both docs now strip it first).
 
 ## Getting started
 

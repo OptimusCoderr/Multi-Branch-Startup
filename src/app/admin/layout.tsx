@@ -28,6 +28,9 @@ export default async function AdminLayout({ children }: { children: ReactNode })
             <Link href="/admin/support" className="hover:text-white">
               Support
             </Link>
+            <Link href="/admin/audit-log" className="hover:text-white">
+              Audit log
+            </Link>
             {staff.role === "SUPER_ADMIN" && (
               <Link href="/admin/team" className="hover:text-white">
                 Team

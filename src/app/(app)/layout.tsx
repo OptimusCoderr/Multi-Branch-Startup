@@ -23,6 +23,8 @@ const NAV_LINKS = [
   { href: "/sales", label: "Sales" },
   { href: "/customers", label: "Customers" },
   { href: "/expenses", label: "Expenses" },
+  { href: "/reports", label: "Reports" },
+  { href: "/audit-log", label: "Audit log" },
   { href: "/staff", label: "Staff" },
   { href: "/settings/branding", label: "Settings" },
 ];
