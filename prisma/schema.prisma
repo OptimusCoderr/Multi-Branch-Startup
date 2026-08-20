@@ -77,6 +77,15 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Platform-level, not company-level — deliberately NOT a Membership/Role
+  // grant, since those are always scoped to one Company by getScopedPrisma.
+  // A platform admin has no company at all; requirePlatformAdmin()
+  // (src/lib/auth/session.ts) checks this flag directly against the raw
+  // `prisma` singleton, bypassing tenant scoping entirely on purpose for
+  // the one narrow /admin surface that legitimately needs to see across
+  // every company. View-only by design — see /admin's own read-only queries.
+  isPlatformAdmin Boolean @default(false)
+
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]

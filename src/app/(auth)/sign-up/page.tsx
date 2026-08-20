@@ -3,10 +3,15 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
+import { AuthThemeShell, useAuthTheme } from "@/components/auth/auth-theme";
 import { CompanyStepForm } from "./company-step-form";
 
-export default function SignUpPage() {
-  const [step, setStep] = useState<"account" | "company">("account");
+function SignUpFormStep({
+  onSubmit,
+}: {
+  onSubmit: (input: { name: string; email: string; password: string }) => Promise<string | null>;
+}) {
+  const { accent } = useAuthTheme();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,38 +22,13 @@ export default function SignUpPage() {
     event.preventDefault();
     setError(null);
     setIsSubmitting(true);
-
-    const { error: signUpError } = await authClient.signUp.email({ name, email, password });
-
-    if (signUpError) {
-      setError(signUpError.message ?? "Could not create your account.");
-      setIsSubmitting(false);
-      return;
-    }
-
-    // Move to the company-creation step. That form posts through a real
-    // <form action={...}> bound to the Server Action, which is the pattern
-    // Next.js's action runtime handles reliably when the action calls
-    // redirect() — calling a redirecting Server Action as a bare function
-    // from an event handler is not a supported pattern.
-    setStep("company");
+    const submitError = await onSubmit({ name, email, password });
+    setError(submitError);
     setIsSubmitting(false);
   }
 
-  if (step === "company") {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Create your company</h1>
-          <p className="mt-1 text-sm text-gray-500">One more step — no card required for your 14-day trial.</p>
-        </div>
-        <CompanyStepForm email={email} />
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
+    <>
       <div>
         <h1 className="text-2xl font-semibold">Create your account</h1>
         <p className="mt-1 text-sm text-gray-500">Start a 14-day trial — no card required.</p>
@@ -94,7 +74,8 @@ export default function SignUpPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          style={{ backgroundColor: accent }}
+          className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {isSubmitting ? "Creating account…" : "Continue"}
         </button>
@@ -102,10 +83,49 @@ export default function SignUpPage() {
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{" "}
-        <Link href="/sign-in" className="font-medium text-black underline">
+        <Link href="/sign-in" className="font-medium underline" style={{ color: accent }}>
           Sign in
         </Link>
       </p>
-    </main>
+    </>
+  );
+}
+
+export default function SignUpPage() {
+  const [step, setStep] = useState<"account" | "company">("account");
+  const [email, setEmail] = useState("");
+
+  async function handleAccountSubmit(input: { name: string; email: string; password: string }): Promise<string | null> {
+    const { error: signUpError } = await authClient.signUp.email(input);
+    if (signUpError) {
+      return signUpError.message ?? "Could not create your account.";
+    }
+
+    setEmail(input.email);
+    // Move to the company-creation step. That form posts through a real
+    // <form action={...}> bound to the Server Action, which is the pattern
+    // Next.js's action runtime handles reliably when the action calls
+    // redirect() — calling a redirecting Server Action as a bare function
+    // from an event handler is not a supported pattern.
+    setStep("company");
+    return null;
+  }
+
+  return (
+    <AuthThemeShell>
+      {step === "company" ? (
+        <div className="flex flex-col gap-6">
+          <div>
+            <h1 className="text-2xl font-semibold">Create your company</h1>
+            <p className="mt-1 text-sm text-gray-500">One more step — no card required for your 14-day trial.</p>
+          </div>
+          <CompanyStepForm email={email} />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-6">
+          <SignUpFormStep onSubmit={handleAccountSubmit} />
+        </div>
+      )}
+    </AuthThemeShell>
   );
 }

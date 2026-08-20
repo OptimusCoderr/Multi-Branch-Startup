@@ -97,6 +97,25 @@ export async function requireMembershipOrThrow(): Promise<AuthenticatedMembershi
 }
 
 /**
+ * For the /admin surface only: redirects to /sign-in if unauthenticated,
+ * to /dashboard if signed in but not a platform admin. Deliberately
+ * separate from requireMembership() — a platform admin isn't a member of
+ * any company, and this check reads User.isPlatformAdmin directly via the
+ * raw `prisma` singleton rather than going through getScopedPrisma, which
+ * always scopes to one companyId and would be the wrong tool for a page
+ * that legitimately needs to see across every company.
+ */
+export async function requirePlatformAdmin() {
+  const session = await getSession();
+  if (!session) redirect("/sign-in");
+
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { isPlatformAdmin: true } });
+  if (!user?.isPlatformAdmin) redirect("/dashboard");
+
+  return session;
+}
+
+/**
  * Computes the effective permission set for a membership:
  * (role's permissions) ∪ (GRANT overrides) − (DENY overrides), with DENY
  * always winning. Always recomputed from the database — never cached

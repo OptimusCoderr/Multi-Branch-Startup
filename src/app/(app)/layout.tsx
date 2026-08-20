@@ -4,6 +4,7 @@ import Image from "next/image";
 import { requireMembership } from "@/lib/auth/session";
 import { getBrandingSettings } from "@/lib/branding";
 import { SignOutButton } from "@/components/layout/sign-out-button";
+import { LogoPlaceholder } from "@/components/logo-placeholder";
 
 // Deliberately NOT trimmed by branch/warehouse count: a company with zero
 // warehouses today still needs "Warehouses" in nav to be the one place
@@ -47,7 +48,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       >
         <div className="flex items-center gap-8">
           <div className="flex items-center gap-2">
-            {branding.logoUrl && (
+            {branding.logoUrl ? (
               <Image
                 src={branding.logoUrl}
                 alt={`${membership.companyName} logo`}
@@ -56,6 +57,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
                 unoptimized
                 className="rounded"
               />
+            ) : (
+              <LogoPlaceholder color={branding.primaryColor} />
             )}
             <div>
               <p className="text-sm font-semibold">{membership.companyName}</p>

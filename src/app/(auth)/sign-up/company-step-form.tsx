@@ -2,10 +2,13 @@
 
 import { useActionState } from "react";
 import { createCompanyForCurrentUser } from "@/server/actions/onboarding";
+import { CompanyNameField } from "@/components/forms/company-name-field";
+import { useAuthTheme } from "@/components/auth/auth-theme";
 
 const initialState = { error: "" };
 
 export function CompanyStepForm({ email }: { email: string }) {
+  const { accent } = useAuthTheme();
   const [state, formAction, isPending] = useActionState(async (_prev: { error: string }, formData: FormData) => {
     const result = await createCompanyForCurrentUser(formData);
     return result ?? initialState;
@@ -17,23 +20,15 @@ export function CompanyStepForm({ email }: { email: string }) {
         You&apos;re signed in as {email}. Name your company to finish setting up your account.
       </p>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Company name
-        <input
-          name="companyName"
-          autoFocus
-          className="rounded-md border border-gray-300 px-3 py-2"
-          required
-          minLength={2}
-        />
-      </label>
+      <CompanyNameField />
 
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
 
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        style={{ backgroundColor: accent }}
+        className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
       >
         {isPending ? "Creating…" : "Create company"}
       </button>
