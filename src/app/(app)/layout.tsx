@@ -5,6 +5,13 @@ import { requireMembership } from "@/lib/auth/session";
 import { getBrandingSettings } from "@/lib/branding";
 import { SignOutButton } from "@/components/layout/sign-out-button";
 
+// Deliberately NOT trimmed by branch/warehouse count: a company with zero
+// warehouses today still needs "Warehouses" in nav to be the one place
+// they'd ever discover they can add one later. Hiding it would make that
+// path undiscoverable, not just decluttered. The friction this app
+// actually had for a single-shop/no-warehouse business — a broken empty
+// dropdown on /transfers/new, and dashboard copy that assumed every
+// company uses both — is fixed at the source on those pages instead.
 const NAV_LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/products", label: "Products" },
