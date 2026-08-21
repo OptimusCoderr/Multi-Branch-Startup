@@ -19,11 +19,18 @@ export default async function ProductsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Products</h1>
-        {canCreate && (
-          <Link href="/products/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-            New product
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          {permissions.has(PERMISSIONS.PRODUCTS_VIEW) && (
+            <a href="/api/exports/products" className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
+              Export CSV
+            </a>
+          )}
+          {canCreate && (
+            <Link href="/products/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
+              New product
+            </Link>
+          )}
+        </div>
       </div>
 
       {products.length === 0 ? (

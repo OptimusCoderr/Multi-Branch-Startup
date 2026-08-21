@@ -33,6 +33,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   16. [Business verification (CAC) and account enable/disable](#16-business-verification-cac-and-account-enabledisable)
   17. [Barcode/QR scanning and stock counts](#17-barcodeqr-scanning-and-stock-counts)
   18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
+  19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -528,6 +529,37 @@ optional — but available — for everyone else. Built on Better Auth's `two-fa
    loop). Confirm the same enroll/verify/backup-code flow works there too.
 6. Try **Regenerate backup codes** (password required) and confirm the old codes stop
    working while the new ones don't.
+
+### 19. CSV data export (products, customers, sales)
+
+Web-only — accounting/tax use, so it's a plain file download rather than anything in the
+mobile app. Every export streams straight from the database (no caching), is scoped to the
+signed-in company like everything else, and is gated by the same permission its underlying
+list page already uses (`products.view`, `customers.view`, `reports.view` for sales) — a
+staff member who can't see the page can't hit the export URL directly either.
+
+1. On **Products**, click **Export CSV**. Confirm the download opens cleanly in Excel/Sheets
+   (the file needs its UTF-8 BOM to avoid mojibake on special characters) with one row per
+   product: SKU, barcode, name, description, unit price, cost price, total stock across every
+   branch/warehouse, stock value at cost, and active/inactive status.
+2. On **Customers**, click **Export CSV**. Confirm one row per customer: name, phone, email,
+   address, credit limit, outstanding balance, open/overdue sale counts, and status — the
+   same balance figures shown on the Customers page itself.
+3. On **Sales**, leave the From/To date fields blank and click **Export CSV** — confirm it
+   downloads every sale ever recorded (including voided ones, so an accountant sees the full
+   picture rather than a silently filtered one), with invoice number, date, branch, customer,
+   status, subtotal/discount/tax/grand total/amount paid, credited amount, outstanding balance,
+   and who recorded the sale. Then pick a From and/or To date and confirm the export only
+   includes sales within that range — this is the tax-period export a small business actually
+   asks for at filing time.
+4. Confirm every money column comes out as a plain two-decimal number (`2500.00`), never a
+   currency-formatted string (`₦2,500.00`) or a value with trailing zeros stripped
+   (`2500`) — accounting software needs consistent, symbol-free numbers to import correctly.
+5. As a Cashier (no `reports.view` by default), confirm the **Sales** page has no export
+   form at all, and that hitting `/api/exports/sales` directly still 403s — but Products and
+   Customers export normally, since Cashiers do have `products.view`/`customers.view`.
+6. Confirm hitting any `/api/exports/*` URL while signed out redirects/rejects rather than
+   downloading anything.
 
 ## Mobile app
 

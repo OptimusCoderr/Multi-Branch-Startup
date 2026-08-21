@@ -34,11 +34,16 @@ export default async function CustomersPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Customers</h1>
-        {canCreate && (
-          <Link href="/customers/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-            New customer
-          </Link>
-        )}
+        <div className="flex items-center gap-3">
+          <a href="/api/exports/customers" className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
+            Export CSV
+          </a>
+          {canCreate && (
+            <Link href="/customers/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
+              New customer
+            </Link>
+          )}
+        </div>
       </div>
 
       {canCreate &&
