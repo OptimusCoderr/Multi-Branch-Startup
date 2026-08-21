@@ -13,7 +13,11 @@ export default async function NewExternalDeliveryPage() {
 
   const db = getScopedPrisma(membership.companyId);
   const [products, branches] = await Promise.all([
-    db.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
+    db.product.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, sku: true, tracksBatches: true },
+    }),
     db.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 

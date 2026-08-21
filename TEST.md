@@ -187,18 +187,20 @@ Two independent intake paths — test both:
    branch stock in one step. This is also the path a business with **zero warehouses**
    uses to stock branches at all — confirm it still works for a company that's never
    created a warehouse.
-2. **Warehouse-sourced transfer**: `/transfers/new` — request a transfer from a warehouse
-   to a branch. As a *different* staff member than the requester, approve it, dispatch it,
-   then receive it. Confirm:
+2. **Warehouse-sourced or branch-sourced transfer**: `/transfers/new` — request a transfer
+   from either a warehouse or another branch (pick the source type; the picker only shows
+   when both are available). As a *different* staff member than the requester, approve it,
+   dispatch it, then receive it. Confirm:
    - The requester cannot also approve their own request (self-approval is blocked by
-     default).
-   - Warehouse stock decrements at dispatch, branch stock increments at receipt — not
-     both at once.
+     default) — no Approve button is shown to the requester at all, just an explanation.
+   - The source location's stock decrements at dispatch, branch stock increments at
+     receipt — not both at once.
+   - A branch cannot be selected as its own destination when it's already the source.
    - Receiving a *different* quantity than requested is recorded as-is and flagged as a
      discrepancy, not silently corrected.
-3. With **zero warehouses**, visit `/transfers/new` directly — it should explain there are
-   no warehouses and point you to `/transfers/new-external` or `/warehouses/new`, not show
-   a broken form with an empty source dropdown.
+3. With **zero warehouses and fewer than two branches**, visit `/transfers/new` directly —
+   it should explain there's no source available and point you to `/transfers/new-external`,
+   not show a broken form with an empty source dropdown.
 
 ### 5. Sales and payments
 
@@ -387,6 +389,35 @@ one.
    access.
 6. `/admin/audit-log` — confirm every action above (support agent added, a reset link
    generated, access removed) shows up, attributed to the right person.
+
+### 15. Low-stock alerts, branch transfers, and perishable batch tracking
+
+1. On a product's edit page, set a **reorder point** (e.g. `5`) and leave it blank on
+   another. Deliver stock below that number via `/transfers/new-external`. Confirm:
+   - `/dashboard` shows a "Low stock" card with the total count and the affected product
+     names — the product with no reorder point set is never included, even at zero stock.
+   - `/stock` shows a red "Low stock" badge next to the affected product, with the current
+     total vs. the reorder point.
+2. Mark a product **"Perishable / tracked by batch"** when creating or editing it. Confirm:
+   - `/transfers/new-external` requires a batch number and expiry date for that product
+     (and only that product — a non-tracked product's form has no batch fields at all), and
+     rejects the delivery server-side if submitted without them.
+   - `/batches` lists the batch under "Expiring soon" (or "Expired" once its date passes),
+     with the correct remaining quantity; the "All" tab shows every batch regardless of
+     expiry.
+   - `/dashboard` shows an "Expiring soon" card counting batches expiring within 14 days,
+     separately calling out how many are already expired.
+3. Record a sale of a batch-tracked product, or dispatch it out via a branch-to-branch
+   transfer, from a branch with two batches at different expiry dates. Confirm the
+   **earlier-expiring batch's `quantityRemaining` is consumed first** (FEFO) — check
+   `/batches` before and after. This should happen transparently; nothing on the sale or
+   transfer form asks which batch to use.
+4. Request a transfer sourced from **another branch** (not a warehouse) via `/transfers/new`
+   — the source-type picker only appears when both a warehouse and a second branch are
+   available; otherwise the form defaults to whichever source actually exists. Confirm you
+   cannot pick the same branch as both source and destination, and that the rest of the
+   lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
+   a warehouse-sourced transfer.
 
 ## Mobile app
 

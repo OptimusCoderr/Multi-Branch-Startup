@@ -38,6 +38,8 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           description: product.description,
           unitPrice: product.unitPrice.toString(),
           costPrice: product.costPrice?.toString() ?? null,
+          reorderPoint: product.reorderPoint?.toString() ?? null,
+          tracksBatches: product.tracksBatches,
         }}
         submitLabel="Save changes"
       />

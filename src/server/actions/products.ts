@@ -27,6 +27,8 @@ export async function createProduct(_prev: { error: string }, formData: FormData
     description: formData.get("description"),
     unitPrice: formData.get("unitPrice"),
     costPrice: formData.get("costPrice"),
+    reorderPoint: formData.get("reorderPoint"),
+    tracksBatches: formData.get("tracksBatches"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid product details." };
@@ -49,6 +51,8 @@ export async function createProduct(_prev: { error: string }, formData: FormData
         description: parsed.data.description ?? null,
         unitPrice: parsed.data.unitPrice,
         costPrice: parsed.data.costPrice ?? null,
+        reorderPoint: parsed.data.reorderPoint ?? null,
+        tracksBatches: parsed.data.tracksBatches,
       },
     });
 
@@ -84,6 +88,8 @@ export async function updateProduct(
     description: formData.get("description"),
     unitPrice: formData.get("unitPrice"),
     costPrice: formData.get("costPrice"),
+    reorderPoint: formData.get("reorderPoint"),
+    tracksBatches: formData.get("tracksBatches"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid product details." };
@@ -113,6 +119,8 @@ export async function updateProduct(
         description: parsed.data.description ?? null,
         unitPrice: parsed.data.unitPrice,
         costPrice: parsed.data.costPrice ?? null,
+        reorderPoint: parsed.data.reorderPoint ?? null,
+        tracksBatches: parsed.data.tracksBatches,
       },
     });
 

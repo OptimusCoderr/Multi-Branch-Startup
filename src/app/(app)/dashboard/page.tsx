@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { ShoppingCart, TrendingUp, TrendingDown, Wallet, Users, ArrowRight } from "lucide-react";
+import type { Route } from "next";
+import { ShoppingCart, TrendingUp, TrendingDown, Wallet, Users, ArrowRight, AlertTriangle, Clock } from "lucide-react";
 import { requireMembership } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { formatMoney } from "@/lib/format";
 import { getPeriodSummary, getOutstandingDebt, startOfCurrentMonth, startOfToday } from "@/server/services/report-service";
 import { getCustomerBalances } from "@/server/services/customer-service";
+import { getLowStockProducts, getExpiringBatches } from "@/server/services/inventory-service";
 
 function StatCard({
   icon: Icon,
@@ -13,15 +15,17 @@ function StatCard({
   value,
   detail,
   tint,
+  href,
 }: {
   icon: typeof ShoppingCart;
   label: string;
   value: string;
   detail?: string;
   tint: string;
+  href?: Route;
 }) {
-  return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
+  const content = (
+    <>
       <div
         className="flex h-9 w-9 items-center justify-center rounded-xl"
         // color-mix() rather than string-concatenating an alpha hex suffix
@@ -39,8 +43,18 @@ function StatCard({
         <p className="mt-1 font-display text-2xl font-semibold text-gray-900">{value}</p>
         {detail && <p className="mt-0.5 text-xs text-gray-500">{detail}</p>}
       </div>
-    </div>
+    </>
   );
+  const className = "flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md";
+
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return <div className={className}>{content}</div>;
 }
 
 export default async function DashboardPage() {
@@ -48,15 +62,18 @@ export default async function DashboardPage() {
   const db = getScopedPrisma(membership.companyId);
   const currency = membership.companyCurrency;
 
-  const [subscription, branchCount, warehouseCount, today, thisMonth, outstanding, customers] = await Promise.all([
-    getSubscriptionForCompany(membership.companyId),
-    db.branch.count({ where: { isActive: true } }),
-    db.warehouse.count({ where: { isActive: true } }),
-    getPeriodSummary(db, startOfToday()),
-    getPeriodSummary(db, startOfCurrentMonth()),
-    getOutstandingDebt(db),
-    db.customer.findMany({ where: { isActive: true }, select: { id: true } }),
-  ]);
+  const [subscription, branchCount, warehouseCount, today, thisMonth, outstanding, customers, lowStock, expiringBatches] =
+    await Promise.all([
+      getSubscriptionForCompany(membership.companyId),
+      db.branch.count({ where: { isActive: true } }),
+      db.warehouse.count({ where: { isActive: true } }),
+      getPeriodSummary(db, startOfToday()),
+      getPeriodSummary(db, startOfCurrentMonth()),
+      getOutstandingDebt(db),
+      db.customer.findMany({ where: { isActive: true }, select: { id: true } }),
+      getLowStockProducts(db),
+      getExpiringBatches(db),
+    ]);
   const active = isSubscriptionActive(subscription);
 
   const balances = await getCustomerBalances(db, customers.map((c) => c.id));
@@ -101,7 +118,7 @@ export default async function DashboardPage() {
         <p className="mt-1 text-gray-500">Manage {summary} from the navigation above.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           icon={ShoppingCart}
           label="Today's sales"
@@ -129,6 +146,33 @@ export default async function DashboardPage() {
           value={String(debtorCount)}
           detail="Customers who owe money"
           tint="#7c3aed"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          label="Low stock"
+          value={String(lowStock.length)}
+          detail={
+            lowStock.length > 0
+              ? `${lowStock
+                  .slice(0, 2)
+                  .map((p) => p.name)
+                  .join(", ")}${lowStock.length > 2 ? "…" : ""}`
+              : "All products above their reorder point"
+          }
+          tint="#ea580c"
+          href="/products"
+        />
+        <StatCard
+          icon={Clock}
+          label="Expiring soon"
+          value={String(expiringBatches.length)}
+          detail={
+            expiringBatches.length > 0
+              ? `${expiringBatches.filter((b) => b.isExpired).length} already expired`
+              : "Nothing expiring in the next 14 days"
+          }
+          tint="#0891b2"
+          href="/batches"
         />
       </div>
 

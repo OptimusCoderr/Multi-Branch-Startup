@@ -48,10 +48,21 @@ export default async function StockPage() {
         <p className="text-gray-500">No products yet.</p>
       ) : (
         <div className="flex flex-col gap-6">
-          {products.map((product) => (
+          {products.map((product) => {
+            const totalStock =
+              product.warehouseStocks.reduce((sum, s) => sum + s.quantity, 0) +
+              product.branchStocks.reduce((sum, s) => sum + s.quantity, 0);
+            const isLowStock = product.reorderPoint !== null && totalStock <= product.reorderPoint;
+
+            return (
             <div key={product.id} className="rounded-lg border border-gray-200 p-4">
-              <p className="font-medium">
+              <p className="flex items-center gap-2 font-medium">
                 {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
+                {isLowStock && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-normal text-red-700">
+                    Low stock ({totalStock} ≤ {product.reorderPoint})
+                  </span>
+                )}
               </p>
               <div className={`mt-3 grid grid-cols-1 gap-4 ${showWarehouseColumn ? "sm:grid-cols-2" : ""}`}>
                 {showWarehouseColumn && (
@@ -88,7 +99,8 @@ export default async function StockPage() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

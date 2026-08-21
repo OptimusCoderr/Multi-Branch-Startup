@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { requestTransfer } from "@/server/actions/transfers";
 
 type FormState = { error: string };
@@ -17,6 +17,13 @@ export function RequestTransferForm({
 }) {
   const [state, formAction, isPending] = useActionState(requestTransfer, initialState);
 
+  const canSourceFromWarehouse = warehouses.length > 0;
+  const canSourceFromBranch = branches.length >= 2;
+  const [sourceType, setSourceType] = useState<"WAREHOUSE" | "BRANCH">(canSourceFromWarehouse ? "WAREHOUSE" : "BRANCH");
+  const [sourceBranchId, setSourceBranchId] = useState("");
+
+  const showSourceTypePicker = canSourceFromWarehouse && canSourceFromBranch;
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1 text-sm">
@@ -31,27 +38,78 @@ export function RequestTransferForm({
         </select>
       </label>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Source warehouse
-        <select name="sourceWarehouseId" required className="rounded-md border border-gray-300 px-3 py-2">
-          <option value="">Select a warehouse</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      {showSourceTypePicker && (
+        <fieldset className="flex flex-col gap-1.5 text-sm">
+          <legend className="mb-0.5 text-gray-500">Source</legend>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="sourceType"
+                value="WAREHOUSE"
+                checked={sourceType === "WAREHOUSE"}
+                onChange={() => setSourceType("WAREHOUSE")}
+              />
+              A warehouse
+            </label>
+            <label className="flex items-center gap-1.5">
+              <input
+                type="radio"
+                name="sourceType"
+                value="BRANCH"
+                checked={sourceType === "BRANCH"}
+                onChange={() => setSourceType("BRANCH")}
+              />
+              Another branch
+            </label>
+          </div>
+        </fieldset>
+      )}
+      {!showSourceTypePicker && <input type="hidden" name="sourceType" value={sourceType} />}
+
+      {sourceType === "WAREHOUSE" ? (
+        <label className="flex flex-col gap-1 text-sm">
+          Source warehouse
+          <select name="sourceWarehouseId" required className="rounded-md border border-gray-300 px-3 py-2">
+            <option value="">Select a warehouse</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <label className="flex flex-col gap-1 text-sm">
+          Source branch
+          <select
+            name="sourceBranchId"
+            required
+            value={sourceBranchId}
+            onChange={(e) => setSourceBranchId(e.target.value)}
+            className="rounded-md border border-gray-300 px-3 py-2"
+          >
+            <option value="">Select a branch</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="flex flex-col gap-1 text-sm">
         Destination branch
         <select name="destinationBranchId" required className="rounded-md border border-gray-300 px-3 py-2">
           <option value="">Select a branch</option>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
+          {branches
+            .filter((b) => sourceType !== "BRANCH" || b.id !== sourceBranchId)
+            .map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
         </select>
       </label>
 

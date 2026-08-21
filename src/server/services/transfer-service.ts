@@ -2,13 +2,22 @@ import "server-only";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import {
   decrementWarehouseStock,
+  decrementBranchStock,
   incrementBranchStock,
   recordStockMovement,
+  createProductBatch,
 } from "@/server/services/inventory-service";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "stockTransfer" | "warehouseStock" | "branchStock" | "stockMovement" | "product" | "warehouse" | "branch"
+  | "stockTransfer"
+  | "warehouseStock"
+  | "branchStock"
+  | "stockMovement"
+  | "product"
+  | "warehouse"
+  | "branch"
+  | "productBatch"
 >;
 
 export class TransferNotFoundError extends Error {
@@ -31,19 +40,26 @@ async function getTransferOrThrow(tx: ScopedTx, transferId: string) {
   return transfer;
 }
 
+type TransferSource = { sourceWarehouseId: string; sourceBranchId?: never } | { sourceBranchId: string; sourceWarehouseId?: never };
+
 export async function requestTransfer(
   tx: ScopedTx,
   companyId: string,
   membershipId: string,
-  input: { productId: string; quantity: number; sourceWarehouseId: string; destinationBranchId: string; notes?: string },
+  input: { productId: string; quantity: number; destinationBranchId: string; notes?: string } & TransferSource,
 ) {
+  if (input.sourceBranchId && input.sourceBranchId === input.destinationBranchId) {
+    throw new TransferStateError("A branch cannot transfer stock to itself.");
+  }
+
   return tx.stockTransfer.create({
     data: {
       companyId,
       productId: input.productId,
       quantity: input.quantity,
-      sourceType: "WAREHOUSE",
-      sourceWarehouseId: input.sourceWarehouseId,
+      sourceType: input.sourceWarehouseId ? "WAREHOUSE" : "BRANCH",
+      sourceWarehouseId: input.sourceWarehouseId ?? null,
+      sourceBranchId: input.sourceBranchId ?? null,
       destinationBranchId: input.destinationBranchId,
       status: "REQUESTED",
       requestedByMembershipId: membershipId,
@@ -98,32 +114,49 @@ export async function cancelTransfer(tx: ScopedTx, membershipId: string, transfe
 }
 
 /**
- * Dispatch decrements the source warehouse immediately — stock leaves
- * custody the moment it's on its way, mirroring physical reality, rather
- * than waiting until it's confirmed received.
+ * Dispatch decrements the source (warehouse OR branch — see
+ * requestTransfer) immediately — stock leaves custody the moment it's on
+ * its way, mirroring physical reality, rather than waiting until it's
+ * confirmed received.
  */
 export async function dispatchTransfer(tx: ScopedTx, companyId: string, membershipId: string, transferId: string) {
   const transfer = await getTransferOrThrow(tx, transferId);
   if (transfer.status !== "APPROVED") {
     throw new TransferStateError("Only approved transfers can be dispatched.");
   }
-  if (!transfer.sourceWarehouseId) {
-    throw new TransferStateError("This transfer has no source warehouse to dispatch from.");
+  if (!transfer.sourceWarehouseId && !transfer.sourceBranchId) {
+    throw new TransferStateError("This transfer has no source location to dispatch from.");
   }
 
-  await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
-  await recordStockMovement(tx, {
-    companyId,
-    productId: transfer.productId,
-    locationType: "WAREHOUSE",
-    warehouseId: transfer.sourceWarehouseId,
-    quantityDelta: -transfer.quantity,
-    reason: "TRANSFER_OUT",
-    referenceType: "StockTransfer",
-    referenceId: transfer.id,
-    stockTransferId: transfer.id,
-    performedByMembershipId: membershipId,
-  });
+  if (transfer.sourceWarehouseId) {
+    await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+    await recordStockMovement(tx, {
+      companyId,
+      productId: transfer.productId,
+      locationType: "WAREHOUSE",
+      warehouseId: transfer.sourceWarehouseId,
+      quantityDelta: -transfer.quantity,
+      reason: "TRANSFER_OUT",
+      referenceType: "StockTransfer",
+      referenceId: transfer.id,
+      stockTransferId: transfer.id,
+      performedByMembershipId: membershipId,
+    });
+  } else {
+    await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+    await recordStockMovement(tx, {
+      companyId,
+      productId: transfer.productId,
+      locationType: "BRANCH",
+      branchId: transfer.sourceBranchId!,
+      quantityDelta: -transfer.quantity,
+      reason: "TRANSFER_OUT",
+      referenceType: "StockTransfer",
+      referenceId: transfer.id,
+      stockTransferId: transfer.id,
+      performedByMembershipId: membershipId,
+    });
+  }
 
   return tx.stockTransfer.update({
     where: { id: transferId },
@@ -154,22 +187,38 @@ export async function receiveTransfer(
   }
 
   if (transfer.status === "APPROVED") {
-    if (!transfer.sourceWarehouseId) {
-      throw new TransferStateError("This transfer has no source warehouse to receive from.");
+    if (!transfer.sourceWarehouseId && !transfer.sourceBranchId) {
+      throw new TransferStateError("This transfer has no source location to receive from.");
     }
-    await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
-    await recordStockMovement(tx, {
-      companyId,
-      productId: transfer.productId,
-      locationType: "WAREHOUSE",
-      warehouseId: transfer.sourceWarehouseId,
-      quantityDelta: -transfer.quantity,
-      reason: "TRANSFER_OUT",
-      referenceType: "StockTransfer",
-      referenceId: transfer.id,
-      stockTransferId: transfer.id,
-      performedByMembershipId: membershipId,
-    });
+    if (transfer.sourceWarehouseId) {
+      await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+      await recordStockMovement(tx, {
+        companyId,
+        productId: transfer.productId,
+        locationType: "WAREHOUSE",
+        warehouseId: transfer.sourceWarehouseId,
+        quantityDelta: -transfer.quantity,
+        reason: "TRANSFER_OUT",
+        referenceType: "StockTransfer",
+        referenceId: transfer.id,
+        stockTransferId: transfer.id,
+        performedByMembershipId: membershipId,
+      });
+    } else {
+      await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+      await recordStockMovement(tx, {
+        companyId,
+        productId: transfer.productId,
+        locationType: "BRANCH",
+        branchId: transfer.sourceBranchId!,
+        quantityDelta: -transfer.quantity,
+        reason: "TRANSFER_OUT",
+        referenceType: "StockTransfer",
+        referenceId: transfer.id,
+        stockTransferId: transfer.id,
+        performedByMembershipId: membershipId,
+      });
+    }
   }
 
   await incrementBranchStock(tx, transfer.productId, transfer.destinationBranchId, receivedQuantity);
@@ -207,12 +256,31 @@ export async function receiveTransfer(
  * a single-step create-and-receive action — there's no internal
  * counterparty to request from or approve against.
  */
+export class BatchRequiredError extends Error {
+  constructor() {
+    super("This product tracks batches — batch number and expiry date are required.");
+    this.name = "BatchRequiredError";
+  }
+}
+
 export async function receiveExternalStock(
   tx: ScopedTx,
   companyId: string,
   membershipId: string,
-  input: { productId: string; quantity: number; destinationBranchId: string; externalSourceName: string; notes?: string },
+  input: {
+    productId: string;
+    quantity: number;
+    destinationBranchId: string;
+    externalSourceName: string;
+    notes?: string;
+    batch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date };
+  },
 ) {
+  const product = await tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true } });
+  if (product?.tracksBatches && !input.batch) {
+    throw new BatchRequiredError();
+  }
+
   const transfer = await tx.stockTransfer.create({
     data: {
       companyId,
@@ -243,6 +311,17 @@ export async function receiveExternalStock(
     stockTransferId: transfer.id,
     performedByMembershipId: membershipId,
   });
+
+  if (input.batch) {
+    await createProductBatch(tx, companyId, membershipId, {
+      productId: input.productId,
+      branchId: input.destinationBranchId,
+      batchNumber: input.batch.batchNumber,
+      expiryDate: input.batch.expiryDate,
+      manufactureDate: input.batch.manufactureDate,
+      quantity: input.quantity,
+    });
+  }
 
   return transfer;
 }

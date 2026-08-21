@@ -19,7 +19,7 @@ export default async function TransfersPage() {
 
   const transfers = await db.stockTransfer.findMany({
     orderBy: { createdAt: "desc" },
-    include: { product: true, sourceWarehouse: true, destinationBranch: true },
+    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true },
     take: 100,
   });
 
@@ -68,7 +68,11 @@ export default async function TransfersPage() {
                   <td className="py-2 pr-4">{t.product.name}</td>
                   <td className="py-2 pr-4 font-mono">{t.quantity}</td>
                   <td className="py-2 pr-4 text-gray-500">
-                    {t.sourceType === "EXTERNAL" ? `External: ${t.externalSourceName}` : t.sourceWarehouse?.name}
+                    {t.sourceType === "EXTERNAL"
+                      ? `External: ${t.externalSourceName}`
+                      : t.sourceType === "BRANCH"
+                        ? t.sourceBranch?.name
+                        : t.sourceWarehouse?.name}
                   </td>
                   <td className="py-2 pr-4 text-gray-500">{t.destinationBranch.name}</td>
                   <td className="py-2 pr-4">

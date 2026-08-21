@@ -24,7 +24,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
   const transfer = await db.stockTransfer.findUnique({
     where: { id },
-    include: { product: true, sourceWarehouse: true, destinationBranch: true },
+    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true },
   });
   if (!transfer) notFound();
 
@@ -80,7 +80,12 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           </span>
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          {transfer.quantity} units · {transfer.sourceType === "EXTERNAL" ? `External: ${transfer.externalSourceName}` : transfer.sourceWarehouse?.name}{" "}
+          {transfer.quantity} units ·{" "}
+          {transfer.sourceType === "EXTERNAL"
+            ? `External: ${transfer.externalSourceName}`
+            : transfer.sourceType === "BRANCH"
+              ? transfer.sourceBranch?.name
+              : transfer.sourceWarehouse?.name}{" "}
           → {transfer.destinationBranch.name}
         </p>
         {transfer.notes && <p className="mt-2 text-sm text-gray-600">Notes: {transfer.notes}</p>}

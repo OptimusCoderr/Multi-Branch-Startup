@@ -60,6 +60,7 @@ model Company {
   expenses          Expense[]
   debtReminders     DebtReminder[]
   creditNotes       CreditNote[]
+  productBatches    ProductBatch[]
 
   @@index([status])
 }
@@ -368,14 +369,14 @@ model AuditLog {
  * prisma/grants.sql revokes UPDATE/DELETE on it the same way.
  */
 model PlatformAuditLog {
-  id           String   @id @default(cuid())
-  actorUserId  String
-  action       String
-  targetEmail  String?
-  metadata     Json?
-  ipAddress    String?
-  userAgent    String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  actorUserId String
+  action      String
+  targetEmail String?
+  metadata    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
 
   @@index([createdAt])
   @@index([actorUserId])
@@ -386,24 +387,41 @@ model PlatformAuditLog {
 // ---------------------------------------------------------------------------
 
 model Product {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   companyId   String
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sku         String
   name        String
   description String?
-  unitPrice   Decimal   @db.Decimal(12, 2)
-  costPrice   Decimal?  @db.Decimal(12, 2)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  unitPrice   Decimal  @db.Decimal(12, 2)
+  costPrice   Decimal? @db.Decimal(12, 2)
+  isActive    Boolean  @default(true)
+
+  // Null = no low-stock alert configured for this product. Compared
+  // against total stock across every location (warehouses + branches
+  // summed), not per-location — a single number an owner can reason
+  // about, not a per-location matrix to maintain.
+  reorderPoint Int?
+
+  // Opt-in per product — most goods aren't perishable and shouldn't pay
+  // for batch bookkeeping they don't need. When true, external-delivery
+  // receipts for this product require batch/expiry details, and sales
+  // decrementing this product's branch stock auto-consume batches
+  // FEFO (first-expiring-first-out) via decrementBranchStock() — see
+  // inventory-service.ts for why that's the one place this could live
+  // without touching every call site.
+  tracksBatches Boolean @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   warehouseStocks WarehouseStock[]
   branchStocks    BranchStock[]
   stockTransfers  StockTransfer[]
   stockMovements  StockMovement[]
   saleLineItems   SaleLineItem[]
+  batches         ProductBatch[]
 
   @@unique([companyId, sku])
   @@index([companyId, isActive])
@@ -442,9 +460,11 @@ model Branch {
 
   stocks            BranchStock[]
   incomingTransfers StockTransfer[] @relation("StockTransferDestinationBranch")
+  outgoingTransfers StockTransfer[] @relation("StockTransferSourceBranch")
   stockMovements    StockMovement[]
   sales             Sale[]
   expenses          Expense[]
+  productBatches    ProductBatch[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -493,6 +513,7 @@ model BranchStock {
 
 enum StockTransferSourceType {
   WAREHOUSE
+  BRANCH
   EXTERNAL
 }
 
@@ -516,6 +537,8 @@ model StockTransfer {
   sourceType          StockTransferSourceType
   sourceWarehouseId   String?
   sourceWarehouse     Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  sourceBranchId      String?
+  sourceBranch        Branch?                 @relation("StockTransferSourceBranch", fields: [sourceBranchId], references: [id])
   externalSourceName  String?
   destinationBranchId String
   destinationBranch   Branch                  @relation("StockTransferDestinationBranch", fields: [destinationBranchId], references: [id])
@@ -553,6 +576,7 @@ model StockTransfer {
   @@index([companyId, productId])
   @@index([companyId, destinationBranchId])
   @@index([companyId, sourceWarehouseId])
+  @@index([companyId, sourceBranchId])
 }
 
 enum StockMovementLocationType {
@@ -602,6 +626,57 @@ model StockMovement {
   @@index([companyId, productId, locationType])
   @@index([companyId, createdAt])
   @@index([companyId, referenceType, referenceId])
+}
+
+// ---------------------------------------------------------------------------
+// Batch/lot tracking for perishables — opt-in per product
+// (Product.tracksBatches). A batch is created wherever stock for a
+// batch-tracked product actually enters the system (today: external
+// delivery straight to a branch — see receiveExternalStock() — the most
+// common "goods arrive" moment for the kind of small/medium perishables
+// business this is aimed at, e.g. yogurt or juice arriving at a shop).
+// quantityRemaining is kept honest by decrementBranchStock(): for a
+// batch-tracked product it auto-consumes the soonest-expiring batches
+// first (FEFO) as part of the exact same atomic decrement every sale
+// already goes through — not a second, easy-to-forget bookkeeping step.
+//
+// branchId is a required, non-nullable column (not the nullable
+// locationType/warehouseId/branchId union StockMovement uses) — Postgres
+// treats NULL as distinct from NULL in unique constraints, so a nullable
+// pair here would silently defeat @@unique's protection against a
+// duplicate batch number the exact same way a single polymorphic
+// WarehouseStock/BranchStock table would have (see that model's own
+// comment). Warehouse-side batches aren't created anywhere yet — a
+// known, scoped limitation, not a bug: most small businesses buying
+// perishables receive them directly at the branch that sells them, not
+// via an internal warehouse hop. Add a parallel WarehouseBatch model
+// (not a nullable column here) if that's ever needed.
+// ---------------------------------------------------------------------------
+
+model ProductBatch {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  batchNumber     String
+  manufactureDate DateTime?
+  expiryDate      DateTime
+
+  quantityReceived  Int
+  quantityRemaining Int
+
+  receivedByMembershipId String
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@unique([companyId, productId, branchId, batchNumber])
+  @@index([companyId, productId])
+  @@index([companyId, expiryDate])
+  @@index([companyId, branchId])
 }
 
 // ---------------------------------------------------------------------------
