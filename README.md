@@ -527,6 +527,13 @@ Either way, verify it's reachable before moving on:
 psql "postgresql://<user>:<password>@localhost:5432/inventory_dev" -c "select 1;"
 ```
 
+**Using Docker and just want a clean local database?** `npm run db:reset` tears down and
+recreates the `inventory-pg` container from scratch (parsing the roles/password/database
+name out of your own `.env`, applies every migration, and reseeds it) — useful whenever
+`prisma migrate dev`/`deploy` can't reach `localhost:5432` (the container died, was never
+started, or you just want a fresh slate). Every run wipes local dev data by design; it
+refuses to run against anything that isn't `localhost`/`127.0.0.1`.
+
 Production never uses this local database — it's dev-only. A real deployment sets
 `DATABASE_URL` (and `RUNTIME_DATABASE_URL`, see below) to a managed Postgres instance
 (e.g. Neon, on Vercel) via environment variables; no code or config changes are needed to
