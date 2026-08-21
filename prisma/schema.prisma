@@ -512,9 +512,11 @@ model Warehouse {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  stocks            WarehouseStock[]
-  outgoingTransfers StockTransfer[]  @relation("StockTransferSourceWarehouse")
-  stockMovements    StockMovement[]
+  stocks                    WarehouseStock[]
+  outgoingTransfers         StockTransfer[]  @relation("StockTransferSourceWarehouse")
+  incomingExternalTransfers StockTransfer[]  @relation("StockTransferDestinationWarehouse")
+  stockMovements            StockMovement[]
+  productBatches            ProductBatch[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -608,14 +610,23 @@ model StockTransfer {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
 
-  sourceType          StockTransferSourceType
-  sourceWarehouseId   String?
-  sourceWarehouse     Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
-  sourceBranchId      String?
-  sourceBranch        Branch?                 @relation("StockTransferSourceBranch", fields: [sourceBranchId], references: [id])
-  externalSourceName  String?
-  destinationBranchId String
-  destinationBranch   Branch                  @relation("StockTransferDestinationBranch", fields: [destinationBranchId], references: [id])
+  sourceType         StockTransferSourceType
+  sourceWarehouseId  String?
+  sourceWarehouse    Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  sourceBranchId     String?
+  sourceBranch       Branch?                 @relation("StockTransferSourceBranch", fields: [sourceBranchId], references: [id])
+  externalSourceName String?
+
+  // Exactly one of these is set (enforced by a CHECK constraint added
+  // directly in the migration) — the internal request/approve/dispatch/
+  // receive flow always targets a branch (a warehouse only ever *supplies*
+  // an internal transfer, never receives one), but an EXTERNAL delivery
+  // can now land straight at a warehouse instead of a branch, for
+  // perishables that commonly wait there before reaching one.
+  destinationBranchId    String?
+  destinationBranch      Branch?    @relation("StockTransferDestinationBranch", fields: [destinationBranchId], references: [id])
+  destinationWarehouseId String?
+  destinationWarehouse   Warehouse? @relation("StockTransferDestinationWarehouse", fields: [destinationWarehouseId], references: [id])
 
   status StockTransferStatus @default(REQUESTED)
 
@@ -636,12 +647,14 @@ model StockTransfer {
   // FEFO-consumed for this transfer, captured at the moment of decrement
   // (dispatch, or the inline decrement of an APPROVED transfer received
   // without a separate dispatch step) — same { batchId, batchNumber,
-  // expiryDate, quantity } shape as SaleLineItem.batchConsumption. Only
-  // ever set for a branch-sourced transfer of a batch-tracked product;
-  // replayed at receipt to recreate the same batch identity at the
-  // destination branch, so expiry tracking survives the move instead of
-  // silently disappearing. Null for warehouse-sourced/external transfers
-  // or non-batch-tracked products.
+  // expiryDate, quantity } shape as SaleLineItem.batchConsumption. Set for
+  // a branch- OR warehouse-sourced transfer of a batch-tracked product
+  // (both locations track batches); replayed at receipt to recreate the
+  // same batch identity at the destination branch, so expiry tracking
+  // survives the move instead of silently disappearing. Null for an
+  // external transfer or a non-batch-tracked product, or when the source
+  // location had no matching batch rows to consume from (e.g. batch
+  // tracking was turned on after stock already existed there).
   dispatchedBatches Json?
 
   receivedByMembershipId String?
@@ -745,8 +758,20 @@ model ProductBatch {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  branchId  String
-  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  // Exactly one of these is set — a batch lives at a branch OR a
+  // warehouse, never both, never neither (enforced by a CHECK constraint
+  // added directly in the migration; Prisma's schema language has no
+  // syntax for one). Warehouses gained batch tracking so a perishable
+  // sitting there before reaching a branch isn't an expiry blind spot —
+  // decrementWarehouseStock/decrementBranchStock (inventory-service.ts)
+  // both FEFO-consume from whichever location they're given, and a
+  // warehouse-sourced transfer now carries its batch identity forward to
+  // the receiving branch the same way a branch-sourced one already did.
+  branchId    String?
+  branch      Branch?    @relation(fields: [branchId], references: [id])
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
 
   batchNumber     String
   manufactureDate DateTime?
@@ -760,9 +785,11 @@ model ProductBatch {
   updatedAt              DateTime @updatedAt
 
   @@unique([companyId, productId, branchId, batchNumber])
+  @@unique([companyId, productId, warehouseId, batchNumber])
   @@index([companyId, productId])
   @@index([companyId, expiryDate])
   @@index([companyId, branchId])
+  @@index([companyId, warehouseId])
 }
 
 // ---------------------------------------------------------------------------

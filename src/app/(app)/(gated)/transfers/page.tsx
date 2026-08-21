@@ -19,7 +19,7 @@ export default async function TransfersPage() {
 
   const transfers = await db.stockTransfer.findMany({
     orderBy: { createdAt: "desc" },
-    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true },
+    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true, destinationWarehouse: true },
     take: 100,
   });
 
@@ -74,7 +74,9 @@ export default async function TransfersPage() {
                         ? t.sourceBranch?.name
                         : t.sourceWarehouse?.name}
                   </td>
-                  <td className="py-2 pr-4 text-gray-500">{t.destinationBranch.name}</td>
+                  <td className="py-2 pr-4 text-gray-500">
+                    {t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`}
+                  </td>
                   <td className="py-2 pr-4">
                     <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[t.status] ?? ""}`}>
                       {t.status.replace("_", " ")}

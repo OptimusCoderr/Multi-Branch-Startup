@@ -4,6 +4,7 @@ import type { Prisma } from "@prisma/client";
 import {
   decrementWarehouseStock,
   decrementBranchStock,
+  incrementWarehouseStock,
   incrementBranchStock,
   recordStockMovement,
   createProductBatch,
@@ -153,7 +154,10 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
   let dispatchedBatches: ConsumedBatch[] = [];
 
   if (transfer.sourceWarehouseId) {
-    await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+    // Captured here (not re-derived at receipt) for the same reason as the
+    // branch case below — FEFO order can shift between dispatch and
+    // receipt.
+    dispatchedBatches = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -219,12 +223,15 @@ function capBatchesToQuantity(batches: ConsumedBatch[], quantity: number): Consu
  * the caller to audit-log as a discrepancy.
  *
  * For a batch-tracked product, the destination gets the *same* batch
- * identity (batch number + expiry) the source branch's stock actually
- * came from — captured at dispatch (or just now, if dispatch was
- * skipped) — so expiry tracking survives the move instead of silently
- * disappearing. A warehouse-sourced transfer has no batch data to carry
- * over (batches only exist per-branch in this schema), so the receiver
- * must supply one manually, same as an external delivery.
+ * identity (batch number + expiry) the source's stock actually came from
+ * — captured at dispatch (or just now, if dispatch was skipped) — so
+ * expiry tracking survives the move instead of silently disappearing.
+ * This works the same whether the source was a branch or a warehouse
+ * (both track batches). The receiver only needs to supply one manually
+ * when the source location genuinely had no matching batch rows to
+ * consume from (e.g. batch tracking was turned on for the product after
+ * stock already existed there) — same requirement an external delivery
+ * already has.
  */
 export async function receiveTransfer(
   tx: ScopedTx,
@@ -239,6 +246,15 @@ export async function receiveTransfer(
   if (transfer.status !== "APPROVED" && transfer.status !== "IN_TRANSIT") {
     throw new TransferStateError("This transfer is not ready to be received.");
   }
+  // The internal request/approve/dispatch/receive flow this function
+  // handles always targets a branch — only an EXTERNAL delivery
+  // (receiveExternalStock, a separate single-step function) can target a
+  // warehouse instead. Asserted here once so every use below can stay a
+  // plain string.
+  if (!transfer.destinationBranchId) {
+    throw new TransferStateError("This transfer has no destination branch.");
+  }
+  const destinationBranchId = transfer.destinationBranchId;
 
   // JSON round-tripping serializes Date -> ISO string, so a snapshot read
   // back from a prior dispatch needs its expiryDate re-parsed — unlike a
@@ -254,7 +270,7 @@ export async function receiveTransfer(
       throw new TransferStateError("This transfer has no source location to receive from.");
     }
     if (transfer.sourceWarehouseId) {
-      await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+      batchesToLand = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
@@ -289,12 +305,12 @@ export async function receiveTransfer(
     throw new BatchRequiredError();
   }
 
-  await incrementBranchStock(tx, transfer.productId, transfer.destinationBranchId, receivedQuantity);
+  await incrementBranchStock(tx, transfer.productId, destinationBranchId, receivedQuantity);
   await recordStockMovement(tx, {
     companyId,
     productId: transfer.productId,
     locationType: "BRANCH",
-    branchId: transfer.destinationBranchId,
+    branchId: destinationBranchId,
     quantityDelta: receivedQuantity,
     reason: "TRANSFER_IN",
     referenceType: "StockTransfer",
@@ -306,7 +322,7 @@ export async function receiveTransfer(
   if (manualBatch) {
     await createProductBatch(tx, companyId, membershipId, {
       productId: transfer.productId,
-      branchId: transfer.destinationBranchId,
+      branchId: destinationBranchId,
       batchNumber: manualBatch.batchNumber,
       expiryDate: manualBatch.expiryDate,
       manufactureDate: manualBatch.manufactureDate,
@@ -316,7 +332,7 @@ export async function receiveTransfer(
     for (const b of capBatchesToQuantity(batchesToLand, receivedQuantity)) {
       await createProductBatch(tx, companyId, membershipId, {
         productId: transfer.productId,
-        branchId: transfer.destinationBranchId,
+        branchId: destinationBranchId,
         batchNumber: b.batchNumber,
         expiryDate: b.expiryDate,
         quantity: b.quantity,
@@ -339,11 +355,15 @@ export async function receiveTransfer(
 }
 
 /**
- * A supplier delivering straight to a branch, bypassing a warehouse
- * entirely. Still modeled as a StockTransfer row (not a separate entity)
- * so every "how did stock get here" query has one place to look, but it's
- * a single-step create-and-receive action — there's no internal
- * counterparty to request from or approve against.
+ * A supplier delivering straight to a branch OR a warehouse, bypassing the
+ * usual request/approve/dispatch/receive chain entirely. Still modeled as
+ * a StockTransfer row (not a separate entity) so every "how did stock get
+ * here" query has one place to look, but it's a single-step
+ * create-and-receive action — there's no internal counterparty to
+ * request from or approve against. A warehouse destination exists so a
+ * perishable delivery that's going to sit in a warehouse before reaching
+ * a branch still gets proper expiry tracking from the moment it arrives,
+ * rather than only once it's transferred out to a branch.
  */
 export class BatchRequiredError extends Error {
   constructor() {
@@ -352,6 +372,8 @@ export class BatchRequiredError extends Error {
   }
 }
 
+type ExternalDestination = { destinationBranchId: string; destinationWarehouseId?: never } | { destinationWarehouseId: string; destinationBranchId?: never };
+
 export async function receiveExternalStock(
   tx: ScopedTx,
   companyId: string,
@@ -359,18 +381,19 @@ export async function receiveExternalStock(
   input: {
     productId: string;
     quantity: number;
-    destinationBranchId: string;
     externalSourceName: string;
     notes?: string;
     batch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date };
-  },
+  } & ExternalDestination,
 ) {
-  const [product, destinationBranch] = await Promise.all([
+  const [product, destinationBranch, destinationWarehouse] = await Promise.all([
     tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true } }),
-    tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }),
+    input.destinationBranchId ? tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }) : null,
+    input.destinationWarehouseId ? tx.warehouse.findUnique({ where: { id: input.destinationWarehouseId }, select: { id: true } }) : null,
   ]);
   if (!product) throw new TransferStateError("Selected product not found.");
-  if (!destinationBranch) throw new TransferStateError("Destination branch not found.");
+  if (input.destinationBranchId && !destinationBranch) throw new TransferStateError("Destination branch not found.");
+  if (input.destinationWarehouseId && !destinationWarehouse) throw new TransferStateError("Destination warehouse not found.");
   if (product.tracksBatches && !input.batch) {
     throw new BatchRequiredError();
   }
@@ -382,7 +405,8 @@ export async function receiveExternalStock(
       quantity: input.quantity,
       sourceType: "EXTERNAL",
       externalSourceName: input.externalSourceName,
-      destinationBranchId: input.destinationBranchId,
+      destinationBranchId: input.destinationBranchId ?? null,
+      destinationWarehouseId: input.destinationWarehouseId ?? null,
       status: "RECEIVED",
       requestedByMembershipId: membershipId,
       receivedByMembershipId: membershipId,
@@ -392,24 +416,40 @@ export async function receiveExternalStock(
     },
   });
 
-  await incrementBranchStock(tx, input.productId, input.destinationBranchId, input.quantity);
-  await recordStockMovement(tx, {
-    companyId,
-    productId: input.productId,
-    locationType: "BRANCH",
-    branchId: input.destinationBranchId,
-    quantityDelta: input.quantity,
-    reason: "EXTERNAL_RECEIPT",
-    referenceType: "StockTransfer",
-    referenceId: transfer.id,
-    stockTransferId: transfer.id,
-    performedByMembershipId: membershipId,
-  });
+  if (input.destinationBranchId) {
+    await incrementBranchStock(tx, input.productId, input.destinationBranchId, input.quantity);
+    await recordStockMovement(tx, {
+      companyId,
+      productId: input.productId,
+      locationType: "BRANCH",
+      branchId: input.destinationBranchId,
+      quantityDelta: input.quantity,
+      reason: "EXTERNAL_RECEIPT",
+      referenceType: "StockTransfer",
+      referenceId: transfer.id,
+      stockTransferId: transfer.id,
+      performedByMembershipId: membershipId,
+    });
+  } else {
+    await incrementWarehouseStock(tx, input.productId, input.destinationWarehouseId!, input.quantity);
+    await recordStockMovement(tx, {
+      companyId,
+      productId: input.productId,
+      locationType: "WAREHOUSE",
+      warehouseId: input.destinationWarehouseId!,
+      quantityDelta: input.quantity,
+      reason: "EXTERNAL_RECEIPT",
+      referenceType: "StockTransfer",
+      referenceId: transfer.id,
+      stockTransferId: transfer.id,
+      performedByMembershipId: membershipId,
+    });
+  }
 
   if (input.batch) {
     await createProductBatch(tx, companyId, membershipId, {
       productId: input.productId,
-      branchId: input.destinationBranchId,
+      ...(input.destinationBranchId ? { branchId: input.destinationBranchId } : { warehouseId: input.destinationWarehouseId! }),
       batchNumber: input.batch.batchNumber,
       expiryDate: input.batch.expiryDate,
       manufactureDate: input.batch.manufactureDate,

@@ -34,6 +34,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   17. [Barcode/QR scanning and stock counts](#17-barcodeqr-scanning-and-stock-counts)
   18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
   19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
+  20. [Warehouse-level batch tracking](#20-warehouse-level-batch-tracking)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -428,10 +429,12 @@ one.
    B. Confirm `/batches` shows a batch at Branch B with the **same** batch number and expiry
    date (not a generic "transferred stock" entry) — receiving doesn't ask for batch details
    again, since it carries over automatically from what was dispatched.
-6. **Batch identity does NOT survive a warehouse-sourced transfer** (batches only exist
-   per-branch). Confirm receiving a batch-tracked product from a warehouse requires manually
-   entering a batch number and expiry at receipt — the same fields `/transfers/new-external`
-   uses — and is rejected if left blank.
+6. **Batch identity also survives a warehouse-sourced transfer** — warehouses track batches
+   too now, not just branches (see §20 for the full walkthrough). Receiving a batch-tracked
+   product from a warehouse does NOT ask for batch details again, the same as a branch
+   source. Manual batch entry at receipt is only ever needed when the source location
+   genuinely has no matching batch rows to consume from (e.g. batch tracking was turned on
+   for the product after stock already existed there).
 7. Receive a **second delivery under an already-used batch number** at the same branch
    (e.g. two shipments of the same lot). Confirm it increments the existing batch's quantity
    instead of erroring.
@@ -560,6 +563,38 @@ staff member who can't see the page can't hit the export URL directly either.
    Customers export normally, since Cashiers do have `products.view`/`customers.view`.
 6. Confirm hitting any `/api/exports/*` URL while signed out redirects/rejects rather than
    downloading anything.
+
+### 20. Warehouse-level batch tracking
+
+Batches used to be branch-only — a perishable delivery that landed in a warehouse before
+reaching a branch had no expiry tracking at all until it was transferred out. Warehouses now
+track batches exactly the same way branches do; see §15 for the base perishable-tracking
+walkthrough, which this extends.
+
+1. Mark a product **"Perishable / tracked by batch"**, then go to `/transfers/new-external`
+   and pick **A warehouse** as the receiving location (the picker only appears when you have
+   both a warehouse and a branch to choose from; otherwise it defaults to whichever exists).
+   Confirm batch number and expiry are required here exactly like a branch delivery, and that
+   `/batches` lists the new batch with its location shown as the warehouse name plus a small
+   "warehouse" badge (the "Location" column shows either a branch or a warehouse now).
+2. Confirm that batch counts toward `/dashboard`'s "Expiring soon"/"Low stock" cards the same
+   as a branch batch would, if its expiry falls within the 14-day window.
+3. Request an internal transfer sourced from **that warehouse** to a branch
+   (`/transfers/new`), for less than the full quantity delivered. Approve (as a different
+   staff member), dispatch, and receive it. Confirm:
+   - The receive form does **not** ask for manual batch details — the batch identity (same
+     batch number and expiry) carries over automatically, the same as a branch-sourced
+     transfer already did.
+   - `/batches` now shows the batch at the **receiving branch** with the transferred
+     quantity, and the **warehouse's** row still shows the correct remaining quantity (what
+     was delivered minus what was just transferred out) — not zeroed out.
+4. Confirm a manual warehouse stock adjustment (`/stock`, negative delta) on a batch-tracked
+   product also consumes FEFO from the warehouse's batches, the same as a branch adjustment
+   already does — check `/batches` before and after.
+5. Try (via direct API manipulation, or just trust the schema-level guarantee) creating a
+   batch or a transfer with both a branch and a warehouse destination set, or neither —
+   confirm the database rejects it (a CHECK constraint backs the app-level logic here, the
+   same defense-in-depth pattern used elsewhere in this schema).
 
 ## Mobile app
 

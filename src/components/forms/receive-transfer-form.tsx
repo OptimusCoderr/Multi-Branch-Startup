@@ -39,8 +39,8 @@ export function ReceiveTransferForm({
       {requiresManualBatch && (
         <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
           <p className="text-xs font-medium text-amber-800">
-            This product is perishable / batch-tracked — since it&apos;s coming from a warehouse (no existing batch
-            to carry over), batch details are required for this receipt.
+            This product is perishable / batch-tracked, and the source location had no existing batch to carry
+            over — batch details are required for this receipt.
           </p>
           <label className="flex flex-col gap-1 text-sm">
             Batch number
