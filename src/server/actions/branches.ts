@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { requireMembershipOrThrow, requirePermission } from "@/lib/auth/session";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -34,40 +35,47 @@ export async function createBranch(_prev: { error: string }, formData: FormData)
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
 
-  try {
-    await assertUnderBranchLimit(db, membership.companyId);
-  } catch (err) {
-    return { error: err instanceof PlanLimitError ? err.message : "Could not verify your plan's branch limit." };
-  }
-
   const existing = await db.branch.findFirst({ where: { name: parsed.data.name } });
   if (existing) {
     return { error: `A branch named "${parsed.data.name}" already exists.` };
   }
 
-  await db.$transaction(async (tx) => {
-    const branch = await tx.branch.create({
-      data: {
-        companyId: membership.companyId,
-        name: parsed.data.name,
-        address: parsed.data.address ?? null,
-        phone: parsed.data.phone ?? null,
+  try {
+    await db.$transaction(
+      async (tx) => {
+        // Re-checked here (not just before the transaction) under
+        // SERIALIZABLE isolation — otherwise two concurrent creates could
+        // both pass a check-then-act count read before either commits,
+        // jointly landing the company over its plan's branch cap.
+        await assertUnderBranchLimit(tx, membership.companyId);
+
+        const branch = await tx.branch.create({
+          data: {
+            companyId: membership.companyId,
+            name: parsed.data.name,
+            address: parsed.data.address ?? null,
+            phone: parsed.data.phone ?? null,
+          },
+        });
+
+        await provisionStockForNewBranch(tx, membership.companyId, branch.id);
+
+        await writeAuditLog(tx, {
+          companyId: membership.companyId,
+          actorMembershipId: membership.membershipId,
+          action: "branch.created",
+          entityType: "Branch",
+          entityId: branch.id,
+          metadata: { name: branch.name },
+          ipAddress,
+          userAgent,
+        });
       },
-    });
-
-    await provisionStockForNewBranch(tx, membership.companyId, branch.id);
-
-    await writeAuditLog(tx, {
-      companyId: membership.companyId,
-      actorMembershipId: membership.membershipId,
-      action: "branch.created",
-      entityType: "Branch",
-      entityId: branch.id,
-      metadata: { name: branch.name },
-      ipAddress,
-      userAgent,
-    });
-  });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (err) {
+    return { error: err instanceof PlanLimitError ? err.message : "Could not create the branch." };
+  }
 
   revalidatePath("/branches");
   redirect("/branches");

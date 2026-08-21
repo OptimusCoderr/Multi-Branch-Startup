@@ -110,6 +110,13 @@ export async function createExpense(_prev: { error: string }, formData: FormData
     return { error: "Selected category is unavailable." };
   }
 
+  if (parsed.data.branchId) {
+    const branch = await db.branch.findUnique({ where: { id: parsed.data.branchId }, select: { id: true } });
+    if (!branch) {
+      return { error: "Selected branch not found." };
+    }
+  }
+
   await db.$transaction(async (tx) => {
     const expense = await tx.expense.create({
       data: {

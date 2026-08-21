@@ -120,7 +120,17 @@ export async function acceptInvitation(
   return { companyId: invitation.companyId, membershipId: membership.id };
 }
 
-export async function updateStaffRole(tx: ScopedTx, membershipId: string, roleId: string) {
+export async function updateStaffRole(tx: ScopedTx, actorMembershipId: string, membershipId: string, roleId: string) {
+  // Without this, anyone holding STAFF_MANAGE_ROLES could grant *themselves*
+  // Owner (or any other role) with no check that they already held
+  // equivalent privilege — a straight self-service escalation, unlike
+  // changing someone else's role, which is the normal, intended use of
+  // this permission. Same self-targeting boundary setStaffStatus() already
+  // enforces for suspend/remove.
+  if (membershipId === actorMembershipId) {
+    throw new StaffActionError("You cannot change your own role — ask another staff member with role-management access.");
+  }
+
   const membership = await tx.membership.findUnique({ where: { id: membershipId }, include: { role: true } });
   if (!membership) throw new StaffActionError("Staff member not found.");
 
@@ -144,6 +154,13 @@ export async function setPermissionOverride(
   permissionId: string,
   effect: "GRANT" | "DENY" | "INHERIT",
 ) {
+  // Same self-targeting boundary as updateStaffRole() — otherwise anyone
+  // holding STAFF_MANAGE_PERMISSIONS could GRANT themselves any individual
+  // permission they lack (e.g. billing.manage) with nobody else's sign-off.
+  if (membershipId === grantedByMembershipId) {
+    throw new StaffActionError("You cannot change your own permission overrides — ask another staff member with permission-management access.");
+  }
+
   const membership = await tx.membership.findUnique({ where: { id: membershipId } });
   if (!membership) throw new StaffActionError("Staff member not found.");
 

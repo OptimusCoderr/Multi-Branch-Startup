@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { verifyPaystackSignature } from "@/lib/paystack/verify-signature";
 import { applyWebhookEvent } from "@/server/services/billing-service";
@@ -33,16 +34,28 @@ export async function POST(request: Request) {
   // processed this exact delivery."
   const paystackEventId = createHash("sha256").update(rawBody).digest("hex");
 
-  const existing = await prisma.paystackEvent.findUnique({ where: { paystackEventId } });
-  if (existing?.status === "PROCESSED") {
-    return NextResponse.json({ status: "already processed" });
+  // Optimistic create, not find-then-create — two near-simultaneous
+  // deliveries of the same retried webhook could otherwise both see no
+  // existing row and both attempt to create, and the loser's unhandled
+  // unique-constraint violation would surface as a 500 (prompting Paystack
+  // to retry the whole thing again) instead of the idempotent no-op this
+  // is supposed to be. The loser just re-fetches the winner's row instead.
+  let eventRecord: { id: string; status: string };
+  try {
+    eventRecord = await prisma.paystackEvent.create({
+      data: { paystackEventId, eventType: payload.event ?? "unknown", payload: payload as object, status: "RECEIVED" },
+    });
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      eventRecord = await prisma.paystackEvent.findUniqueOrThrow({ where: { paystackEventId } });
+    } else {
+      throw err;
+    }
   }
 
-  const eventRecord =
-    existing ??
-    (await prisma.paystackEvent.create({
-      data: { paystackEventId, eventType: payload.event ?? "unknown", payload: payload as object, status: "RECEIVED" },
-    }));
+  if (eventRecord.status === "PROCESSED") {
+    return NextResponse.json({ status: "already processed" });
+  }
 
   try {
     await applyWebhookEvent(payload.event ?? "", payload.data ?? {});
