@@ -6,13 +6,14 @@ import { formatMoney } from "@/lib/format";
 import { prisma } from "@/lib/db/prisma";
 import { CheckoutButton } from "@/components/forms/checkout-button";
 import { SettingsNav } from "@/components/layout/settings-nav";
+import { PageHeader, Card, Badge, type BadgeVariant } from "@/components/ui";
 
-const STATUS_STYLES: Record<string, string> = {
-  TRIALING: "bg-yellow-100 text-yellow-700",
-  ACTIVE: "bg-green-100 text-green-700",
-  PAST_DUE: "bg-amber-100 text-amber-800",
-  CANCELLED: "bg-red-100 text-red-700",
-  INCOMPLETE: "bg-gray-100 text-gray-500",
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  TRIALING: "warning",
+  ACTIVE: "success",
+  PAST_DUE: "warning",
+  CANCELLED: "danger",
+  INCOMPLETE: "neutral",
 };
 
 export default async function BillingSettingsPage() {
@@ -33,14 +34,12 @@ export default async function BillingSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <SettingsNav current="/settings/billing" />
-      <h1 className="text-2xl font-semibold">Billing</h1>
+      <PageHeader title="Billing" />
 
       {subscription && (
-        <div className="rounded-lg border border-gray-200 p-4">
+        <Card>
           <div className="flex items-center gap-3">
-            <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[subscription.status] ?? ""}`}>
-              {subscription.status.replace("_", " ")}
-            </span>
+            <Badge variant={STATUS_VARIANTS[subscription.status] ?? "neutral"}>{subscription.status.replace("_", " ")}</Badge>
             <span className="text-sm font-medium">{subscription.plan.name}</span>
           </div>
           <div className="mt-2 flex flex-col gap-1 text-sm text-gray-500">
@@ -54,7 +53,7 @@ export default async function BillingSettingsPage() {
               </p>
             )}
           </div>
-        </div>
+        </Card>
       )}
 
       <div className="flex flex-col gap-4">
@@ -64,8 +63,8 @@ export default async function BillingSettingsPage() {
             const features = parsePlanFeatures(plan.features);
             const isCurrent = subscription?.planId === plan.id && subscription.status === "ACTIVE";
             return (
-              <div key={plan.id} className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4">
-                <p className="font-semibold">{plan.name}</p>
+              <Card key={plan.id} className="flex flex-col gap-2">
+                <p className="font-display font-semibold text-gray-900">{plan.name}</p>
                 <p className="text-2xl font-semibold">
                   {formatMoney(plan.priceKobo / 100, "NGN")}
                   <span className="text-sm font-normal text-gray-500">/mo</span>
@@ -82,13 +81,13 @@ export default async function BillingSettingsPage() {
                   {features.maxStaff !== undefined && <li>Up to {features.maxStaff} staff</li>}
                 </ul>
                 {isCurrent ? (
-                  <span className="mt-2 self-start rounded-md bg-gray-100 px-3 py-1.5 text-sm text-gray-500">Current plan</span>
+                  <Badge variant="neutral">Current plan</Badge>
                 ) : (
                   <div className="mt-2">
                     <CheckoutButton planId={plan.id} label="Subscribe" />
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })}
         </div>

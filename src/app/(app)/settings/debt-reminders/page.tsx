@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { isSmsConfigured } from "@/lib/notifications/sms-client";
 import { DebtReminderSettingsForm } from "@/components/forms/debt-reminder-settings-form";
 import { SettingsNav } from "@/components/layout/settings-nav";
+import { PageHeader } from "@/components/ui";
 
 export default async function DebtReminderSettingsPage() {
   const membership = await requireMembership();
@@ -20,7 +21,7 @@ export default async function DebtReminderSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <SettingsNav current="/settings/debt-reminders" />
-      <h1 className="text-2xl font-semibold">Debt reminders</h1>
+      <PageHeader title="Debt reminders" />
       <DebtReminderSettingsForm
         defaultValues={{
           debtReminderEnabled: company.debtReminderEnabled,

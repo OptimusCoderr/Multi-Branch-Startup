@@ -3,6 +3,7 @@ import { getBrandingSettings } from "@/lib/branding";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { BrandingForm } from "@/components/forms/branding-form";
 import { SettingsNav } from "@/components/layout/settings-nav";
+import { PageHeader } from "@/components/ui";
 
 export default async function BrandingSettingsPage() {
   const membership = await requireMembership();
@@ -17,7 +18,7 @@ export default async function BrandingSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <SettingsNav current="/settings/branding" />
-      <h1 className="text-2xl font-semibold">Branding</h1>
+      <PageHeader title="Branding" />
       <BrandingForm
         defaultValues={{
           primaryColor: branding.primaryColor,
