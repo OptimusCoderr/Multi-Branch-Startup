@@ -1,10 +1,12 @@
-import { View, Text, FlatList, StyleSheet, RefreshControl, Pressable } from "react-native";
+import { View, Text, FlatList, StyleSheet, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "expo-router";
-import { ScanLine } from "lucide-react-native";
+import { ScanLine, PackageSearch } from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { api, type StockProduct } from "@/lib/api";
 import { useHasPermission } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
+import { Button, Card, Badge, EmptyState, SkeletonCard } from "@/components/ui";
 
 export default function StockScreen() {
   const canCount = useHasPermission("stock_levels.view");
@@ -13,41 +15,53 @@ export default function StockScreen() {
   return (
     <View style={styles.container}>
       {canCount && (
-        <Link href="/stock-count" asChild>
-          <Pressable style={styles.countButton}>
-            <ScanLine size={16} color="#fff" />
-            <Text style={styles.countButtonText}>Stock count</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.countButtonWrap}>
+          <Link href="/stock-count" asChild>
+            <Button label="Stock count" icon={ScanLine} />
+          </Link>
+        </View>
       )}
       {isLoading ? (
-        <Text style={styles.muted}>Loading…</Text>
+        <View style={{ padding: theme.spacing.lg, gap: theme.spacing.md }}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
       ) : (
         <FlatList
           data={data?.products ?? []}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-          ListEmptyComponent={<Text style={styles.muted}>No products yet.</Text>}
-          contentContainerStyle={{ padding: 16, gap: 12 }}
-          renderItem={({ item }: { item: StockProduct }) => (
-            <View style={styles.card}>
-              <Text style={styles.productName}>
-                {item.name} <Text style={styles.sku}>({item.sku})</Text>
-              </Text>
-              {item.branchStocks.map((s) => (
-                <View key={s.branchId} style={styles.row}>
-                  <Text style={styles.location}>{s.branchName}</Text>
-                  <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
-                </View>
-              ))}
-              {item.warehouseStocks.map((s) => (
-                <View key={s.warehouseId} style={styles.row}>
-                  <Text style={styles.location}>{s.warehouseName} (warehouse)</Text>
-                  <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
-                </View>
-              ))}
-            </View>
-          )}
+          ListEmptyComponent={<EmptyState icon={PackageSearch} title="No products yet" />}
+          contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.md }}
+          renderItem={({ item, index }: { item: StockProduct; index: number }) => {
+            const totalStock =
+              item.branchStocks.reduce((sum, s) => sum + s.quantity, 0) + item.warehouseStocks.reduce((sum, s) => sum + s.quantity, 0);
+            return (
+              <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 30)}>
+                <Card>
+                  <View style={styles.headerRow}>
+                    <Text style={styles.productName}>
+                      {item.name} <Text style={styles.sku}>({item.sku})</Text>
+                    </Text>
+                    {totalStock === 0 && <Badge variant="danger" label="Out of stock" />}
+                  </View>
+                  {item.branchStocks.map((s) => (
+                    <View key={s.branchId} style={styles.row}>
+                      <Text style={styles.location}>{s.branchName}</Text>
+                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
+                    </View>
+                  ))}
+                  {item.warehouseStocks.map((s) => (
+                    <View key={s.warehouseId} style={styles.row}>
+                      <Text style={styles.location}>{s.warehouseName} (warehouse)</Text>
+                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
+                    </View>
+                  ))}
+                </Card>
+              </Animated.View>
+            );
+          }}
         />
       )}
     </View>
@@ -55,25 +69,13 @@ export default function StockScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  countButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: theme.primary,
-    margin: 16,
-    marginBottom: 0,
-    borderRadius: 8,
-    paddingVertical: 12,
-  },
-  countButtonText: { color: "#fff", fontWeight: "600" },
-  muted: { color: "#9ca3af", padding: 16 },
-  card: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10, padding: 12, gap: 6 },
-  productName: { fontWeight: "600" },
-  sku: { fontFamily: "monospace", fontWeight: "400", color: "#9ca3af", fontSize: 12 },
+  container: { flex: 1, backgroundColor: theme.surface },
+  countButtonWrap: { padding: theme.spacing.lg, paddingBottom: 0 },
+  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.spacing.sm },
+  productName: { fontWeight: "600", color: theme.textPrimary },
+  sku: { fontFamily: "monospace", fontWeight: "400", color: theme.textFaint, fontSize: theme.font.caption },
   row: { flexDirection: "row", justifyContent: "space-between" },
   location: { color: "#374151" },
-  qty: { fontFamily: "monospace", fontWeight: "600" },
-  qtyZero: { color: "#dc2626" },
+  qty: { fontFamily: "monospace", fontWeight: "600", color: theme.textPrimary },
+  qtyZero: { color: theme.danger },
 });
