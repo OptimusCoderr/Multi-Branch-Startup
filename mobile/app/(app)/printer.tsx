@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   requestBluetoothPermissions,
   scanForPrinters,
@@ -124,12 +125,14 @@ export default function PrinterSettingsScreen() {
         keyExtractor={(d) => d.id}
         contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm }}
         ListHeaderComponent={devices.length > 0 ? <Text style={styles.cardTitle}>Nearby devices</Text> : null}
-        renderItem={({ item }) => (
-          <ListItem
-            title={item.name}
-            trailing={pairingId === item.id ? <ActivityIndicator /> : <Text style={styles.pairLink}>Pair</Text>}
-            onPress={() => handlePair(item)}
-          />
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(index * 40)}>
+            <ListItem
+              title={item.name}
+              trailing={pairingId === item.id ? <ActivityIndicator /> : <Text style={styles.pairLink}>Pair</Text>}
+              onPress={() => handlePair(item)}
+            />
+          </Animated.View>
         )}
       />
 

@@ -5,6 +5,7 @@ import { LayoutDashboard, ShoppingCart, Boxes, Users, Settings } from "lucide-re
 import { api } from "@/lib/api";
 import { signOut } from "@/lib/auth-client";
 import { theme } from "@/lib/theme";
+import { TabBar } from "@/components/ui/TabBar";
 
 export default function AppLayout() {
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: api.me });
@@ -21,7 +22,7 @@ export default function AppLayout() {
           </Pressable>
         </View>
       )}
-      <Tabs screenOptions={{ tabBarActiveTintColor: theme.primary, tabBarInactiveTintColor: "#9ca3af" }}>
+      <Tabs tabBar={(props) => <TabBar {...props} />}>
         <Tabs.Screen name="index" options={{ title: "Dashboard", tabBarIcon: ({ color, size }) => <LayoutDashboard color={color} size={size} /> }} />
         <Tabs.Screen name="sales" options={{ title: "Sales", tabBarIcon: ({ color, size }) => <ShoppingCart color={color} size={size} /> }} />
         <Tabs.Screen name="stock" options={{ title: "Stock", tabBarIcon: ({ color, size }) => <Boxes color={color} size={size} /> }} />

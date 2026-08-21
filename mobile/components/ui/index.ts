@@ -8,3 +8,4 @@ export { Skeleton, SkeletonText, SkeletonCard } from "./Skeleton";
 export { ListItem } from "./ListItem";
 export { StatCard } from "./StatCard";
 export { Field, Input } from "./Input";
+export { TabBar } from "./TabBar";
