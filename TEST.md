@@ -418,6 +418,22 @@ one.
    cannot pick the same branch as both source and destination, and that the rest of the
    lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
    a warehouse-sourced transfer.
+5. **Batch identity survives a branch-to-branch transfer.** Receive a batch-tracked product
+   into Branch A with a specific batch number and expiry, then transfer some of it to Branch
+   B. Confirm `/batches` shows a batch at Branch B with the **same** batch number and expiry
+   date (not a generic "transferred stock" entry) — receiving doesn't ask for batch details
+   again, since it carries over automatically from what was dispatched.
+6. **Batch identity does NOT survive a warehouse-sourced transfer** (batches only exist
+   per-branch). Confirm receiving a batch-tracked product from a warehouse requires manually
+   entering a batch number and expiry at receipt — the same fields `/transfers/new-external`
+   uses — and is rejected if left blank.
+7. Receive a **second delivery under an already-used batch number** at the same branch
+   (e.g. two shipments of the same lot). Confirm it increments the existing batch's quantity
+   instead of erroring.
+8. Record a sale of a batch-tracked product, then **void that sale**. Confirm the batch's
+   `quantityRemaining` on `/batches` is restored by exactly the sale's quantity — not just
+   the aggregate stock total — even if other sales or deliveries touched that batch in the
+   meantime.
 
 ### 16. Business verification (CAC) and account enable/disable
 

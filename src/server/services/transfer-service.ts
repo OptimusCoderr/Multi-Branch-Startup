@@ -1,11 +1,13 @@
 import "server-only";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import type { Prisma } from "@prisma/client";
 import {
   decrementWarehouseStock,
   decrementBranchStock,
   incrementBranchStock,
   recordStockMovement,
   createProductBatch,
+  type ConsumedBatch,
 } from "@/server/services/inventory-service";
 
 type ScopedTx = Pick<
@@ -51,6 +53,26 @@ export async function requestTransfer(
   if (input.sourceBranchId && input.sourceBranchId === input.destinationBranchId) {
     throw new TransferStateError("A branch cannot transfer stock to itself.");
   }
+
+  // Every FK below must be verified to belong to this tenant BEFORE it's
+  // ever written onto the StockTransfer row — getScopedPrisma only forces
+  // the row's own companyId, it never validates that FKs the caller
+  // supplied actually point into the same company. Skipping this let a
+  // crafted request (bypassing the UI's own tenant-scoped dropdowns, e.g.
+  // a raw POST) persist another company's real product/branch/warehouse
+  // id on a transfer this company owns — later rendered by-name on the
+  // transfers list/detail pages via `include`, which (unlike a top-level
+  // query) isn't re-scoped by the tenant-isolation extension.
+  const [product, destinationBranch, sourceWarehouse, sourceBranch] = await Promise.all([
+    tx.product.findUnique({ where: { id: input.productId }, select: { id: true } }),
+    tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }),
+    input.sourceWarehouseId ? tx.warehouse.findUnique({ where: { id: input.sourceWarehouseId }, select: { id: true } }) : null,
+    input.sourceBranchId ? tx.branch.findUnique({ where: { id: input.sourceBranchId }, select: { id: true } }) : null,
+  ]);
+  if (!product) throw new TransferStateError("Selected product not found.");
+  if (!destinationBranch) throw new TransferStateError("Destination branch not found.");
+  if (input.sourceWarehouseId && !sourceWarehouse) throw new TransferStateError("Source warehouse not found.");
+  if (input.sourceBranchId && !sourceBranch) throw new TransferStateError("Source branch not found.");
 
   return tx.stockTransfer.create({
     data: {
@@ -128,6 +150,8 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
     throw new TransferStateError("This transfer has no source location to dispatch from.");
   }
 
+  let dispatchedBatches: ConsumedBatch[] = [];
+
   if (transfer.sourceWarehouseId) {
     await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
     await recordStockMovement(tx, {
@@ -143,7 +167,10 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
       performedByMembershipId: membershipId,
     });
   } else {
-    await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+    // Captured here (not re-derived at receipt) because FEFO order can
+    // shift between dispatch and receipt — a later delivery or another
+    // sale could add/consume batches at this branch in the meantime.
+    dispatchedBatches = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -160,8 +187,26 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
 
   return tx.stockTransfer.update({
     where: { id: transferId },
-    data: { status: "IN_TRANSIT", dispatchedByMembershipId: membershipId, dispatchedAt: new Date() },
+    data: {
+      status: "IN_TRANSIT",
+      dispatchedByMembershipId: membershipId,
+      dispatchedAt: new Date(),
+      dispatchedBatches: dispatchedBatches.length > 0 ? (dispatchedBatches as unknown as Prisma.InputJsonValue) : undefined,
+    },
   });
+}
+
+/** Walks `batches` in order, taking up to `quantity` total — for capping a dispatched-batch snapshot down to what was actually received when there's a discrepancy. */
+function capBatchesToQuantity(batches: ConsumedBatch[], quantity: number): ConsumedBatch[] {
+  let remaining = quantity;
+  const capped: ConsumedBatch[] = [];
+  for (const b of batches) {
+    if (remaining <= 0) break;
+    const take = Math.min(b.quantity, remaining);
+    capped.push({ ...b, quantity: take });
+    remaining -= take;
+  }
+  return capped;
 }
 
 /**
@@ -172,6 +217,14 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
  * done the decrement. A receivedQuantity that differs from the requested
  * quantity is recorded as-is (never silently corrected) and flagged for
  * the caller to audit-log as a discrepancy.
+ *
+ * For a batch-tracked product, the destination gets the *same* batch
+ * identity (batch number + expiry) the source branch's stock actually
+ * came from — captured at dispatch (or just now, if dispatch was
+ * skipped) — so expiry tracking survives the move instead of silently
+ * disappearing. A warehouse-sourced transfer has no batch data to carry
+ * over (batches only exist per-branch in this schema), so the receiver
+ * must supply one manually, same as an external delivery.
  */
 export async function receiveTransfer(
   tx: ScopedTx,
@@ -180,11 +233,21 @@ export async function receiveTransfer(
   transferId: string,
   receivedQuantity: number,
   notes?: string,
+  manualBatch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date },
 ) {
   const transfer = await getTransferOrThrow(tx, transferId);
   if (transfer.status !== "APPROVED" && transfer.status !== "IN_TRANSIT") {
     throw new TransferStateError("This transfer is not ready to be received.");
   }
+
+  // JSON round-tripping serializes Date -> ISO string, so a snapshot read
+  // back from a prior dispatch needs its expiryDate re-parsed — unlike a
+  // snapshot captured moments ago in the APPROVED (skip-dispatch) branch
+  // below, which is still a real ConsumedBatch[] with genuine Date objects.
+  const storedBatches = transfer.dispatchedBatches as unknown as
+    | { batchId: string; batchNumber: string; expiryDate: string; quantity: number }[]
+    | null;
+  let batchesToLand: ConsumedBatch[] = (storedBatches ?? []).map((b) => ({ ...b, expiryDate: new Date(b.expiryDate) }));
 
   if (transfer.status === "APPROVED") {
     if (!transfer.sourceWarehouseId && !transfer.sourceBranchId) {
@@ -205,7 +268,7 @@ export async function receiveTransfer(
         performedByMembershipId: membershipId,
       });
     } else {
-      await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+      batchesToLand = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
@@ -221,6 +284,11 @@ export async function receiveTransfer(
     }
   }
 
+  const product = await tx.product.findUnique({ where: { id: transfer.productId }, select: { tracksBatches: true } });
+  if (product?.tracksBatches && batchesToLand.length === 0 && !manualBatch) {
+    throw new BatchRequiredError();
+  }
+
   await incrementBranchStock(tx, transfer.productId, transfer.destinationBranchId, receivedQuantity);
   await recordStockMovement(tx, {
     companyId,
@@ -234,6 +302,27 @@ export async function receiveTransfer(
     stockTransferId: transfer.id,
     performedByMembershipId: membershipId,
   });
+
+  if (manualBatch) {
+    await createProductBatch(tx, companyId, membershipId, {
+      productId: transfer.productId,
+      branchId: transfer.destinationBranchId,
+      batchNumber: manualBatch.batchNumber,
+      expiryDate: manualBatch.expiryDate,
+      manufactureDate: manualBatch.manufactureDate,
+      quantity: receivedQuantity,
+    });
+  } else if (batchesToLand.length > 0) {
+    for (const b of capBatchesToQuantity(batchesToLand, receivedQuantity)) {
+      await createProductBatch(tx, companyId, membershipId, {
+        productId: transfer.productId,
+        branchId: transfer.destinationBranchId,
+        batchNumber: b.batchNumber,
+        expiryDate: b.expiryDate,
+        quantity: b.quantity,
+      });
+    }
+  }
 
   const updated = await tx.stockTransfer.update({
     where: { id: transferId },
@@ -276,8 +365,13 @@ export async function receiveExternalStock(
     batch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date };
   },
 ) {
-  const product = await tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true } });
-  if (product?.tracksBatches && !input.batch) {
+  const [product, destinationBranch] = await Promise.all([
+    tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true } }),
+    tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }),
+  ]);
+  if (!product) throw new TransferStateError("Selected product not found.");
+  if (!destinationBranch) throw new TransferStateError("Destination branch not found.");
+  if (product.tracksBatches && !input.batch) {
     throw new BatchRequiredError();
   }
 

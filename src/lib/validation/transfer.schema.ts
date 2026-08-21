@@ -29,6 +29,13 @@ export type RejectTransferInput = z.infer<typeof rejectTransferSchema>;
 export const receiveTransferSchema = z.object({
   receivedQuantity: z.coerce.number().int().nonnegative("Received quantity cannot be negative"),
   notes: z.preprocess(emptyToUndefined, z.string().trim().max(1000).optional()),
+  // Only needed when the product tracks batches AND the transfer has no
+  // dispatched-batch snapshot to carry over — i.e. a warehouse-sourced
+  // transfer, since batches only exist per-branch in this schema.
+  // Enforced in the service layer (BatchRequiredError), not here.
+  batchNumber: z.preprocess(emptyToUndefined, z.string().trim().min(1).max(100).optional()),
+  expiryDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+  manufactureDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
 });
 export type ReceiveTransferInput = z.infer<typeof receiveTransferSchema>;
 

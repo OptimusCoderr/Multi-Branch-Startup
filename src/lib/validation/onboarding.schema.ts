@@ -14,7 +14,16 @@ const slugify = (value: string) =>
 export const createCompanySchema = z.object({
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters").max(100),
   rcNumber: z.preprocess(emptyToUndefined, z.string().trim().max(50).optional()),
-  incorporationDate: z.preprocess(emptyToUndefined, z.coerce.date().max(new Date(), "Incorporation date can't be in the future").optional()),
+  // .refine() (not .max(new Date())) — see verification.schema.ts's
+  // identical comment; .max() bakes in the Date the schema module
+  // happened to load at, not "now" at validation time.
+  incorporationDate: z.preprocess(
+    emptyToUndefined,
+    z.coerce
+      .date()
+      .refine((date) => date <= new Date(), "Incorporation date can't be in the future")
+      .optional(),
+  ),
 });
 
 export type CreateCompanyInput = z.infer<typeof createCompanySchema>;

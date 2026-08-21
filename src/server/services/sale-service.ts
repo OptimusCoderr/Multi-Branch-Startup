@@ -135,6 +135,13 @@ export async function createSale(
   });
 
   for (const li of lineItemsData) {
+    // Throws InsufficientStockError if the branch doesn't have enough —
+    // the whole transaction (including the Sale row already created above)
+    // rolls back, so a failed sale never partially commits. Runs before
+    // the line item is created so the exact batch(es) consumed can be
+    // recorded on it in one write — voidSale() reverses precisely this.
+    const consumedBatches = await decrementBranchStock(tx, li.productId, input.branchId, li.quantity);
+
     await tx.saleLineItem.create({
       data: {
         saleId: sale.id,
@@ -143,13 +150,9 @@ export async function createSale(
         unitPriceAtSale: li.unitPriceAtSale,
         discountAmount: 0,
         lineTotal: li.lineTotal,
+        batchConsumption: consumedBatches.length > 0 ? (consumedBatches as unknown as Prisma.InputJsonValue) : undefined,
       },
     });
-
-    // Throws InsufficientStockError if the branch doesn't have enough —
-    // the whole transaction (including the Sale row already created above)
-    // rolls back, so a failed sale never partially commits.
-    await decrementBranchStock(tx, li.productId, input.branchId, li.quantity);
 
     await recordStockMovement(tx, {
       companyId,
@@ -260,6 +263,20 @@ export async function voidSale(tx: ScopedTx, companyId: string, membershipId: st
       referenceId: sale.id,
       performedByMembershipId: membershipId,
     });
+
+    // Restore exactly the batch(es) this line item's sale FEFO-consumed —
+    // targeting the recorded batchId directly (not re-deriving FEFO order)
+    // means this is correct even if other sales/deliveries have touched
+    // this product's batches at this branch since.
+    const consumption = li.batchConsumption as { batchId: string; quantity: number }[] | null;
+    if (consumption) {
+      for (const c of consumption) {
+        await tx.productBatch.updateMany({
+          where: { id: c.batchId },
+          data: { quantityRemaining: { increment: c.quantity } },
+        });
+      }
+    }
   }
 
   return tx.sale.update({
