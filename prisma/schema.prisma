@@ -22,6 +22,19 @@ enum CompanyStatus {
   CANCELLED
 }
 
+// A company's business-verification (CAC) lifecycle — independent of
+// CompanyStatus/billing. UNVERIFIED is the only state a company can be
+// suspended-for-security in without also being locked out of the app (see
+// the "soft reminder" design: the 5-day deadline never blocks access on
+// its own, it just makes a company visible/filterable to platform staff).
+enum CompanyVerificationStatus {
+  UNVERIFIED // default; nothing submitted yet, or the deadline has passed with nothing submitted
+  PENDING_REVIEW // certificate submitted, awaiting a platform admin's decision
+  VERIFIED // reviewed and approved — shows a verified badge
+  REJECTED // reviewed and rejected; the company can resubmit
+  APPROVED_WITHOUT_CAC // no CAC certificate exists (e.g. not yet incorporated), but a platform admin manually approved the company to operate anyway
+}
+
 model Company {
   id                String        @id @default(cuid())
   name              String
@@ -37,6 +50,34 @@ model Company {
   // existing company just because this feature shipped.
   debtReminderEnabled     Boolean @default(false)
   debtReminderDaysOverdue Int     @default(7)
+
+  // Business verification (CAC). rcNumber/incorporationDate are collected
+  // (optionally) at sign-up; verificationDeadline is set to createdAt + 5
+  // days there too. A company with no CAC is still allowed to operate —
+  // reaching the deadline with nothing submitted never blocks access on
+  // its own, it only makes the company show up as overdue for a platform
+  // admin to chase up or explicitly approve without one.
+  rcNumber                     String?
+  incorporationDate            DateTime?
+  verificationStatus           CompanyVerificationStatus @default(UNVERIFIED)
+  verificationDeadline         DateTime?
+  cacCertificateUrl            String?
+  cacSubmittedAt               DateTime?
+  // Reviewer is a platform User.id (SUPER_ADMIN), stored the same
+  // no-FK-relation way PlatformAuditLog.actorUserId is — platform staff
+  // aren't Membership rows, so there's no scoped relation to hang off of.
+  verificationReviewedAt       DateTime?
+  verificationReviewedByUserId String?
+  verificationNote             String? // rejection reason, or an approval note
+
+  // Security kill switch a SUPER_ADMIN can flip independent of billing —
+  // sets status to SUSPENDED (blocking the whole company, see
+  // getCurrentMembership()) and remembers the prior status so re-enabling
+  // restores it exactly rather than guessing ACTIVE vs TRIAL.
+  statusBeforeSuspension CompanyStatus?
+  disabledAt             DateTime?
+  disabledByUserId       String?
+  disabledReason         String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -63,6 +104,7 @@ model Company {
   productBatches    ProductBatch[]
 
   @@index([status])
+  @@index([verificationStatus])
 }
 
 // ---------------------------------------------------------------------------

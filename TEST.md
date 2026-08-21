@@ -419,6 +419,37 @@ one.
    lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
    a warehouse-sourced transfer.
 
+### 16. Business verification (CAC) and account enable/disable
+
+1. Sign up a new company, optionally filling in the **CAC RC number** and **incorporation
+   date** on the company step — both are optional, and a company with neither can still
+   operate normally. Confirm a 5-day `verificationDeadline` is set at creation (check
+   `Company.verificationDeadline` in the DB, or just trust the countdown shows correctly).
+2. As Owner/Admin, go to `/settings/verification` and submit a certificate link. Confirm the
+   status moves to "Submitted — awaiting review" and the company shows up under `/admin`'s
+   **Needs review** filter for a platform super admin.
+3. As the super admin, open that company's `/admin/companies/[id]` page. Confirm the RC
+   number, incorporation date, and a clickable link to the submitted certificate all show
+   up, and click **Approve & verify**. Confirm:
+   - The company now shows "Verified" on its own `/settings/verification` page.
+   - It appears under `/admin`'s **Verified** filter, with a small checkmark badge next to
+     its name in the companies list.
+4. On a different company, submit a certificate and **Reject** it with a reason. Confirm the
+   company's Owner sees the rejection reason on `/settings/verification` and can resubmit —
+   resubmitting moves it back to "awaiting review".
+5. On a company that never submitted anything, use **Approve without CAC** (with an optional
+   note). Confirm its Owner sees "approved to operate without a CAC" instead of a submission
+   form, and the company is excluded from the **Needs review**/**Overdue** filters.
+6. As the super admin, **Disable** a company's account with a reason. Confirm:
+   - That company's staff are immediately redirected to `/account-disabled` on their next
+     page load, showing the disable reason — not the confusing "create your company" form a
+     suspended-but-unhandled account used to fall through to.
+   - **Enable account** restores access on the staff member's very next request, without
+     needing to sign in again.
+7. Confirm a `SUPPORT_AGENT` (not a super admin) sees the same read-only company detail page
+   but none of the verification-review or enable/disable controls — this stays a `SUPER_ADMIN`-only
+   trust decision, same as granting platform access.
+
 ## Mobile app
 
 ```bash

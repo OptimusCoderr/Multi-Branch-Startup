@@ -74,7 +74,11 @@ export async function requireSession() {
 
 /**
  * For Server Components/pages: redirects to /sign-in if there's no session
- * at all, or to /onboarding if the user is signed in but hasn't finished
+ * at all, to /account-disabled if the user has an active membership but
+ * their company has been suspended (see getCurrentMembership() above — it
+ * returns null for both cases, so this re-checks specifically to give a
+ * suspended user a real explanation instead of a confusing "create your
+ * company" form), or to /onboarding if they truly haven't finished
  * creating/joining a company yet.
  */
 export async function requireMembership(): Promise<AuthenticatedMembership> {
@@ -82,7 +86,14 @@ export async function requireMembership(): Promise<AuthenticatedMembership> {
   if (!session) redirect("/sign-in");
 
   const membership = await getCurrentMembership();
-  if (!membership) redirect("/onboarding");
+  if (!membership) {
+    const suspendedMembership = await prisma.membership.findFirst({
+      where: { userId: session.user.id, status: "ACTIVE", company: { status: "SUSPENDED" } },
+      select: { id: true },
+    });
+    if (suspendedMembership) redirect("/account-disabled");
+    redirect("/onboarding");
+  }
   return membership;
 }
 
