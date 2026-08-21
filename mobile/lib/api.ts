@@ -50,11 +50,12 @@ export type DashboardSummary = {
 };
 
 export type Branch = { id: string; name: string; address: string | null; phone: string | null };
-export type Product = { id: string; sku: string; name: string; description: string | null; unitPrice: string };
+export type Product = { id: string; sku: string; barcode: string | null; name: string; description: string | null; unitPrice: string };
 
 export type StockProduct = {
   id: string;
   sku: string;
+  barcode: string | null;
   name: string;
   warehouseStocks: { warehouseId: string; warehouseName: string; quantity: number }[];
   branchStocks: { branchId: string; branchName: string; quantity: number }[];
@@ -151,4 +152,7 @@ export const api = {
   customer: (id: string) => request<CustomerDetail>(`/api/mobile/v1/customers/${id}`),
   createCustomer: (input: { name: string; phone?: string; email?: string }) =>
     request<{ customerId: string }>("/api/mobile/v1/customers", { method: "POST", body: JSON.stringify(input) }),
+
+  adjustStock: (input: { productId: string; branchId: string; delta: number; reason?: string }) =>
+    request<{ ok: true }>("/api/mobile/v1/stock/adjust", { method: "POST", body: JSON.stringify(input) }),
 };

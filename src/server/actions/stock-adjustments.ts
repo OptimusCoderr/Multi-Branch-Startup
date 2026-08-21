@@ -44,6 +44,18 @@ export async function adjustWarehouseStock(_prev: { error: string }, formData: F
   const userAgent = h.get("user-agent");
   const { productId, warehouseId, delta, reason } = parsed.data;
 
+  // Unlike a decrement (guarded by decrementWarehouseStock's row-matched
+  // count check), an increment against a foreign productId/warehouseId
+  // would otherwise silently update zero real WarehouseStock rows while
+  // still writing a StockMovement/AuditLog claiming the adjustment
+  // happened — a phantom record, not just a tenant-isolation gap.
+  const [product, warehouse] = await Promise.all([
+    db.product.findUnique({ where: { id: productId }, select: { id: true } }),
+    db.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } }),
+  ]);
+  if (!product) return { error: "Product not found." };
+  if (!warehouse) return { error: "Warehouse not found." };
+
   try {
     await db.$transaction(async (tx) => {
       if (delta > 0) {

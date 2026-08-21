@@ -34,6 +34,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
         action={updateProduct.bind(null, product.id)}
         defaultValues={{
           sku: product.sku,
+          barcode: product.barcode,
           name: product.name,
           description: product.description,
           unitPrice: product.unitPrice.toString(),

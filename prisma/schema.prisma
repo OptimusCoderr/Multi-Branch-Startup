@@ -22,6 +22,19 @@ enum CompanyStatus {
   CANCELLED
 }
 
+// A company's business-verification (CAC) lifecycle — independent of
+// CompanyStatus/billing. UNVERIFIED is the only state a company can be
+// suspended-for-security in without also being locked out of the app (see
+// the "soft reminder" design: the 5-day deadline never blocks access on
+// its own, it just makes a company visible/filterable to platform staff).
+enum CompanyVerificationStatus {
+  UNVERIFIED // default; nothing submitted yet, or the deadline has passed with nothing submitted
+  PENDING_REVIEW // certificate submitted, awaiting a platform admin's decision
+  VERIFIED // reviewed and approved — shows a verified badge
+  REJECTED // reviewed and rejected; the company can resubmit
+  APPROVED_WITHOUT_CAC // no CAC certificate exists (e.g. not yet incorporated), but a platform admin manually approved the company to operate anyway
+}
+
 model Company {
   id                String        @id @default(cuid())
   name              String
@@ -37,6 +50,34 @@ model Company {
   // existing company just because this feature shipped.
   debtReminderEnabled     Boolean @default(false)
   debtReminderDaysOverdue Int     @default(7)
+
+  // Business verification (CAC). rcNumber/incorporationDate are collected
+  // (optionally) at sign-up; verificationDeadline is set to createdAt + 5
+  // days there too. A company with no CAC is still allowed to operate —
+  // reaching the deadline with nothing submitted never blocks access on
+  // its own, it only makes the company show up as overdue for a platform
+  // admin to chase up or explicitly approve without one.
+  rcNumber                     String?
+  incorporationDate            DateTime?
+  verificationStatus           CompanyVerificationStatus @default(UNVERIFIED)
+  verificationDeadline         DateTime?
+  cacCertificateUrl            String?
+  cacSubmittedAt               DateTime?
+  // Reviewer is a platform User.id (SUPER_ADMIN), stored the same
+  // no-FK-relation way PlatformAuditLog.actorUserId is — platform staff
+  // aren't Membership rows, so there's no scoped relation to hang off of.
+  verificationReviewedAt       DateTime?
+  verificationReviewedByUserId String?
+  verificationNote             String? // rejection reason, or an approval note
+
+  // Security kill switch a SUPER_ADMIN can flip independent of billing —
+  // sets status to SUSPENDED (blocking the whole company, see
+  // getCurrentMembership()) and remembers the prior status so re-enabling
+  // restores it exactly rather than guessing ACTIVE vs TRIAL.
+  statusBeforeSuspension CompanyStatus?
+  disabledAt             DateTime?
+  disabledByUserId       String?
+  disabledReason         String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -63,6 +104,7 @@ model Company {
   productBatches    ProductBatch[]
 
   @@index([status])
+  @@index([verificationStatus])
 }
 
 // ---------------------------------------------------------------------------
@@ -91,11 +133,36 @@ model User {
   // anyone else. Null means "not platform staff" — an ordinary user.
   platformRole PlatformRole?
 
+  // Managed entirely by Better Auth's two-factor plugin — flips true only
+  // after enrollment is confirmed with a valid TOTP code (see
+  // TwoFactor.verified below), never just on "enable" being called.
+  // Mandatory for company Owners and platform staff (SUPER_ADMIN/
+  // SUPPORT_AGENT); optional for everyone else — see
+  // requireMembershipWithTwoFactor()/requirePlatformStaffWithTwoFactor()
+  // in src/lib/auth/session.ts for where that's enforced.
+  twoFactorEnabled Boolean @default(false)
+
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]
+  twoFactors  TwoFactor[]
 
   @@map("user")
+}
+
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
 }
 
 enum PlatformRole {
@@ -391,6 +458,12 @@ model Product {
   companyId   String
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sku         String
+  // Distinct from sku — the manufacturer/retail barcode (EAN-13, UPC-A,
+  // etc.) printed on the physical product, scanned via the mobile app for
+  // POS-speed sale entry and stock counts. Optional: a company assigns
+  // its own SKU to every product regardless, but not every product comes
+  // with a printed barcode (or a company may not bother recording one).
+  barcode     String?
   name        String
   description String?
   unitPrice   Decimal  @db.Decimal(12, 2)
@@ -424,6 +497,7 @@ model Product {
   batches         ProductBatch[]
 
   @@unique([companyId, sku])
+  @@unique([companyId, barcode])
   @@index([companyId, isActive])
 }
 
@@ -557,6 +631,18 @@ model StockTransfer {
 
   dispatchedByMembershipId String?
   dispatchedAt             DateTime?
+
+  // Exactly which source ProductBatch row(s) (and how much of each) got
+  // FEFO-consumed for this transfer, captured at the moment of decrement
+  // (dispatch, or the inline decrement of an APPROVED transfer received
+  // without a separate dispatch step) — same { batchId, batchNumber,
+  // expiryDate, quantity } shape as SaleLineItem.batchConsumption. Only
+  // ever set for a branch-sourced transfer of a batch-tracked product;
+  // replayed at receipt to recreate the same batch identity at the
+  // destination branch, so expiry tracking survives the move instead of
+  // silently disappearing. Null for warehouse-sourced/external transfers
+  // or non-batch-tracked products.
+  dispatchedBatches Json?
 
   receivedByMembershipId String?
   receivedAt             DateTime?
@@ -896,6 +982,13 @@ model SaleLineItem {
   unitPriceAtSale Decimal @db.Decimal(12, 2)
   discountAmount  Decimal @default(0) @db.Decimal(12, 2)
   lineTotal       Decimal @db.Decimal(12, 2)
+
+  // Exactly which ProductBatch row(s) (and how much of each) this line
+  // item's sale FEFO-consumed, for a batch-tracked product — an array of
+  // { batchId, batchNumber, expiryDate, quantity }. Null for a
+  // non-batch-tracked product. Recorded so voidSale() can restore the
+  // precise batch(es) this sale took from, instead of guessing.
+  batchConsumption Json?
 
   @@index([saleId])
   @@index([productId])

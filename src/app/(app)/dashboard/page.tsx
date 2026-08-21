@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { Route } from "next";
 import { ShoppingCart, TrendingUp, TrendingDown, Wallet, Users, ArrowRight, AlertTriangle, Clock } from "lucide-react";
-import { requireMembership } from "@/lib/auth/session";
+import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { prisma } from "@/lib/db/prisma";
 import { formatMoney } from "@/lib/format";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getPeriodSummary, getOutstandingDebt, startOfCurrentMonth, startOfToday } from "@/server/services/report-service";
 import { getCustomerBalances } from "@/server/services/customer-service";
 import { getLowStockProducts, getExpiringBatches } from "@/server/services/inventory-service";
@@ -62,7 +64,7 @@ export default async function DashboardPage() {
   const db = getScopedPrisma(membership.companyId);
   const currency = membership.companyCurrency;
 
-  const [subscription, branchCount, warehouseCount, today, thisMonth, outstanding, customers, lowStock, expiringBatches] =
+  const [subscription, branchCount, warehouseCount, today, thisMonth, outstanding, customers, lowStock, expiringBatches, company, permissions, user] =
     await Promise.all([
       getSubscriptionForCompany(membership.companyId),
       db.branch.count({ where: { isActive: true } }),
@@ -73,8 +75,17 @@ export default async function DashboardPage() {
       db.customer.findMany({ where: { isActive: true }, select: { id: true } }),
       getLowStockProducts(db),
       getExpiringBatches(db),
+      db.company.findUniqueOrThrow({ where: { id: membership.companyId } }),
+      computeEffectivePermissions(membership.membershipId),
+      prisma.user.findUniqueOrThrow({ where: { id: membership.userId }, select: { twoFactorEnabled: true } }),
     ]);
   const active = isSubscriptionActive(subscription);
+  const isOwner = membership.roleName === "Owner" && membership.roleIsSystem;
+  const needsTwoFactor = isOwner && !user.twoFactorEnabled;
+  const canManageCompanySettings = permissions.has(PERMISSIONS.SETTINGS_COMPANY);
+  const verificationDeadlinePassed = company.verificationDeadline ? company.verificationDeadline < new Date() : false;
+  const showVerificationBanner =
+    company.verificationStatus === "REJECTED" || (company.verificationStatus === "UNVERIFIED" && verificationDeadlinePassed);
 
   const balances = await getCustomerBalances(db, customers.map((c) => c.id));
   const debtorCount = [...balances.values()].filter((b) => b.outstanding.gt(0)).length;
@@ -102,6 +113,29 @@ export default async function DashboardPage() {
           <Link href="/settings/billing" className="font-medium underline">
             Review billing
           </Link>
+        </div>
+      )}
+      {needsTwoFactor && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          Two-factor authentication is required for the account Owner — access to products, sales, and other
+          features is restricted until it&apos;s set up.{" "}
+          <Link href="/settings/security" className="font-medium underline">
+            Set up now
+          </Link>
+        </div>
+      )}
+      {showVerificationBanner && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {company.verificationStatus === "REJECTED"
+            ? "Your business verification was rejected — resubmit your CAC certificate when it's ready."
+            : "You haven't submitted a CAC certificate for verification yet — nothing is restricted, but a verified badge helps customers trust your business."}{" "}
+          {canManageCompanySettings ? (
+            <Link href="/settings/verification" className="font-medium underline">
+              Go to verification
+            </Link>
+          ) : (
+            "Ask an Owner or Admin to submit it."
+          )}
         </div>
       )}
       {active && subscription?.status === "TRIALING" && subscription.trialEndsAt && (

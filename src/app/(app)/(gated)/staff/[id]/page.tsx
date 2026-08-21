@@ -49,11 +49,16 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         </p>
       </div>
 
-      {canManageRoles && (
+      {canManageRoles && !isSelf && (
         <div className="rounded-lg border border-gray-200 p-4">
           <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Role</p>
           <ChangeRoleForm membershipId={staffMember.id} roles={roles} currentRoleId={staffMember.roleId} />
         </div>
+      )}
+      {canManageRoles && isSelf && (
+        <p className="text-sm text-gray-500">
+          You can&apos;t change your own role — ask another staff member with role-management access.
+        </p>
       )}
 
       {canRemove && !isSelf && (
@@ -79,7 +84,14 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      {canManagePermissions && (
+      {canManagePermissions && isSelf && (
+        <p className="text-sm text-gray-500">
+          You can&apos;t change your own permission overrides — ask another staff member with permission-management
+          access.
+        </p>
+      )}
+
+      {canManagePermissions && !isSelf && (
         <div className="rounded-lg border border-gray-200 p-4">
           <p className="mb-1 text-xs font-semibold uppercase text-gray-400">Permission overrides</p>
           <p className="mb-3 text-sm text-gray-500">

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { requireMembership } from "@/lib/auth/session";
+import { requireMembershipWithTwoFactor } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
 
 /**
@@ -11,7 +11,7 @@ import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/s
  * /settings/billing needs to stay reachable so they can actually fix it.
  */
 export default async function GatedLayout({ children }: { children: ReactNode }) {
-  const membership = await requireMembership();
+  const membership = await requireMembershipWithTwoFactor();
   const subscription = await getSubscriptionForCompany(membership.companyId);
 
   if (!isSubscriptionActive(subscription)) {

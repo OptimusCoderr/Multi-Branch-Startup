@@ -28,6 +28,12 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   });
   if (!transfer) notFound();
 
+  // A branch-sourced transfer always carries its batch identity forward
+  // automatically (captured at dispatch, or inline if dispatch was
+  // skipped) — only a warehouse source has no batch data to carry over,
+  // since batches only exist per-branch in this schema.
+  const requiresManualBatch = transfer.product.tracksBatches && transfer.sourceType === "WAREHOUSE";
+
   const names = await resolveMembershipNames(db, [
     transfer.requestedByMembershipId,
     transfer.approvedByMembershipId,
@@ -149,7 +155,11 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
                 <p className="mb-2 text-sm text-gray-500">
                   Receiving now (without a separate dispatch step) will move the stock directly.
                 </p>
-                <ReceiveTransferForm transferId={transfer.id} expectedQuantity={transfer.quantity} />
+                <ReceiveTransferForm
+                  transferId={transfer.id}
+                  expectedQuantity={transfer.quantity}
+                  requiresManualBatch={requiresManualBatch}
+                />
               </div>
             )}
             {(isRequester || canApprove) && (

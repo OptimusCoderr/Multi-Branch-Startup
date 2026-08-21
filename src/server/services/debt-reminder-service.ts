@@ -70,8 +70,12 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
   });
   if (eligibleCustomers.length === 0) return [];
 
+  // Only a successfully SENT reminder should start the cooldown — a FAILED
+  // row (transient SMS-provider error, not the customer's fault) must not
+  // count as "recently reminded," or a real overdue debtor gets silently
+  // skipped for days despite never actually receiving a message.
   const recentlyReminded = await db.debtReminder.findMany({
-    where: { customerId: { in: eligibleCustomers.map((c) => c.id) }, createdAt: { gte: cooldownCutoff } },
+    where: { customerId: { in: eligibleCustomers.map((c) => c.id) }, createdAt: { gte: cooldownCutoff }, status: "SENT" },
     select: { customerId: true },
   });
   const recentlyRemindedIds = new Set(recentlyReminded.map((r) => r.customerId));

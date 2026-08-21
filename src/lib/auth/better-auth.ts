@@ -1,5 +1,5 @@
 import { betterAuth } from "better-auth";
-import { bearer } from "better-auth/plugins";
+import { bearer, twoFactor } from "better-auth/plugins";
 import { expo } from "@better-auth/expo";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/lib/db/prisma";
@@ -51,6 +51,17 @@ export const auth = betterAuth({
     // and deep-link callback plumbing around it.
     bearer(),
     expo(),
+    // TOTP + backup codes only — the "otp" method (email/SMS one-time
+    // codes) needs a real send implementation we don't have (same gap as
+    // sendResetPassword above), so the UI never offers it and this plugin
+    // is left on its defaults for that method. Mandatory for company
+    // Owners and platform staff, optional for everyone else — enforced by
+    // requireMembershipWithTwoFactor()/requirePlatformStaffWithTwoFactor()
+    // in src/lib/auth/session.ts, not by this plugin (it has no concept of
+    // roles).
+    twoFactor({
+      issuer: "Multi-Branch Inventory",
+    }),
   ],
 });
 

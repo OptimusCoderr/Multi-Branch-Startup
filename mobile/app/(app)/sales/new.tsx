@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
+import { ScanLine } from "lucide-react-native";
 import { api } from "@/lib/api";
 import { useMe, formatMoney } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
+import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
 
 type LineItem = { productId: string; name: string; unitPrice: number; quantity: number };
 
@@ -22,6 +24,7 @@ export default function NewSaleScreen() {
   const [customerName, setCustomerName] = useState("");
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   // A single-shop owner has exactly one branch and shouldn't have to tap a
   // picker with one option in it every time they record a sale.
@@ -54,6 +57,17 @@ export default function NewSaleScreen() {
       }
       return [...prev, { productId, name, unitPrice, quantity: 1 }];
     });
+  }
+
+  function handleBarcodeScanned(data: string) {
+    setScannerOpen(false);
+    const product = (productsData?.products ?? []).find((p) => p.barcode === data);
+    if (!product) {
+      setError(`No product found for barcode "${data}".`);
+      return;
+    }
+    setError(null);
+    addProduct(product.id, product.name, Number(product.unitPrice));
   }
 
   function changeQuantity(productId: string, delta: number) {
@@ -96,7 +110,13 @@ export default function NewSaleScreen() {
       </View>
 
       <View>
-        <Text style={styles.label}>Add products</Text>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Add products</Text>
+          <Pressable style={styles.scanButton} onPress={() => setScannerOpen(true)}>
+            <ScanLine size={16} color={theme.primary} />
+            <Text style={styles.scanButtonText}>Scan</Text>
+          </Pressable>
+        </View>
         <View style={{ gap: 8 }}>
           {(productsData?.products ?? []).map((p) => (
             <Pressable key={p.id} style={styles.productRow} onPress={() => addProduct(p.id, p.name, Number(p.unitPrice))}>
@@ -137,6 +157,13 @@ export default function NewSaleScreen() {
       <Pressable style={styles.submitButton} onPress={handleSubmit} disabled={createSale.isPending}>
         {createSale.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Record sale</Text>}
       </Pressable>
+
+      <BarcodeScannerModal
+        visible={scannerOpen}
+        onScanned={handleBarcodeScanned}
+        onClose={() => setScannerOpen(false)}
+        title="Scan a product barcode"
+      />
     </ScrollView>
   );
 }
@@ -144,6 +171,9 @@ export default function NewSaleScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
   label: { fontSize: 12, fontWeight: "600", color: "#6b7280", marginBottom: 6, textTransform: "uppercase" },
+  labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  scanButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8 },
+  scanButtonText: { color: theme.primary, fontWeight: "600", fontSize: 13 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },

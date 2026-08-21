@@ -498,13 +498,45 @@ This is being built in phases, each one shipping something testable end-to-end (
 ### Prerequisites
 
 - Node.js 20+
-- A PostgreSQL 16 database
+- PostgreSQL 16
+
+### Set up a local dev database
+
+Any local Postgres 16 works — this is just one way to get one running. If you already
+have a Postgres server, skip to the role/database creation below and point `DATABASE_URL`
+at it instead.
+
+**Docker (fastest, no system install):**
+
+```bash
+docker run --name inventory-pg -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=inventory_dev -p 5432:5432 -d postgres:16
+```
+
+**Native install (Debian/Ubuntu):**
+
+```bash
+sudo apt install postgresql-16
+sudo systemctl start postgresql
+sudo -u postgres psql -c "CREATE ROLE devuser WITH LOGIN PASSWORD 'devpass' SUPERUSER;"
+sudo -u postgres createdb inventory_dev
+```
+
+Either way, verify it's reachable before moving on:
+
+```bash
+psql "postgresql://<user>:<password>@localhost:5432/inventory_dev" -c "select 1;"
+```
+
+Production never uses this local database — it's dev-only. A real deployment sets
+`DATABASE_URL` (and `RUNTIME_DATABASE_URL`, see below) to a managed Postgres instance
+(e.g. Neon, on Vercel) via environment variables; no code or config changes are needed to
+switch between them.
 
 ### Setup
 
 ```bash
 npm install
-cp .env.example .env   # then fill in DATABASE_URL and BETTER_AUTH_SECRET
+cp .env.example .env   # then fill in DATABASE_URL (from above) and BETTER_AUTH_SECRET
 npx prisma migrate dev
 npm run db:seed        # seeds permissions, subscription plans, and a local admin login
 npm run dev

@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { prisma } from "@/lib/db/prisma";
 import { requireMembershipOrThrow, requirePermission, getSession } from "@/lib/auth/session";
@@ -49,30 +50,34 @@ export async function inviteStaff(_prev: InviteResult, formData: FormData): Prom
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
 
-  try {
-    await assertUnderStaffLimit(db, membership.companyId);
-  } catch (err) {
-    return { error: friendlyError(err, "Could not verify your plan's staff seat limit.") };
-  }
-
   let token = "";
 
   try {
-    await db.$transaction(async (tx) => {
-      const result = await staffService.inviteStaff(tx, membership.companyId, membership.membershipId, parsed.data);
-      token = result.token;
+    await db.$transaction(
+      async (tx) => {
+        // Re-checked here under SERIALIZABLE isolation — a plain
+        // check-then-act read before the transaction let two concurrent
+        // invites each pass the seat-count check and jointly land the
+        // company over its plan's staff cap (same fix as
+        // branches.ts/warehouses.ts).
+        await assertUnderStaffLimit(tx, membership.companyId);
 
-      await writeAuditLog(tx, {
-        companyId: membership.companyId,
-        actorMembershipId: membership.membershipId,
-        action: "staff.invited",
-        entityType: "Invitation",
-        entityId: result.invitationId,
-        metadata: { email: parsed.data.email, roleId: parsed.data.roleId },
-        ipAddress,
-        userAgent,
-      });
-    });
+        const result = await staffService.inviteStaff(tx, membership.companyId, membership.membershipId, parsed.data);
+        token = result.token;
+
+        await writeAuditLog(tx, {
+          companyId: membership.companyId,
+          actorMembershipId: membership.membershipId,
+          action: "staff.invited",
+          entityType: "Invitation",
+          entityId: result.invitationId,
+          metadata: { email: parsed.data.email, roleId: parsed.data.roleId },
+          ipAddress,
+          userAgent,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (err) {
     return { error: friendlyError(err, "Could not create the invitation.") };
   }
@@ -124,7 +129,7 @@ export async function updateStaffRole(
 
   try {
     await db.$transaction(async (tx) => {
-      const updated = await staffService.updateStaffRole(tx, membershipId, parsed.data.roleId);
+      const updated = await staffService.updateStaffRole(tx, membership.membershipId, membershipId, parsed.data.roleId);
       await writeAuditLog(tx, {
         companyId: membership.companyId,
         actorMembershipId: membership.membershipId,

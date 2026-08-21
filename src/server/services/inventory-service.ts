@@ -92,6 +92,8 @@ export async function incrementWarehouseStock(
   });
 }
 
+export type ConsumedBatch = { batchId: string; batchNumber: string; expiryDate: Date; quantity: number };
+
 /**
  * See decrementWarehouseStock — same atomic guard, applied to branch
  * stock. Additionally, for a batch-tracked product (Product.tracksBatches),
@@ -105,8 +107,19 @@ export async function incrementWarehouseStock(
  * BranchStock decrement above is what actually gates whether the sale
  * was allowed at all; batch remaining-quantity is a derived tracking
  * signal, not a second source of truth to block on.
+ *
+ * Returns exactly which batch(es) were consumed (and how much of each) —
+ * callers that need to reverse this later (voidSale) or recreate the same
+ * batch identity elsewhere (a branch-sourced transfer's receiving end)
+ * persist this rather than re-deriving it, since FEFO order can shift
+ * between when stock leaves and when a caller might want to undo it.
  */
-export async function decrementBranchStock(tx: ScopedTx, productId: string, branchId: string, quantity: number) {
+export async function decrementBranchStock(
+  tx: ScopedTx,
+  productId: string,
+  branchId: string,
+  quantity: number,
+): Promise<ConsumedBatch[]> {
   const result = await tx.branchStock.updateMany({
     where: { productId, branchId, quantity: { gte: quantity } },
     data: { quantity: { decrement: quantity } },
@@ -114,9 +127,10 @@ export async function decrementBranchStock(tx: ScopedTx, productId: string, bran
   if (result.count === 0) throw new InsufficientStockError();
 
   const product = await tx.product.findUnique({ where: { id: productId }, select: { tracksBatches: true } });
-  if (!product?.tracksBatches) return;
+  if (!product?.tracksBatches) return [];
 
   let remainingToConsume = quantity;
+  const consumed: ConsumedBatch[] = [];
   const batches = await tx.productBatch.findMany({
     where: { productId, branchId, quantityRemaining: { gt: 0 } },
     orderBy: { expiryDate: "asc" },
@@ -130,16 +144,26 @@ export async function decrementBranchStock(tx: ScopedTx, productId: string, bran
       where: { id: batch.id, quantityRemaining: { gte: consumeFromThisBatch } },
       data: { quantityRemaining: { decrement: consumeFromThisBatch } },
     });
-    if (updated.count > 0) remainingToConsume -= consumeFromThisBatch;
+    if (updated.count > 0) {
+      remainingToConsume -= consumeFromThisBatch;
+      consumed.push({ batchId: batch.id, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate, quantity: consumeFromThisBatch });
+    }
   }
+  return consumed;
 }
 
 /**
- * Records a newly-received batch for a batch-tracked product — called
- * wherever stock for such a product actually enters a branch (today:
- * receiveExternalStock() in transfer-service.ts). quantityRemaining
+ * Records a batch-tracked product entering a branch — external delivery
+ * (transfer-service.ts's receiveExternalStock), or a batch-tracked
+ * transfer landing at its destination (receiveTransfer). quantityRemaining
  * starts equal to quantityReceived; decrementBranchStock() consumes it
- * down FEFO as the product sells.
+ * down FEFO as the product sells or leaves again.
+ *
+ * A second delivery under an already-used (companyId, productId,
+ * branchId, batchNumber) — a realistic multi-shipment restock of the same
+ * lot — increments the existing row instead of colliding with its unique
+ * constraint; a bare `create` here would otherwise throw and roll back an
+ * entire otherwise-valid delivery.
  */
 export async function createProductBatch(
   tx: ScopedTx,
@@ -147,6 +171,24 @@ export async function createProductBatch(
   membershipId: string,
   input: { productId: string; branchId: string; batchNumber: string; expiryDate: Date; manufactureDate?: Date; quantity: number },
 ) {
+  const existing = await tx.productBatch.findFirst({
+    where: { productId: input.productId, branchId: input.branchId, batchNumber: input.batchNumber },
+    select: { id: true },
+  });
+
+  if (existing) {
+    await tx.productBatch.update({
+      where: { id: existing.id },
+      data: {
+        quantityReceived: { increment: input.quantity },
+        quantityRemaining: { increment: input.quantity },
+        expiryDate: input.expiryDate,
+        manufactureDate: input.manufactureDate ?? undefined,
+      },
+    });
+    return;
+  }
+
   await tx.productBatch.create({
     data: {
       companyId,

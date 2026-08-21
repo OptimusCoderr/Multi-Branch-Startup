@@ -19,11 +19,16 @@ function SignInForm() {
     setError(null);
     setIsSubmitting(true);
 
-    const { error: signInError } = await authClient.signIn.email({ email, password });
+    const { data, error: signInError } = await authClient.signIn.email({ email, password });
 
     if (signInError) {
       setError(signInError.message ?? "Could not sign in.");
       setIsSubmitting(false);
+      return;
+    }
+
+    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+      router.push("/two-factor");
       return;
     }
 
@@ -68,7 +73,7 @@ function SignInForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          style={{ backgroundColor: accent }}
+          style={{ background: "var(--accent-gradient)" }}
           className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98] disabled:opacity-50"
         >
           {isSubmitting ? "Signing in…" : "Sign in"}

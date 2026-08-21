@@ -42,7 +42,20 @@ export async function startCheckout(
   });
 }
 
-export async function activateSubscriptionFromTransaction(reference: string): Promise<{ companyId: string }> {
+/**
+ * `expectedCompanyId` must be the calling session's own company — the
+ * transaction reference embedded in the redirect URL is otherwise a bare
+ * string an attacker could copy from another company's browser history
+ * and replay against their own session's callback to activate someone
+ * else's subscription, or (worse) attribute that activation to the wrong
+ * company in the audit trail. This check is the actual tenant-isolation
+ * boundary here, since Paystack's own metadata can't be trusted to match
+ * whoever is currently signed in.
+ */
+export async function activateSubscriptionFromTransaction(
+  reference: string,
+  expectedCompanyId: string,
+): Promise<{ companyId: string }> {
   const verified = await paystack.verifyTransaction(reference);
   if (verified.status !== "success") {
     throw new BillingError(`Payment was not completed (status: ${verified.status}).`);
@@ -52,6 +65,9 @@ export async function activateSubscriptionFromTransaction(reference: string): Pr
   const planId = verified.metadata.planId as string | undefined;
   if (!companyId || !planId) {
     throw new BillingError("This transaction is missing the billing metadata Paystack should have echoed back.");
+  }
+  if (companyId !== expectedCompanyId) {
+    throw new BillingError("This transaction does not belong to your company.");
   }
 
   const now = new Date();

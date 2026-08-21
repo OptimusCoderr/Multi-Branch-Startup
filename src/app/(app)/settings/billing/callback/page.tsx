@@ -7,7 +7,7 @@ import { writeAuditLog } from "@/server/services/audit-service";
 
 async function activate(membershipId: string, companyId: string, txReference: string): Promise<{ ok: boolean; title: string }> {
   try {
-    await billingService.activateSubscriptionFromTransaction(txReference);
+    await billingService.activateSubscriptionFromTransaction(txReference, companyId);
 
     const db = getScopedPrisma(companyId);
     const h = await headers();

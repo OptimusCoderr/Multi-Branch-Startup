@@ -45,6 +45,29 @@ export async function generatePasswordResetLink(_prev: LinkState, formData: Form
   }
   const email = parsed.data;
 
+  // A SUPPORT_AGENT must never be able to mint a password-reset link for
+  // another platform-staff account (a fellow agent, or a SUPER_ADMIN) —
+  // that's a direct privilege escalation, not the "help a locked-out
+  // tenant user" case this tool exists for. A SUPER_ADMIN can still use it
+  // on platform staff (including themselves): they already hold the top
+  // privilege, so this is a convenience recovery path, not an escalation.
+  // The denial reuses the same "no account found" message a genuinely
+  // unknown email gets, so a support agent can't use this as an oracle for
+  // which emails belong to platform staff.
+  if (staff.role !== "SUPER_ADMIN") {
+    const target = await prisma.user.findUnique({ where: { email }, select: { platformRole: true } });
+    if (target?.platformRole) {
+      await writePlatformAuditLog({
+        actorUserId: staff.userId,
+        action: "platform.password_reset_link_denied",
+        targetEmail: email,
+        metadata: { reason: "target_is_platform_staff" },
+        ...(await requestMeta()),
+      });
+      return { error: "No account found for that email." };
+    }
+  }
+
   const link = await captureResetPasswordUrl(async () => {
     await auth.api.requestPasswordReset({ body: { email, redirectTo: "/reset-password" } });
   });

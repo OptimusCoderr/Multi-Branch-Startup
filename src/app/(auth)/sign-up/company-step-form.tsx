@@ -3,12 +3,11 @@
 import { useActionState } from "react";
 import { createCompanyForCurrentUser } from "@/server/actions/onboarding";
 import { CompanyNameField } from "@/components/forms/company-name-field";
-import { useAuthTheme } from "@/components/auth/auth-theme";
+import { CompanyVerificationFields } from "@/components/forms/company-verification-fields";
 
 const initialState = { error: "" };
 
 export function CompanyStepForm({ email }: { email: string }) {
-  const { accent } = useAuthTheme();
   const [state, formAction, isPending] = useActionState(async (_prev: { error: string }, formData: FormData) => {
     const result = await createCompanyForCurrentUser(formData);
     return result ?? initialState;
@@ -21,13 +20,14 @@ export function CompanyStepForm({ email }: { email: string }) {
       </p>
 
       <CompanyNameField />
+      <CompanyVerificationFields />
 
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
 
       <button
         type="submit"
         disabled={isPending}
-        style={{ backgroundColor: accent }}
+        style={{ background: "var(--accent-gradient)" }}
         className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98] disabled:opacity-50"
       >
         {isPending ? "Creating…" : "Create company"}

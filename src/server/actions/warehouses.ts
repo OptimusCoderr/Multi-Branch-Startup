@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { requireMembershipOrThrow, requirePermission } from "@/lib/auth/session";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -33,35 +34,40 @@ export async function createWarehouse(_prev: { error: string }, formData: FormDa
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
 
-  try {
-    await assertUnderWarehouseLimit(db, membership.companyId);
-  } catch (err) {
-    return { error: err instanceof PlanLimitError ? err.message : "Could not verify your plan's warehouse limit." };
-  }
-
   const existing = await db.warehouse.findFirst({ where: { name: parsed.data.name } });
   if (existing) {
     return { error: `A warehouse named "${parsed.data.name}" already exists.` };
   }
 
-  await db.$transaction(async (tx) => {
-    const warehouse = await tx.warehouse.create({
-      data: { companyId: membership.companyId, name: parsed.data.name, address: parsed.data.address ?? null },
-    });
+  try {
+    await db.$transaction(
+      async (tx) => {
+        // Re-checked here under SERIALIZABLE isolation — see the identical
+        // comment in branches.ts's createBranch.
+        await assertUnderWarehouseLimit(tx, membership.companyId);
 
-    await provisionStockForNewWarehouse(tx, membership.companyId, warehouse.id);
+        const warehouse = await tx.warehouse.create({
+          data: { companyId: membership.companyId, name: parsed.data.name, address: parsed.data.address ?? null },
+        });
 
-    await writeAuditLog(tx, {
-      companyId: membership.companyId,
-      actorMembershipId: membership.membershipId,
-      action: "warehouse.created",
-      entityType: "Warehouse",
-      entityId: warehouse.id,
-      metadata: { name: warehouse.name },
-      ipAddress,
-      userAgent,
-    });
-  });
+        await provisionStockForNewWarehouse(tx, membership.companyId, warehouse.id);
+
+        await writeAuditLog(tx, {
+          companyId: membership.companyId,
+          actorMembershipId: membership.membershipId,
+          action: "warehouse.created",
+          entityType: "Warehouse",
+          entityId: warehouse.id,
+          metadata: { name: warehouse.name },
+          ipAddress,
+          userAgent,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch (err) {
+    return { error: err instanceof PlanLimitError ? err.message : "Could not create the warehouse." };
+  }
 
   revalidatePath("/warehouses");
   redirect("/warehouses");

@@ -1,12 +1,14 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { requirePlatformStaff } from "@/lib/auth/session";
+import { ArrowLeft, ExternalLink } from "lucide-react";
+import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { formatMoney } from "@/lib/format";
 import { getCustomerBalances } from "@/server/services/customer-service";
 import { writePlatformAuditLog } from "@/server/services/platform-audit-service";
+import { CompanyVerificationReview } from "@/components/forms/company-verification-review";
+import { CompanySuspensionControl } from "@/components/forms/company-suspension-control";
 
 const SALE_STATUS_STYLES: Record<string, string> = {
   CONFIRMED: "bg-blue-500/20 text-blue-300",
@@ -15,14 +17,25 @@ const SALE_STATUS_STYLES: Record<string, string> = {
   VOIDED: "bg-red-500/20 text-red-300",
 };
 
+const VERIFICATION_LABELS: Record<string, string> = {
+  UNVERIFIED: "Unverified",
+  PENDING_REVIEW: "Needs review",
+  VERIFIED: "Verified",
+  REJECTED: "Rejected",
+  APPROVED_WITHOUT_CAC: "Approved without CAC",
+};
+
 /**
- * Read-only drill-down into one company's actual operational data — a
- * deliberate widening of the earlier "summary only" scope, so support
- * staff can diagnose real "why isn't my X showing" issues, not just see
- * that a company exists. Every visit is logged to PlatformAuditLog (same
- * discipline as password-reset links and role changes): this is a
- * conscious tenant-isolation exception, and the access itself should be
- * as accountable as any other platform action.
+ * A read-only drill-down into one company's actual operational data for
+ * everyone — a deliberate widening of the earlier "summary only" scope, so
+ * support staff can diagnose real "why isn't my X showing" issues, not
+ * just see that a company exists — plus, for SUPER_ADMIN only, the one
+ * place two trust decisions get made: reviewing a business-verification
+ * submission, and the account enable/disable kill switch. A SUPPORT_AGENT
+ * never sees those controls, only the same read-only data. Every visit is
+ * logged to PlatformAuditLog (same discipline as password-reset links and
+ * role changes): this is a conscious tenant-isolation exception, and the
+ * access itself should be as accountable as any other platform action.
  *
  * getScopedPrisma(id) — not the raw `prisma` singleton — for everything
  * past the initial company lookup, so every query here gets the exact
@@ -32,7 +45,7 @@ const SALE_STATUS_STYLES: Record<string, string> = {
  */
 export default async function AdminCompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const staff = await requirePlatformStaff();
+  const staff = await requirePlatformStaffWithTwoFactor();
 
   const company = await prisma.company.findUnique({
     where: { id },
@@ -75,9 +88,57 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
           Signed up {company.createdAt.toLocaleDateString()}
         </p>
         <p className="mt-1 text-xs text-amber-400/80">
-          Read-only — you&apos;re viewing this company&apos;s data as {staff.role === "SUPER_ADMIN" ? "a super admin" : "a support agent"}. This visit is logged.
+          {staff.role === "SUPER_ADMIN"
+            ? "You're viewing this company's data as a super admin, with verification review and account controls below."
+            : "Read-only — you're viewing this company's data as a support agent."}{" "}
+          This visit is logged.
         </p>
       </div>
+
+      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Business verification</h2>
+        <div className="flex flex-col gap-1 text-sm text-gray-300">
+          <p>
+            Status: <span className="font-medium text-gray-100">{VERIFICATION_LABELS[company.verificationStatus]}</span>
+          </p>
+          <p>RC number: {company.rcNumber ?? "—"}</p>
+          <p>Incorporation date: {company.incorporationDate ? company.incorporationDate.toLocaleDateString() : "—"}</p>
+          <p>
+            CAC certificate:{" "}
+            {company.cacCertificateUrl ? (
+              <a
+                href={company.cacCertificateUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-indigo-400 hover:underline"
+              >
+                Open link <ExternalLink size={12} />
+              </a>
+            ) : (
+              "Not submitted"
+            )}
+          </p>
+          {company.cacSubmittedAt && <p>Submitted: {company.cacSubmittedAt.toLocaleString()}</p>}
+          {company.verificationReviewedAt && <p>Last reviewed: {company.verificationReviewedAt.toLocaleString()}</p>}
+          {company.verificationNote && <p>Note: {company.verificationNote}</p>}
+        </div>
+
+        {staff.role === "SUPER_ADMIN" && (company.verificationStatus === "PENDING_REVIEW" || company.verificationStatus === "UNVERIFIED") && (
+          <div className="mt-4 border-t border-gray-800 pt-4">
+            <CompanyVerificationReview companyId={company.id} />
+          </div>
+        )}
+      </section>
+
+      {staff.role === "SUPER_ADMIN" && (
+        <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Account security</h2>
+          {company.status === "SUSPENDED" && company.disabledReason && (
+            <p className="mb-3 text-sm text-gray-300">Disabled reason: {company.disabledReason}</p>
+          )}
+          <CompanySuspensionControl companyId={company.id} isSuspended={company.status === "SUSPENDED"} />
+        </section>
+      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">

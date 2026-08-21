@@ -22,6 +22,7 @@ export type AuthenticatedMembership = {
   companyCurrency: string;
   roleId: string | null;
   roleName: string | null;
+  roleIsSystem: boolean;
 };
 
 /**
@@ -62,7 +63,13 @@ export async function getCurrentMembership(): Promise<AuthenticatedMembership | 
     companyCurrency: membership.company.currency,
     roleId: membership.roleId,
     roleName: membership.role?.name ?? null,
+    roleIsSystem: membership.role?.isSystem ?? false,
   };
+}
+
+/** True for the seeded, one-per-company "Owner" system role — never a company-created role that happens to share the name. */
+function isOwnerMembership(membership: AuthenticatedMembership): boolean {
+  return membership.roleName === "Owner" && membership.roleIsSystem;
 }
 
 /** For Server Components/pages: redirects to /sign-in if unauthenticated. */
@@ -74,7 +81,11 @@ export async function requireSession() {
 
 /**
  * For Server Components/pages: redirects to /sign-in if there's no session
- * at all, or to /onboarding if the user is signed in but hasn't finished
+ * at all, to /account-disabled if the user has an active membership but
+ * their company has been suspended (see getCurrentMembership() above — it
+ * returns null for both cases, so this re-checks specifically to give a
+ * suspended user a real explanation instead of a confusing "create your
+ * company" form), or to /onboarding if they truly haven't finished
  * creating/joining a company yet.
  */
 export async function requireMembership(): Promise<AuthenticatedMembership> {
@@ -82,7 +93,35 @@ export async function requireMembership(): Promise<AuthenticatedMembership> {
   if (!session) redirect("/sign-in");
 
   const membership = await getCurrentMembership();
-  if (!membership) redirect("/onboarding");
+  if (!membership) {
+    const suspendedMembership = await prisma.membership.findFirst({
+      where: { userId: session.user.id, status: "ACTIVE", company: { status: "SUSPENDED" } },
+      select: { id: true },
+    });
+    if (suspendedMembership) redirect("/account-disabled");
+    redirect("/onboarding");
+  }
+  return membership;
+}
+
+/**
+ * Same as requireMembership(), but also enforces mandatory two-factor
+ * authentication for Owners — the one role that can touch billing, staff,
+ * and every other company setting. Redirects to /settings/security (which
+ * stays reachable through the plain (app)/layout.tsx gate, same as
+ * /dashboard, so this can never become a redirect loop) instead of
+ * blocking sign-in itself, mirroring how the billing-required gate treats
+ * dashboard/settings as always-reachable "go fix this" pages. Use this in
+ * place of requireMembership() for anything under (gated) — the
+ * operational surface (products, transfers, sales, staff, etc.) — not for
+ * /dashboard or /settings themselves.
+ */
+export async function requireMembershipWithTwoFactor(): Promise<AuthenticatedMembership> {
+  const membership = await requireMembership();
+  if (isOwnerMembership(membership)) {
+    const user = await prisma.user.findUnique({ where: { id: membership.userId }, select: { twoFactorEnabled: true } });
+    if (!user?.twoFactorEnabled) redirect("/settings/security");
+  }
   return membership;
 }
 
@@ -121,6 +160,28 @@ export async function requirePlatformStaff(): Promise<{ userId: string; email: s
 /** For the support-team-roster page: SUPER_ADMIN only, everyone else (including SUPPORT_AGENT) bounced to /admin. */
 export async function requireSuperAdmin(): Promise<{ userId: string; email: string }> {
   const staff = await requirePlatformStaff();
+  if (staff.role !== "SUPER_ADMIN") redirect("/admin");
+  return staff;
+}
+
+/**
+ * Same as requirePlatformStaff(), but also enforces mandatory two-factor
+ * authentication — every platform staff member can see across every
+ * company. Redirects to /admin/security, which AdminLayout keeps
+ * reachable (it only calls the plain requirePlatformStaff() check, not
+ * this one) so this can never become a redirect loop. Use this for every
+ * /admin page except /admin/security itself.
+ */
+export async function requirePlatformStaffWithTwoFactor(): Promise<{ userId: string; email: string; role: "SUPER_ADMIN" | "SUPPORT_AGENT" }> {
+  const staff = await requirePlatformStaff();
+  const user = await prisma.user.findUnique({ where: { id: staff.userId }, select: { twoFactorEnabled: true } });
+  if (!user?.twoFactorEnabled) redirect("/admin/security");
+  return staff;
+}
+
+/** Two-factor-enforcing counterpart to requireSuperAdmin() — see requirePlatformStaffWithTwoFactor() above. */
+export async function requireSuperAdminWithTwoFactor(): Promise<{ userId: string; email: string }> {
+  const staff = await requirePlatformStaffWithTwoFactor();
   if (staff.role !== "SUPER_ADMIN") redirect("/admin");
   return staff;
 }

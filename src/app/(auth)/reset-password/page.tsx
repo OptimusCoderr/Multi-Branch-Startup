@@ -39,7 +39,7 @@ function ResetPasswordForm() {
         <Link
           href="/sign-in"
           className="mt-4 inline-block rounded-md px-4 py-2 text-sm font-medium text-white"
-          style={{ backgroundColor: accent }}
+          style={{ background: "var(--accent-gradient)" }}
         >
           Go to sign in
         </Link>
@@ -80,7 +80,8 @@ function ResetPasswordForm() {
           New password
           <input
             type="password"
-            className="rounded-md border border-gray-300 px-3 py-2"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -92,7 +93,8 @@ function ResetPasswordForm() {
           Confirm new password
           <input
             type="password"
-            className="rounded-md border border-gray-300 px-3 py-2"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             required
@@ -105,7 +107,7 @@ function ResetPasswordForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          style={{ backgroundColor: accent }}
+          style={{ background: "var(--accent-gradient)" }}
           className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {isSubmitting ? "Saving…" : "Set new password"}

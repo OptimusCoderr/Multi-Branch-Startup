@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Building2, LifeBuoy, ScrollText, ShieldCheck } from "lucide-react";
+import { Building2, LifeBuoy, ScrollText, ShieldCheck, KeyRound } from "lucide-react";
 import { requirePlatformStaff } from "@/lib/auth/session";
 import { AdminSignOutButton } from "@/components/layout/admin-sign-out-button";
+import { LogoPlaceholder } from "@/components/logo-placeholder";
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super admin",
@@ -18,6 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
+              <LogoPlaceholder size={22} color="#a5b4fc" />
               <span className="rounded-full bg-gradient-to-r from-indigo-500/20 to-fuchsia-500/20 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-300">
                 {ROLE_LABEL[staff.role]}
               </span>
@@ -41,6 +43,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               >
                 <ScrollText size={16} />
                 Audit log
+              </Link>
+              <Link
+                href="/admin/security"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors hover:bg-gray-800 hover:text-white"
+              >
+                <KeyRound size={16} />
+                Security
               </Link>
               {staff.role === "SUPER_ADMIN" && (
                 <Link

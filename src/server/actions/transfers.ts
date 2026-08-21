@@ -222,6 +222,9 @@ export async function receiveTransfer(
   const parsed = receiveTransferSchema.safeParse({
     receivedQuantity: formData.get("receivedQuantity"),
     notes: formData.get("notes"),
+    batchNumber: formData.get("batchNumber"),
+    expiryDate: formData.get("expiryDate"),
+    manufactureDate: formData.get("manufactureDate"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid received quantity." };
@@ -229,6 +232,11 @@ export async function receiveTransfer(
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
+
+  const manualBatch =
+    parsed.data.batchNumber && parsed.data.expiryDate
+      ? { batchNumber: parsed.data.batchNumber, expiryDate: parsed.data.expiryDate, manufactureDate: parsed.data.manufactureDate }
+      : undefined;
 
   try {
     await db.$transaction(async (tx) => {
@@ -239,6 +247,7 @@ export async function receiveTransfer(
         transferId,
         parsed.data.receivedQuantity,
         parsed.data.notes,
+        manualBatch,
       );
 
       await writeAuditLog(tx, {

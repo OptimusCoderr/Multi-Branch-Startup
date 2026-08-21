@@ -27,6 +27,8 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
 
   const parsed = createCompanySchema.safeParse({
     companyName: formData.get("companyName"),
+    rcNumber: formData.get("rcNumber"),
+    incorporationDate: formData.get("incorporationDate"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid company name." };
@@ -59,12 +61,18 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
   const ipAddress = requestHeaders.get("x-forwarded-for");
   const userAgent = requestHeaders.get("user-agent");
 
+  const now = new Date();
+  const verificationDeadline = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+
   await prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
       data: {
         name: parsed.data.companyName,
         slug,
         status: "TRIAL",
+        rcNumber: parsed.data.rcNumber ?? null,
+        incorporationDate: parsed.data.incorporationDate ?? null,
+        verificationDeadline,
       },
     });
 

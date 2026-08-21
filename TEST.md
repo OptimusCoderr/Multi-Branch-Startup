@@ -29,6 +29,11 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   12. [Billing (Paystack)](#12-billing-paystack)
   13. [Security & accountability](#13-security--accountability)
   14. [Platform admin & support](#14-platform-admin--support)
+  15. [Low-stock alerts, branch transfers, and perishable batch tracking](#15-low-stock-alerts-branch-transfers-and-perishable-batch-tracking)
+  16. [Business verification (CAC) and account enable/disable](#16-business-verification-cac-and-account-enabledisable)
+  17. [Barcode/QR scanning and stock counts](#17-barcodeqr-scanning-and-stock-counts)
+  18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
+  19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -418,6 +423,143 @@ one.
    cannot pick the same branch as both source and destination, and that the rest of the
    lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
    a warehouse-sourced transfer.
+5. **Batch identity survives a branch-to-branch transfer.** Receive a batch-tracked product
+   into Branch A with a specific batch number and expiry, then transfer some of it to Branch
+   B. Confirm `/batches` shows a batch at Branch B with the **same** batch number and expiry
+   date (not a generic "transferred stock" entry) — receiving doesn't ask for batch details
+   again, since it carries over automatically from what was dispatched.
+6. **Batch identity does NOT survive a warehouse-sourced transfer** (batches only exist
+   per-branch). Confirm receiving a batch-tracked product from a warehouse requires manually
+   entering a batch number and expiry at receipt — the same fields `/transfers/new-external`
+   uses — and is rejected if left blank.
+7. Receive a **second delivery under an already-used batch number** at the same branch
+   (e.g. two shipments of the same lot). Confirm it increments the existing batch's quantity
+   instead of erroring.
+8. Record a sale of a batch-tracked product, then **void that sale**. Confirm the batch's
+   `quantityRemaining` on `/batches` is restored by exactly the sale's quantity — not just
+   the aggregate stock total — even if other sales or deliveries touched that batch in the
+   meantime.
+
+### 16. Business verification (CAC) and account enable/disable
+
+1. Sign up a new company, optionally filling in the **CAC RC number** and **incorporation
+   date** on the company step — both are optional, and a company with neither can still
+   operate normally. Confirm a 5-day `verificationDeadline` is set at creation (check
+   `Company.verificationDeadline` in the DB, or just trust the countdown shows correctly).
+2. As Owner/Admin, go to `/settings/verification` and submit a certificate link. Confirm the
+   status moves to "Submitted — awaiting review" and the company shows up under `/admin`'s
+   **Needs review** filter for a platform super admin.
+3. As the super admin, open that company's `/admin/companies/[id]` page. Confirm the RC
+   number, incorporation date, and a clickable link to the submitted certificate all show
+   up, and click **Approve & verify**. Confirm:
+   - The company now shows "Verified" on its own `/settings/verification` page.
+   - It appears under `/admin`'s **Verified** filter, with a small checkmark badge next to
+     its name in the companies list.
+4. On a different company, submit a certificate and **Reject** it with a reason. Confirm the
+   company's Owner sees the rejection reason on `/settings/verification` and can resubmit —
+   resubmitting moves it back to "awaiting review".
+5. On a company that never submitted anything, use **Approve without CAC** (with an optional
+   note). Confirm its Owner sees "approved to operate without a CAC" instead of a submission
+   form, and the company is excluded from the **Needs review**/**Overdue** filters.
+6. As the super admin, **Disable** a company's account with a reason. Confirm:
+   - That company's staff are immediately redirected to `/account-disabled` on their next
+     page load, showing the disable reason — not the confusing "create your company" form a
+     suspended-but-unhandled account used to fall through to.
+   - **Enable account** restores access on the staff member's very next request, without
+     needing to sign in again.
+7. Confirm a `SUPPORT_AGENT` (not a super admin) sees the same read-only company detail page
+   but none of the verification-review or enable/disable controls — this stays a `SUPER_ADMIN`-only
+   trust decision, same as granting platform access.
+
+### 17. Barcode/QR scanning and stock counts
+
+1. On the web app, edit or create a product and set a **Barcode** value. Confirm saving a
+   second product with the same barcode (within the same company) is rejected, but the
+   same barcode is allowed for a different company (uniqueness is per-`companyId`, not
+   global).
+2. On mobile, open **New sale** and tap **Scan**. Confirm the camera-permission prompt
+   appears on first use, and scanning a barcode/QR code that matches a product's `barcode`
+   adds it to the cart the same as tapping it in the product list. Scanning an unmatched
+   code shows an inline error instead of crashing.
+3. On mobile, open **Stock** → **Stock count**, pick a branch, and tap **Scan** repeatedly
+   on the same code — confirm the counted quantity for that product increments by one per
+   scan rather than resetting. Confirm typing a count directly in the input works the same
+   way and shows the delta (green for over, red for under) against the branch's system
+   quantity.
+4. Tap **Save count** with at least one changed row. Confirm the confirmation dialog states
+   how many products will be adjusted, and after confirming: the branch's `StockLevel`
+   matches what was counted (verify in `psql`), a `StockMovement` row exists per adjusted
+   product with reason `ADJUSTMENT`, and an audit log entry (`stock.adjusted`) was written.
+   Confirm rows with no change (delta `0`) are not sent to the adjust endpoint at all.
+5. Confirm a staff member without `branches.manage` can still open **Stock count** and build
+   a tally, but sees a message instead of the **Save count** button — matching the
+   read-only-vs-adjust split used elsewhere in the app.
+
+### 18. Two-factor authentication (2FA) for Owners and platform staff
+
+Mandatory for the company Owner role and for platform staff (`SUPER_ADMIN`/`SUPPORT_AGENT`);
+optional — but available — for everyone else. Built on Better Auth's `two-factor` plugin
+(TOTP + backup codes only; the email/SMS "otp" method is left unconfigured, same situation as
+`sendResetPassword`, so the UI never offers it).
+
+1. Sign up a new company. As the Owner, confirm the dashboard shows a red "two-factor
+   authentication is required" banner, and visiting any gated page (`/products`, `/staff`,
+   `/transfers`, etc.) redirects to `/settings/security` instead of the page itself.
+   `/dashboard` and every `/settings/*` page stay reachable throughout — same "always leave
+   the fix-it page open" pattern as the billing-required gate.
+2. On `/settings/security`, confirm your password, then confirm the QR code renders, a
+   manual-entry key is shown, and 10 backup codes are listed. Scan the QR (or add the
+   manual key) in an authenticator app (Google Authenticator, Authy, 1Password, etc.), check
+   "I've saved these backup codes", and enter the 6-digit code. Confirm the page flips to
+   "Two-factor authentication is on" and gated pages are reachable again immediately (no
+   re-login needed).
+3. Confirm the **Disable two-factor authentication** button is absent for the Owner — the
+   copy explains it's required for your role. Sign out and sign back in: confirm you land on
+   `/two-factor` instead of `/dashboard`, entering a wrong code shows an error and keeps you
+   there, and the correct code (or a backup code, via "Use a backup code instead") completes
+   sign-in. Confirm a used backup code can't be reused.
+4. Invite a non-Owner staff member (e.g. Cashier). Confirm their dashboard shows no 2FA
+   banner and they are never redirected away from gated pages regardless of whether they've
+   set up 2FA — it's the same optional toggle, on the same `/settings/security` page, minus
+   the "required" copy and with a working **Disable** button once enabled.
+5. As a `SUPER_ADMIN` or `SUPPORT_AGENT` (`scripts/create-platform-admin.ts` to bootstrap
+   one), confirm every `/admin/*` page (companies list, support, audit log, team) redirects
+   to `/admin/security` until 2FA is set up, and that `/admin/security` itself always stays
+   reachable (it's what every other admin page redirects to, so it can never be part of the
+   loop). Confirm the same enroll/verify/backup-code flow works there too.
+6. Try **Regenerate backup codes** (password required) and confirm the old codes stop
+   working while the new ones don't.
+
+### 19. CSV data export (products, customers, sales)
+
+Web-only — accounting/tax use, so it's a plain file download rather than anything in the
+mobile app. Every export streams straight from the database (no caching), is scoped to the
+signed-in company like everything else, and is gated by the same permission its underlying
+list page already uses (`products.view`, `customers.view`, `reports.view` for sales) — a
+staff member who can't see the page can't hit the export URL directly either.
+
+1. On **Products**, click **Export CSV**. Confirm the download opens cleanly in Excel/Sheets
+   (the file needs its UTF-8 BOM to avoid mojibake on special characters) with one row per
+   product: SKU, barcode, name, description, unit price, cost price, total stock across every
+   branch/warehouse, stock value at cost, and active/inactive status.
+2. On **Customers**, click **Export CSV**. Confirm one row per customer: name, phone, email,
+   address, credit limit, outstanding balance, open/overdue sale counts, and status — the
+   same balance figures shown on the Customers page itself.
+3. On **Sales**, leave the From/To date fields blank and click **Export CSV** — confirm it
+   downloads every sale ever recorded (including voided ones, so an accountant sees the full
+   picture rather than a silently filtered one), with invoice number, date, branch, customer,
+   status, subtotal/discount/tax/grand total/amount paid, credited amount, outstanding balance,
+   and who recorded the sale. Then pick a From and/or To date and confirm the export only
+   includes sales within that range — this is the tax-period export a small business actually
+   asks for at filing time.
+4. Confirm every money column comes out as a plain two-decimal number (`2500.00`), never a
+   currency-formatted string (`₦2,500.00`) or a value with trailing zeros stripped
+   (`2500`) — accounting software needs consistent, symbol-free numbers to import correctly.
+5. As a Cashier (no `reports.view` by default), confirm the **Sales** page has no export
+   form at all, and that hitting `/api/exports/sales` directly still 403s — but Products and
+   Customers export normally, since Cashiers do have `products.view`/`customers.view`.
+6. Confirm hitting any `/api/exports/*` URL while signed out redirects/rejects rather than
+   downloading anything.
 
 ## Mobile app
 
@@ -445,6 +587,12 @@ the branch picker is skipped entirely for a single-branch company, shown for mul
 recording a payment, viewing/creating customers, issuing/voiding a credit note, and
 printing (needs the Development Build + a real Bluetooth thermal printer — see the caveat
 below).
+
+2FA enrollment/management is web-only (`/settings/security`), but signing in from mobile
+with an account that already has 2FA enabled (set it up on web first) should land on the
+app's own `two-factor` screen instead of the dashboard — confirm entering the correct code
+(or a backup code, via "Use a backup code instead") completes sign-in, and a wrong code
+shows an error without navigating away.
 
 ### Testing the mobile API directly with curl
 
@@ -484,6 +632,14 @@ actually comes out. If it doesn't, check the printer uses BLE (not classic Bluet
 SPP — iOS can't talk to that at all from a third-party app) and that
 `mobile/lib/bluetooth-printer.ts`'s "first writable characteristic" heuristic actually
 found the right one for your printer's chipset.
+
+### Barcode scanning — needs a real camera
+
+Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so
+`BarcodeScannerModal`'s permission prompt, live viewfinder, and actual scan detection can
+only be exercised on a real device or simulator with camera access — a Development Build
+is not required for this one (`expo-camera`'s `CameraView` works fine in Expo Go). Print a
+few barcodes/QR codes for products you've set a `barcode` value on and test against those.
 
 ## Writing your own smoke tests
 
