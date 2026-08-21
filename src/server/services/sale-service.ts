@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { decrementBranchStock, incrementBranchStock, recordStockMovement } from "@/server/services/inventory-service";
+import { getCreditedTotal } from "@/server/services/credit-note-service";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
@@ -17,6 +18,7 @@ type ScopedTx = Pick<
   | "stockMovement"
   | "customer"
   | "productBatch"
+  | "creditNote"
 >;
 
 export class SaleValidationError extends Error {
@@ -193,7 +195,8 @@ export async function recordPayment(
     throw new SaleValidationError("Payment amount must be greater than 0.");
   }
 
-  const outstanding = sale.grandTotal.sub(sale.amountPaid);
+  const alreadyCredited = await getCreditedTotal(tx, input.saleId);
+  const outstanding = sale.grandTotal.sub(sale.amountPaid).sub(alreadyCredited);
   if (input.amount.gt(outstanding)) {
     throw new SaleValidationError(`Payment exceeds the outstanding balance of ${outstanding.toFixed(2)}.`);
   }
@@ -224,13 +227,24 @@ export async function recordPayment(
 /**
  * Voids a sale and reverses its inventory impact via compensating
  * StockMovement entries — the original Sale/SaleLineItem/Payment rows are
- * never deleted, so the audit trail survives.
+ * never deleted, so the audit trail survives. Blocked once any payment has
+ * been recorded: voiding only ever reverses inventory, never touches
+ * Payment rows or amountPaid, so voiding a paid sale would make money the
+ * customer already handed over vanish from every balance/report view with
+ * no record prompting a refund. Use a credit note to adjust what's owed
+ * instead — this app has no cash-refund ledger, so an actual refund has to
+ * be handled outside it.
  */
 export async function voidSale(tx: ScopedTx, companyId: string, membershipId: string, saleId: string, reason: string) {
   const sale = await tx.sale.findUnique({ where: { id: saleId }, include: { lineItems: true } });
   if (!sale) throw new SaleNotFoundError();
   if (sale.status === "VOIDED") {
     throw new SaleValidationError("This sale is already voided.");
+  }
+  if (sale.amountPaid.gt(0)) {
+    throw new SaleValidationError(
+      "This sale already has a payment recorded and can't be voided — issue a credit note instead, or reverse the payment outside the system.",
+    );
   }
 
   for (const li of sale.lineItems) {

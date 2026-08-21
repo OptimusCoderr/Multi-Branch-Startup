@@ -32,7 +32,11 @@ export async function getCreditedTotal(tx: ScopedTx, saleId: string): Promise<Pr
  * the sale itself or touching stock — a financial correction, not an
  * inventory event. Capped at the sale's currently outstanding balance
  * (grandTotal - amountPaid - already-credited), the same overcorrection
- * guard recordPayment() applies in the opposite direction.
+ * guard recordPayment() applies in the opposite direction. The caller must
+ * run this inside a SERIALIZABLE transaction for the same reason
+ * recordPayment() does — the read-then-write of alreadyCredited here isn't
+ * a single atomic UPDATE, so two concurrent credit notes could otherwise
+ * both read a stale total and jointly over-credit the sale.
  */
 export async function issueCreditNote(
   tx: ScopedTx,

@@ -69,7 +69,7 @@ export async function issueCreditNote(saleId: string, _prev: { error: string }, 
         ipAddress,
         userAgent,
       });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   } catch (err) {
     return { error: friendlyError(err, "Could not issue the credit note.") };
   }

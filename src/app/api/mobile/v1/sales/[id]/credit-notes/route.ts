@@ -49,7 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         entityId: creditNote.id,
         metadata: { saleId, amount: creditNote.amount.toString(), reason: parsed.data.reason, source: "mobile" },
       });
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return NextResponse.json({ creditNoteId }, { status: 201 });
   } catch (err) {
