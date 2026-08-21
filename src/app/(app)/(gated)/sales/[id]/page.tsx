@@ -9,12 +9,13 @@ import { RecordPaymentForm } from "@/components/forms/record-payment-form";
 import { VoidSaleForm } from "@/components/forms/void-sale-form";
 import { IssueCreditNoteForm } from "@/components/forms/issue-credit-note-form";
 import { VoidCreditNoteForm } from "@/components/forms/void-credit-note-form";
+import { Card, Badge, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, type BadgeVariant } from "@/components/ui";
 
-const STATUS_STYLES: Record<string, string> = {
-  CONFIRMED: "bg-yellow-100 text-yellow-700",
-  PARTIALLY_PAID: "bg-blue-100 text-blue-700",
-  PAID: "bg-green-100 text-green-700",
-  VOIDED: "bg-gray-100 text-gray-500",
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  CONFIRMED: "warning",
+  PARTIALLY_PAID: "brand",
+  PAID: "success",
+  VOIDED: "neutral",
 };
 
 export default async function SaleDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -60,10 +61,8 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       <div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold">{sale.saleNumber}</h1>
-            <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[sale.status] ?? ""}`}>
-              {sale.status.replace("_", " ")}
-            </span>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900">{sale.saleNumber}</h1>
+            <Badge variant={STATUS_VARIANTS[sale.status] ?? "neutral"}>{sale.status.replace("_", " ")}</Badge>
           </div>
           <Link href={`/sales/${sale.id}/print`} className="text-sm text-[var(--brand-primary)] hover:underline">
             Print invoice
@@ -78,34 +77,32 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           </p>
         )}
         {sale.status === "VOIDED" && (
-          <p className="mt-2 rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
             Voided by {nameOf(sale.voidedByMembershipId)} on {sale.voidedAt?.toLocaleString()} — {sale.voidReason}
           </p>
         )}
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Line items</p>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="text-gray-500">
-              <th className="pb-1">Product</th>
-              <th className="pb-1">Qty</th>
-              <th className="pb-1">Unit price</th>
-              <th className="pb-1 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Card>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Line items</p>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>Product</TableHeaderCell>
+            <TableHeaderCell>Qty</TableHeaderCell>
+            <TableHeaderCell>Unit price</TableHeaderCell>
+            <TableHeaderCell align="right">Total</TableHeaderCell>
+          </TableHeader>
+          <TableBody>
             {sale.lineItems.map((li) => (
-              <tr key={li.id}>
-                <td className="py-1">{li.product.name}</td>
-                <td className="py-1">{li.quantity}</td>
-                <td className="py-1">{formatMoney(li.unitPriceAtSale.toString(), currency)}</td>
-                <td className="py-1 text-right">{formatMoney(li.lineTotal.toString(), currency)}</td>
-              </tr>
+              <TableRow key={li.id}>
+                <TableCell>{li.product.name}</TableCell>
+                <TableCell>{li.quantity}</TableCell>
+                <TableCell>{formatMoney(li.unitPriceAtSale.toString(), currency)}</TableCell>
+                <TableCell align="right">{formatMoney(li.lineTotal.toString(), currency)}</TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
         <div className="mt-3 flex flex-col items-end gap-1 text-sm">
           <p>Subtotal: {formatMoney(sale.subtotal.toString(), currency)}</p>
           <p className="font-semibold">Grand total: {formatMoney(sale.grandTotal.toString(), currency)}</p>
@@ -115,10 +112,10 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             <p className="font-medium text-amber-700">Outstanding: {formatMoney(outstanding.toString(), currency)}</p>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Payments</p>
+      <Card>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Payments</p>
         {sale.payments.length === 0 ? (
           <p className="text-sm text-gray-400">No payments recorded yet.</p>
         ) : (
@@ -133,7 +130,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             ))}
           </ul>
         )}
-      </div>
+      </Card>
 
       {canRecordPayment && canPay && (
         <RecordPaymentForm saleId={sale.id} outstanding={formatMoney(outstanding.toString(), currency)} />
@@ -142,8 +139,8 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       {canVoid && sale.status !== "VOIDED" && <VoidSaleForm saleId={sale.id} />}
 
       {sale.creditNotes.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Credit notes</p>
+        <Card>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Credit notes</p>
           <ul className="flex flex-col gap-2 text-sm">
             {sale.creditNotes.map((cn) => (
               <li key={cn.id} className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
@@ -170,7 +167,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {canIssueCreditNote && canCreditNote && (

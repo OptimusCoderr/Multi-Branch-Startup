@@ -2,6 +2,8 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { AdjustWarehouseStockForm } from "@/components/forms/adjust-warehouse-stock-form";
+import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
+import { PackageSearch } from "lucide-react";
 
 export default async function StockPage() {
   const membership = await requireMembership();
@@ -35,7 +37,7 @@ export default async function StockPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Stock levels</h1>
+      <PageHeader title="Stock levels" />
 
       {canAdjust && (
         <AdjustWarehouseStockForm
@@ -45,9 +47,9 @@ export default async function StockPage() {
       )}
 
       {products.length === 0 ? (
-        <p className="text-gray-500">No products yet.</p>
+        <EmptyState icon={PackageSearch} title="No products yet" />
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           {products.map((product) => {
             const totalStock =
               product.warehouseStocks.reduce((sum, s) => sum + s.quantity, 0) +
@@ -55,50 +57,50 @@ export default async function StockPage() {
             const isLowStock = product.reorderPoint !== null && totalStock <= product.reorderPoint;
 
             return (
-            <div key={product.id} className="rounded-lg border border-gray-200 p-4">
-              <p className="flex items-center gap-2 font-medium">
-                {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
-                {isLowStock && (
-                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-normal text-red-700">
-                    Low stock ({totalStock} ≤ {product.reorderPoint})
-                  </span>
-                )}
-              </p>
-              <div className={`mt-3 grid grid-cols-1 gap-4 ${showWarehouseColumn ? "sm:grid-cols-2" : ""}`}>
-                {showWarehouseColumn && (
+              <Card key={product.id}>
+                <p className="flex items-center gap-2 font-medium">
+                  {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
+                  {isLowStock && (
+                    <Badge variant="danger">
+                      Low stock ({totalStock} ≤ {product.reorderPoint})
+                    </Badge>
+                  )}
+                </p>
+                <div className={`mt-3 grid grid-cols-1 gap-4 ${showWarehouseColumn ? "sm:grid-cols-2" : ""}`}>
+                  {showWarehouseColumn && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Warehouses</p>
+                      <ul className="mt-1 flex flex-col gap-1 text-sm">
+                        {product.warehouseStocks.length === 0 ? (
+                          <li className="text-gray-400">None</li>
+                        ) : (
+                          product.warehouseStocks.map((stock) => (
+                            <li key={stock.id} className="flex justify-between">
+                              <span>{stock.warehouse.name}</span>
+                              <span className="font-mono">{stock.quantity}</span>
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  )}
                   <div>
-                    <p className="text-xs font-semibold uppercase text-gray-400">Warehouses</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Branches</p>
                     <ul className="mt-1 flex flex-col gap-1 text-sm">
-                      {product.warehouseStocks.length === 0 ? (
-                        <li className="text-gray-400">None</li>
+                      {product.branchStocks.length === 0 ? (
+                        <li className="text-gray-400">No branches yet</li>
                       ) : (
-                        product.warehouseStocks.map((stock) => (
+                        product.branchStocks.map((stock) => (
                           <li key={stock.id} className="flex justify-between">
-                            <span>{stock.warehouse.name}</span>
+                            <span>{stock.branch.name}</span>
                             <span className="font-mono">{stock.quantity}</span>
                           </li>
                         ))
                       )}
                     </ul>
                   </div>
-                )}
-                <div>
-                  <p className="text-xs font-semibold uppercase text-gray-400">Branches</p>
-                  <ul className="mt-1 flex flex-col gap-1 text-sm">
-                    {product.branchStocks.length === 0 ? (
-                      <li className="text-gray-400">No branches yet</li>
-                    ) : (
-                      product.branchStocks.map((stock) => (
-                        <li key={stock.id} className="flex justify-between">
-                          <span>{stock.branch.name}</span>
-                          <span className="font-mono">{stock.quantity}</span>
-                        </li>
-                      ))
-                    )}
-                  </ul>
                 </div>
-              </div>
-            </div>
+              </Card>
             );
           })}
         </div>
