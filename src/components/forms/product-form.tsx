@@ -13,6 +13,7 @@ export function ProductForm({
   action: (prev: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   defaultValues?: {
     sku: string;
+    barcode: string | null;
     name: string;
     description: string | null;
     unitPrice: string;
@@ -34,6 +35,17 @@ export function ProductForm({
           className="rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
           required
         />
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Barcode <span className="text-gray-400">(optional)</span>
+        <input
+          name="barcode"
+          defaultValue={defaultValues?.barcode ?? ""}
+          placeholder="e.g. EAN-13 / UPC printed on the product"
+          className="rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
+        />
+        <span className="text-xs text-gray-400">Scanned in the mobile app for POS-speed sales entry and stock counts.</span>
       </label>
 
       <label className="flex flex-col gap-1 text-sm">

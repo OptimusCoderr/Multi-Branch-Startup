@@ -35,6 +35,13 @@
           "neverForLocation": true,
           "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your Bluetooth receipt printer."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera to scan product barcodes.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "extra": {

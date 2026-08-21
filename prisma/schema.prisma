@@ -433,6 +433,12 @@ model Product {
   companyId   String
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   sku         String
+  // Distinct from sku — the manufacturer/retail barcode (EAN-13, UPC-A,
+  // etc.) printed on the physical product, scanned via the mobile app for
+  // POS-speed sale entry and stock counts. Optional: a company assigns
+  // its own SKU to every product regardless, but not every product comes
+  // with a printed barcode (or a company may not bother recording one).
+  barcode     String?
   name        String
   description String?
   unitPrice   Decimal  @db.Decimal(12, 2)
@@ -466,6 +472,7 @@ model Product {
   batches         ProductBatch[]
 
   @@unique([companyId, sku])
+  @@unique([companyId, barcode])
   @@index([companyId, isActive])
 }
 

@@ -29,6 +29,9 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   12. [Billing (Paystack)](#12-billing-paystack)
   13. [Security & accountability](#13-security--accountability)
   14. [Platform admin & support](#14-platform-admin--support)
+  15. [Low-stock alerts, branch transfers, and perishable batch tracking](#15-low-stock-alerts-branch-transfers-and-perishable-batch-tracking)
+  16. [Business verification (CAC) and account enable/disable](#16-business-verification-cac-and-account-enabledisable)
+  17. [Barcode/QR scanning and stock counts](#17-barcodeqr-scanning-and-stock-counts)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -466,6 +469,30 @@ one.
    but none of the verification-review or enable/disable controls — this stays a `SUPER_ADMIN`-only
    trust decision, same as granting platform access.
 
+### 17. Barcode/QR scanning and stock counts
+
+1. On the web app, edit or create a product and set a **Barcode** value. Confirm saving a
+   second product with the same barcode (within the same company) is rejected, but the
+   same barcode is allowed for a different company (uniqueness is per-`companyId`, not
+   global).
+2. On mobile, open **New sale** and tap **Scan**. Confirm the camera-permission prompt
+   appears on first use, and scanning a barcode/QR code that matches a product's `barcode`
+   adds it to the cart the same as tapping it in the product list. Scanning an unmatched
+   code shows an inline error instead of crashing.
+3. On mobile, open **Stock** → **Stock count**, pick a branch, and tap **Scan** repeatedly
+   on the same code — confirm the counted quantity for that product increments by one per
+   scan rather than resetting. Confirm typing a count directly in the input works the same
+   way and shows the delta (green for over, red for under) against the branch's system
+   quantity.
+4. Tap **Save count** with at least one changed row. Confirm the confirmation dialog states
+   how many products will be adjusted, and after confirming: the branch's `StockLevel`
+   matches what was counted (verify in `psql`), a `StockMovement` row exists per adjusted
+   product with reason `ADJUSTMENT`, and an audit log entry (`stock.adjusted`) was written.
+   Confirm rows with no change (delta `0`) are not sent to the adjust endpoint at all.
+5. Confirm a staff member without `branches.manage` can still open **Stock count** and build
+   a tally, but sees a message instead of the **Save count** button — matching the
+   read-only-vs-adjust split used elsewhere in the app.
+
 ## Mobile app
 
 ```bash
@@ -531,6 +558,14 @@ actually comes out. If it doesn't, check the printer uses BLE (not classic Bluet
 SPP — iOS can't talk to that at all from a third-party app) and that
 `mobile/lib/bluetooth-printer.ts`'s "first writable characteristic" heuristic actually
 found the right one for your printer's chipset.
+
+### Barcode scanning — needs a real camera
+
+Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so
+`BarcodeScannerModal`'s permission prompt, live viewfinder, and actual scan detection can
+only be exercised on a real device or simulator with camera access — a Development Build
+is not required for this one (`expo-camera`'s `CameraView` works fine in Expo Go). Print a
+few barcodes/QR codes for products you've set a `barcode` value on and test against those.
 
 ## Writing your own smoke tests
 

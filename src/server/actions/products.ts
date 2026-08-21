@@ -23,6 +23,7 @@ export async function createProduct(_prev: { error: string }, formData: FormData
 
   const parsed = productSchema.safeParse({
     sku: formData.get("sku"),
+    barcode: formData.get("barcode"),
     name: formData.get("name"),
     description: formData.get("description"),
     unitPrice: formData.get("unitPrice"),
@@ -42,11 +43,19 @@ export async function createProduct(_prev: { error: string }, formData: FormData
     return { error: `A product with SKU "${parsed.data.sku}" already exists.` };
   }
 
+  if (parsed.data.barcode) {
+    const barcodeTaken = await db.product.findFirst({ where: { barcode: parsed.data.barcode } });
+    if (barcodeTaken) {
+      return { error: `A product with barcode "${parsed.data.barcode}" already exists.` };
+    }
+  }
+
   await db.$transaction(async (tx) => {
     const product = await tx.product.create({
       data: {
         companyId: membership.companyId,
         sku: parsed.data.sku,
+        barcode: parsed.data.barcode ?? null,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
         unitPrice: parsed.data.unitPrice,
@@ -84,6 +93,7 @@ export async function updateProduct(
 
   const parsed = productSchema.safeParse({
     sku: formData.get("sku"),
+    barcode: formData.get("barcode"),
     name: formData.get("name"),
     description: formData.get("description"),
     unitPrice: formData.get("unitPrice"),
@@ -110,11 +120,21 @@ export async function updateProduct(
     return { error: `A product with SKU "${parsed.data.sku}" already exists.` };
   }
 
+  if (parsed.data.barcode) {
+    const barcodeTaken = await db.product.findFirst({
+      where: { barcode: parsed.data.barcode, id: { not: productId } },
+    });
+    if (barcodeTaken) {
+      return { error: `A product with barcode "${parsed.data.barcode}" already exists.` };
+    }
+  }
+
   await db.$transaction(async (tx) => {
     const updated = await tx.product.update({
       where: { id: productId },
       data: {
         sku: parsed.data.sku,
+        barcode: parsed.data.barcode ?? null,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
         unitPrice: parsed.data.unitPrice,

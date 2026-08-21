@@ -8,3 +8,11 @@ export const adjustWarehouseStockSchema = z.object({
   reason: z.preprocess(emptyToUndefined, z.string().trim().max(500).optional()),
 });
 export type AdjustWarehouseStockInput = z.infer<typeof adjustWarehouseStockSchema>;
+
+export const adjustBranchStockSchema = z.object({
+  productId: z.string().min(1, "Select a product"),
+  branchId: z.string().min(1, "Select a branch"),
+  delta: z.coerce.number().int().refine((n) => n !== 0, "Enter a non-zero adjustment"),
+  reason: z.preprocess(emptyToUndefined, z.string().trim().max(500).optional()),
+});
+export type AdjustBranchStockInput = z.infer<typeof adjustBranchStockSchema>;

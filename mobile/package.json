@@ -8,6 +8,7 @@
     "base64-js": "^1.5.1",
     "better-auth": "^1.7.1",
     "expo": "~57.0.14",
+    "expo-camera": "~57.0.4",
     "expo-constants": "^57.0.12",
     "expo-dev-client": "~57.0.13",
     "expo-linear-gradient": "^57.0.1",
