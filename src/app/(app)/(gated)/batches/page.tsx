@@ -36,7 +36,11 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
   const batches = await db.productBatch.findMany({
     where,
     orderBy: { expiryDate: "asc" },
-    include: { product: { select: { name: true, sku: true } }, branch: { select: { name: true } } },
+    include: {
+      product: { select: { name: true, sku: true } },
+      branch: { select: { name: true } },
+      warehouse: { select: { name: true } },
+    },
   });
 
   return (
@@ -70,7 +74,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
             <thead>
               <tr className="border-b border-gray-200 text-gray-500">
                 <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Branch</th>
+                <th className="py-2 pr-4">Location</th>
                 <th className="py-2 pr-4">Batch #</th>
                 <th className="py-2 pr-4">Expiry</th>
                 <th className="py-2 pr-4">Remaining</th>
@@ -85,7 +89,16 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
                     <td className="py-2 pr-4">
                       {b.product.name} <span className="font-mono text-xs text-gray-400">({b.product.sku})</span>
                     </td>
-                    <td className="py-2 pr-4">{b.branch.name}</td>
+                    <td className="py-2 pr-4">
+                      {b.branch ? (
+                        b.branch.name
+                      ) : (
+                        <>
+                          {b.warehouse!.name}{" "}
+                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">warehouse</span>
+                        </>
+                      )}
+                    </td>
                     <td className="py-2 pr-4 font-mono text-xs">{b.batchNumber}</td>
                     <td className="py-2 pr-4">
                       <span

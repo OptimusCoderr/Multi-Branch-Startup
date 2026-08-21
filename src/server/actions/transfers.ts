@@ -288,6 +288,8 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
 
   const parsed = receiveExternalSchema.safeParse({
     productId: formData.get("productId"),
+    destinationType: formData.get("destinationType"),
+    destinationWarehouseId: formData.get("destinationWarehouseId"),
     destinationBranchId: formData.get("destinationBranchId"),
     quantity: formData.get("quantity"),
     externalSourceName: formData.get("externalSourceName"),
@@ -313,15 +315,20 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
         }
       : undefined;
 
+  const destination =
+    parsed.data.destinationType === "WAREHOUSE"
+      ? { destinationWarehouseId: parsed.data.destinationWarehouseId! }
+      : { destinationBranchId: parsed.data.destinationBranchId! };
+
   try {
     await db.$transaction(async (tx) => {
       const transfer = await transferService.receiveExternalStock(tx, membership.companyId, membership.membershipId, {
         productId: parsed.data.productId,
-        destinationBranchId: parsed.data.destinationBranchId,
         quantity: parsed.data.quantity,
         externalSourceName: parsed.data.externalSourceName,
         notes: parsed.data.notes,
         batch,
+        ...destination,
       });
       transferId = transfer.id;
 

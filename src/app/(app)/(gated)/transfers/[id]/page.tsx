@@ -24,15 +24,19 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
 
   const transfer = await db.stockTransfer.findUnique({
     where: { id },
-    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true },
+    include: { product: true, sourceWarehouse: true, sourceBranch: true, destinationBranch: true, destinationWarehouse: true },
   });
   if (!transfer) notFound();
 
-  // A branch-sourced transfer always carries its batch identity forward
-  // automatically (captured at dispatch, or inline if dispatch was
-  // skipped) — only a warehouse source has no batch data to carry over,
-  // since batches only exist per-branch in this schema.
-  const requiresManualBatch = transfer.product.tracksBatches && transfer.sourceType === "WAREHOUSE";
+  // A transfer's batch identity is only known for certain once dispatch
+  // has actually happened (IN_TRANSIT) — before that (APPROVED, not yet
+  // dispatched), both a branch and a warehouse source are trusted to
+  // auto-carry a batch-tracked product's identity forward the same way,
+  // same as this app already trusted branch sources to. Only once
+  // dispatchedBatches comes back empty for an IN_TRANSIT transfer do we
+  // know for sure the source had no matching batch rows to consume from.
+  const carriedBatchCount = Array.isArray(transfer.dispatchedBatches) ? transfer.dispatchedBatches.length : 0;
+  const requiresManualBatch = transfer.product.tracksBatches && transfer.status === "IN_TRANSIT" && carriedBatchCount === 0;
 
   const names = await resolveMembershipNames(db, [
     transfer.requestedByMembershipId,
@@ -92,7 +96,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             : transfer.sourceType === "BRANCH"
               ? transfer.sourceBranch?.name
               : transfer.sourceWarehouse?.name}{" "}
-          → {transfer.destinationBranch.name}
+          → {transfer.destinationBranch ? transfer.destinationBranch.name : `${transfer.destinationWarehouse!.name} (warehouse)`}
         </p>
         {transfer.notes && <p className="mt-2 text-sm text-gray-600">Notes: {transfer.notes}</p>}
         {hasDiscrepancy && (

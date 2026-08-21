@@ -12,12 +12,13 @@ export default async function NewExternalDeliveryPage() {
   }
 
   const db = getScopedPrisma(membership.companyId);
-  const [products, branches] = await Promise.all([
+  const [products, warehouses, branches] = await Promise.all([
     db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true, tracksBatches: true },
     }),
+    db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
@@ -26,10 +27,10 @@ export default async function NewExternalDeliveryPage() {
       <div>
         <h1 className="text-2xl font-semibold">Record an external delivery</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Stock delivered directly to a branch from a supplier, bypassing a warehouse.
+          Stock delivered directly from a supplier, straight to a warehouse or a branch.
         </p>
       </div>
-      <ReceiveExternalForm products={products} branches={branches} />
+      <ReceiveExternalForm products={products} warehouses={warehouses} branches={branches} />
     </div>
   );
 }

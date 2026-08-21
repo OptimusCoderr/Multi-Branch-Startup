@@ -60,24 +60,59 @@ export async function provisionStockForNewBranch(tx: ScopedTx, companyId: string
   }
 }
 
+export type ConsumedBatch = { batchId: string; batchNumber: string; expiryDate: Date; quantity: number };
+
 /**
  * Decrements warehouse stock atomically: the WHERE clause (quantity >=
  * requested amount) and the decrement happen in a single Postgres UPDATE
  * statement, so two concurrent transfers/sales racing for the last units
  * can't both succeed and drive the quantity negative — one of them will
  * match zero rows and this throws instead.
+ *
+ * Also FEFO-consumes batches at this warehouse for a batch-tracked
+ * product, identically to decrementBranchStock below (see its docstring
+ * for the full reasoning — best-effort, never a second source of truth to
+ * block on). Returns exactly which batch(es) were consumed so a caller
+ * dispatching a warehouse-sourced transfer can carry that identity
+ * forward to the receiving branch, the same way a branch-sourced
+ * transfer already does.
  */
 export async function decrementWarehouseStock(
   tx: ScopedTx,
   productId: string,
   warehouseId: string,
   quantity: number,
-) {
+): Promise<ConsumedBatch[]> {
   const result = await tx.warehouseStock.updateMany({
     where: { productId, warehouseId, quantity: { gte: quantity } },
     data: { quantity: { decrement: quantity } },
   });
   if (result.count === 0) throw new InsufficientStockError();
+
+  const product = await tx.product.findUnique({ where: { id: productId }, select: { tracksBatches: true } });
+  if (!product?.tracksBatches) return [];
+
+  let remainingToConsume = quantity;
+  const consumed: ConsumedBatch[] = [];
+  const batches = await tx.productBatch.findMany({
+    where: { productId, warehouseId, quantityRemaining: { gt: 0 } },
+    orderBy: { expiryDate: "asc" },
+  });
+
+  for (const batch of batches) {
+    if (remainingToConsume <= 0) break;
+    const consumeFromThisBatch = Math.min(batch.quantityRemaining, remainingToConsume);
+
+    const updated = await tx.productBatch.updateMany({
+      where: { id: batch.id, quantityRemaining: { gte: consumeFromThisBatch } },
+      data: { quantityRemaining: { decrement: consumeFromThisBatch } },
+    });
+    if (updated.count > 0) {
+      remainingToConsume -= consumeFromThisBatch;
+      consumed.push({ batchId: batch.id, batchNumber: batch.batchNumber, expiryDate: batch.expiryDate, quantity: consumeFromThisBatch });
+    }
+  }
+  return consumed;
 }
 
 export async function incrementWarehouseStock(
@@ -91,8 +126,6 @@ export async function incrementWarehouseStock(
     data: { quantity: { increment: quantity } },
   });
 }
-
-export type ConsumedBatch = { batchId: string; batchNumber: string; expiryDate: Date; quantity: number };
 
 /**
  * See decrementWarehouseStock — same atomic guard, applied to branch
@@ -152,27 +185,32 @@ export async function decrementBranchStock(
   return consumed;
 }
 
+type BatchLocation = { branchId: string; warehouseId?: never } | { warehouseId: string; branchId?: never };
+
 /**
- * Records a batch-tracked product entering a branch — external delivery
- * (transfer-service.ts's receiveExternalStock), or a batch-tracked
- * transfer landing at its destination (receiveTransfer). quantityRemaining
- * starts equal to quantityReceived; decrementBranchStock() consumes it
- * down FEFO as the product sells or leaves again.
+ * Records a batch-tracked product entering a branch OR a warehouse —
+ * external delivery (transfer-service.ts's receiveExternalStock), or a
+ * batch-tracked transfer landing at its destination (receiveTransfer).
+ * quantityRemaining starts equal to quantityReceived;
+ * decrementBranchStock()/decrementWarehouseStock() consumes it down FEFO
+ * as the product sells, moves on, or leaves again.
  *
  * A second delivery under an already-used (companyId, productId,
- * branchId, batchNumber) — a realistic multi-shipment restock of the same
- * lot — increments the existing row instead of colliding with its unique
- * constraint; a bare `create` here would otherwise throw and roll back an
- * entire otherwise-valid delivery.
+ * branchId/warehouseId, batchNumber) — a realistic multi-shipment restock
+ * of the same lot — increments the existing row instead of colliding with
+ * its unique constraint; a bare `create` here would otherwise throw and
+ * roll back an entire otherwise-valid delivery.
  */
 export async function createProductBatch(
   tx: ScopedTx,
   companyId: string,
   membershipId: string,
-  input: { productId: string; branchId: string; batchNumber: string; expiryDate: Date; manufactureDate?: Date; quantity: number },
+  input: { productId: string; batchNumber: string; expiryDate: Date; manufactureDate?: Date; quantity: number } & BatchLocation,
 ) {
+  const locationWhere = input.branchId ? { branchId: input.branchId } : { warehouseId: input.warehouseId };
+
   const existing = await tx.productBatch.findFirst({
-    where: { productId: input.productId, branchId: input.branchId, batchNumber: input.batchNumber },
+    where: { productId: input.productId, ...locationWhere, batchNumber: input.batchNumber },
     select: { id: true },
   });
 
@@ -193,7 +231,8 @@ export async function createProductBatch(
     data: {
       companyId,
       productId: input.productId,
-      branchId: input.branchId,
+      branchId: input.branchId ?? null,
+      warehouseId: input.warehouseId ?? null,
       batchNumber: input.batchNumber,
       expiryDate: input.expiryDate,
       manufactureDate: input.manufactureDate ?? null,
@@ -280,14 +319,15 @@ export type ExpiringBatch = {
   productId: string;
   productName: string;
   productSku: string;
-  branchName: string;
+  locationName: string;
+  locationType: "BRANCH" | "WAREHOUSE";
   batchNumber: string;
   expiryDate: Date;
   quantityRemaining: number;
   isExpired: boolean;
 };
 
-/** Batches with stock still remaining, expiring within `withinDays` (default 14) — including already-expired ones, sorted soonest first. */
+/** Batches with stock still remaining, expiring within `withinDays` (default 14) — including already-expired ones, sorted soonest first. Covers both branch and warehouse locations, since a perishable can sit at either before it sells. */
 export async function getExpiringBatches(tx: ScopedTx, withinDays = 14): Promise<ExpiringBatch[]> {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() + withinDays);
@@ -296,7 +336,11 @@ export async function getExpiringBatches(tx: ScopedTx, withinDays = 14): Promise
   const batches = await tx.productBatch.findMany({
     where: { quantityRemaining: { gt: 0 }, expiryDate: { lte: cutoff } },
     orderBy: { expiryDate: "asc" },
-    include: { product: { select: { id: true, name: true, sku: true } }, branch: { select: { name: true } } },
+    include: {
+      product: { select: { id: true, name: true, sku: true } },
+      branch: { select: { name: true } },
+      warehouse: { select: { name: true } },
+    },
   });
 
   return batches.map((b) => ({
@@ -304,7 +348,8 @@ export async function getExpiringBatches(tx: ScopedTx, withinDays = 14): Promise
     productId: b.product.id,
     productName: b.product.name,
     productSku: b.product.sku,
-    branchName: b.branch.name,
+    locationName: b.branch?.name ?? b.warehouse!.name,
+    locationType: b.branch ? "BRANCH" : "WAREHOUSE",
     batchNumber: b.batchNumber,
     expiryDate: b.expiryDate,
     quantityRemaining: b.quantityRemaining,
