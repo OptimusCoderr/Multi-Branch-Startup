@@ -9,12 +9,24 @@ import { getCustomerBalances } from "@/server/services/customer-service";
 import { writePlatformAuditLog } from "@/server/services/platform-audit-service";
 import { CompanyVerificationReview } from "@/components/forms/company-verification-review";
 import { CompanySuspensionControl } from "@/components/forms/company-suspension-control";
+import {
+  AdminCard,
+  AdminBadge,
+  AdminTable,
+  AdminTableHeader,
+  AdminTableHeaderCell,
+  AdminTableBody,
+  AdminTableRow,
+  AdminTableCell,
+  AdminEmptyState,
+  type AdminBadgeVariant,
+} from "@/components/ui-admin";
 
-const SALE_STATUS_STYLES: Record<string, string> = {
-  CONFIRMED: "bg-blue-500/20 text-blue-300",
-  PARTIALLY_PAID: "bg-amber-500/20 text-amber-300",
-  PAID: "bg-green-500/20 text-green-300",
-  VOIDED: "bg-red-500/20 text-red-300",
+const SALE_STATUS_VARIANTS: Record<string, AdminBadgeVariant> = {
+  CONFIRMED: "brand",
+  PARTIALLY_PAID: "warning",
+  PAID: "success",
+  VOIDED: "danger",
 };
 
 const VERIFICATION_LABELS: Record<string, string> = {
@@ -95,7 +107,7 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
         </p>
       </div>
 
-      <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+      <AdminCard>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Business verification</h2>
         <div className="flex flex-col gap-1 text-sm text-gray-300">
           <p>
@@ -128,127 +140,124 @@ export default async function AdminCompanyDetailPage({ params }: { params: Promi
             <CompanyVerificationReview companyId={company.id} />
           </div>
         )}
-      </section>
+      </AdminCard>
 
       {staff.role === "SUPER_ADMIN" && (
-        <section className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+        <AdminCard>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Account security</h2>
           {company.status === "SUSPENDED" && company.disabledReason && (
             <p className="mb-3 text-sm text-gray-300">Disabled reason: {company.disabledReason}</p>
           )}
           <CompanySuspensionControl companyId={company.id} isSuspended={company.status === "SUSPENDED"} />
-        </section>
+        </AdminCard>
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+        <AdminCard>
           <p className="text-xs uppercase text-gray-500">Branches</p>
-          <p className="mt-1 text-xl font-semibold">{branches.length}</p>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <p className="mt-1 text-xl font-semibold text-gray-100">{branches.length}</p>
+        </AdminCard>
+        <AdminCard>
           <p className="text-xs uppercase text-gray-500">Warehouses</p>
-          <p className="mt-1 text-xl font-semibold">{warehouses.length}</p>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <p className="mt-1 text-xl font-semibold text-gray-100">{warehouses.length}</p>
+        </AdminCard>
+        <AdminCard>
           <p className="text-xs uppercase text-gray-500">Products</p>
-          <p className="mt-1 text-xl font-semibold">{productCount}</p>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <p className="mt-1 text-xl font-semibold text-gray-100">{productCount}</p>
+        </AdminCard>
+        <AdminCard>
           <p className="text-xs uppercase text-gray-500">Staff</p>
-          <p className="mt-1 text-xl font-semibold">{memberships.filter((m) => m.status === "ACTIVE").length}</p>
-        </div>
+          <p className="mt-1 text-xl font-semibold text-gray-100">{memberships.filter((m) => m.status === "ACTIVE").length}</p>
+        </AdminCard>
       </div>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Staff</h2>
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900 text-gray-400">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
+        {memberships.length === 0 ? (
+          <AdminEmptyState>No staff yet.</AdminEmptyState>
+        ) : (
+          <AdminTable>
+            <AdminTableHeader>
+              <AdminTableHeaderCell>Name</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Email</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Role</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Status</AdminTableHeaderCell>
+            </AdminTableHeader>
+            <AdminTableBody>
               {memberships.map((m) => (
-                <tr key={m.id} className="border-b border-gray-900 last:border-0">
-                  <td className="px-4 py-3 font-medium">{m.displayName ?? m.user.name}</td>
-                  <td className="px-4 py-3 text-gray-300">{m.user.email}</td>
-                  <td className="px-4 py-3 text-gray-300">{m.role?.name ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-400">{m.status}</td>
-                </tr>
+                <AdminTableRow key={m.id}>
+                  <AdminTableCell className="font-medium text-gray-100">{m.displayName ?? m.user.name}</AdminTableCell>
+                  <AdminTableCell>{m.user.email}</AdminTableCell>
+                  <AdminTableCell>{m.role?.name ?? "—"}</AdminTableCell>
+                  <AdminTableCell className="text-gray-400">{m.status}</AdminTableCell>
+                </AdminTableRow>
               ))}
-            </tbody>
-          </table>
-          {memberships.length === 0 && <p className="p-4 text-gray-500">No staff yet.</p>}
-        </div>
+            </AdminTableBody>
+          </AdminTable>
+        )}
       </section>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Recent sales</h2>
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900 text-gray-400">
-                <th className="px-4 py-3">Sale</th>
-                <th className="px-4 py-3">Branch</th>
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Total</th>
-                <th className="px-4 py-3">Paid</th>
-                <th className="px-4 py-3">Date</th>
-              </tr>
-            </thead>
-            <tbody>
+        {sales.length === 0 ? (
+          <AdminEmptyState>No sales yet.</AdminEmptyState>
+        ) : (
+          <AdminTable>
+            <AdminTableHeader>
+              <AdminTableHeaderCell>Sale</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Branch</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Customer</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Status</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Total</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Paid</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Date</AdminTableHeaderCell>
+            </AdminTableHeader>
+            <AdminTableBody>
               {sales.map((sale) => (
-                <tr key={sale.id} className="border-b border-gray-900 last:border-0">
-                  <td className="px-4 py-3 font-mono text-xs">{sale.saleNumber}</td>
-                  <td className="px-4 py-3 text-gray-300">{sale.branch.name}</td>
-                  <td className="px-4 py-3 text-gray-300">{sale.customerName ?? "Walk-in"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${SALE_STATUS_STYLES[sale.status] ?? ""}`}>{sale.status}</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-300">{formatMoney(sale.grandTotal.toString(), company.currency)}</td>
-                  <td className="px-4 py-3 text-gray-300">{formatMoney(sale.amountPaid.toString(), company.currency)}</td>
-                  <td className="px-4 py-3 text-gray-400">{sale.createdAt.toLocaleDateString()}</td>
-                </tr>
+                <AdminTableRow key={sale.id}>
+                  <AdminTableCell mono>{sale.saleNumber}</AdminTableCell>
+                  <AdminTableCell>{sale.branch.name}</AdminTableCell>
+                  <AdminTableCell>{sale.customerName ?? "Walk-in"}</AdminTableCell>
+                  <AdminTableCell>
+                    <AdminBadge variant={SALE_STATUS_VARIANTS[sale.status] ?? "neutral"}>{sale.status}</AdminBadge>
+                  </AdminTableCell>
+                  <AdminTableCell>{formatMoney(sale.grandTotal.toString(), company.currency)}</AdminTableCell>
+                  <AdminTableCell>{formatMoney(sale.amountPaid.toString(), company.currency)}</AdminTableCell>
+                  <AdminTableCell className="text-gray-400">{sale.createdAt.toLocaleDateString()}</AdminTableCell>
+                </AdminTableRow>
               ))}
-            </tbody>
-          </table>
-          {sales.length === 0 && <p className="p-4 text-gray-500">No sales yet.</p>}
-        </div>
+            </AdminTableBody>
+          </AdminTable>
+        )}
       </section>
 
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Customers with an outstanding balance</h2>
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900 text-gray-400">
-                <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Phone</th>
-                <th className="px-4 py-3">Outstanding</th>
-                <th className="px-4 py-3">Overdue sales</th>
-              </tr>
-            </thead>
-            <tbody>
+        {[...balances.values()].every((b) => b.outstanding.lte(0)) ? (
+          <AdminEmptyState>No outstanding customer debt.</AdminEmptyState>
+        ) : (
+          <AdminTable>
+            <AdminTableHeader>
+              <AdminTableHeaderCell>Customer</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Phone</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Outstanding</AdminTableHeaderCell>
+              <AdminTableHeaderCell>Overdue sales</AdminTableHeaderCell>
+            </AdminTableHeader>
+            <AdminTableBody>
               {customers
                 .map((c) => ({ customer: c, balance: balances.get(c.id) }))
                 .filter((row) => row.balance && row.balance.outstanding.gt(0))
                 .map(({ customer, balance }) => (
-                  <tr key={customer.id} className="border-b border-gray-900 last:border-0">
-                    <td className="px-4 py-3 font-medium">{customer.name}</td>
-                    <td className="px-4 py-3 text-gray-300">{customer.phone ?? "—"}</td>
-                    <td className="px-4 py-3 text-gray-300">{formatMoney(balance!.outstanding.toString(), company.currency)}</td>
-                    <td className="px-4 py-3 text-gray-400">{balance!.overdueSaleCount}</td>
-                  </tr>
+                  <AdminTableRow key={customer.id}>
+                    <AdminTableCell className="font-medium text-gray-100">{customer.name}</AdminTableCell>
+                    <AdminTableCell>{customer.phone ?? "—"}</AdminTableCell>
+                    <AdminTableCell>{formatMoney(balance!.outstanding.toString(), company.currency)}</AdminTableCell>
+                    <AdminTableCell className="text-gray-400">{balance!.overdueSaleCount}</AdminTableCell>
+                  </AdminTableRow>
                 ))}
-            </tbody>
-          </table>
-          {[...balances.values()].every((b) => b.outstanding.lte(0)) && <p className="p-4 text-gray-500">No outstanding customer debt.</p>}
-        </div>
+            </AdminTableBody>
+          </AdminTable>
+        )}
       </section>
     </div>
   );

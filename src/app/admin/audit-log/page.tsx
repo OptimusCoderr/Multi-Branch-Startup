@@ -1,5 +1,15 @@
 import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import {
+  AdminPageHeader,
+  AdminTable,
+  AdminTableHeader,
+  AdminTableHeaderCell,
+  AdminTableBody,
+  AdminTableRow,
+  AdminTableCell,
+  AdminEmptyState,
+} from "@/components/ui-admin";
 
 export default async function AdminAuditLogPage() {
   await requirePlatformStaffWithTwoFactor();
@@ -15,43 +25,36 @@ export default async function AdminAuditLogPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Platform audit log</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          Every action taken by platform staff — link generations, promotions, demotions. Append-only, showing the
-          most recent 200 entries.
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Platform audit log"
+        description="Every action taken by platform staff — link generations, promotions, demotions. Append-only, showing the most recent 200 entries."
+      />
 
       {entries.length === 0 ? (
-        <p className="text-gray-500">No platform audit log entries yet.</p>
+        <AdminEmptyState>No platform audit log entries yet.</AdminEmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-800 bg-gray-900 text-gray-400">
-                <th className="px-4 py-3">When</th>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Target</th>
-                <th className="px-4 py-3">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="border-b border-gray-900 align-top last:border-0">
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-400">{entry.createdAt.toLocaleString()}</td>
-                  <td className="px-4 py-3">{actorEmailById.get(entry.actorUserId) ?? "Unknown"}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{entry.action}</td>
-                  <td className="px-4 py-3 text-gray-300">{entry.targetEmail ?? "—"}</td>
-                  <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-gray-500" title={JSON.stringify(entry.metadata)}>
-                    {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <AdminTable>
+          <AdminTableHeader>
+            <AdminTableHeaderCell>When</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Actor</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Action</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Target</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Details</AdminTableHeaderCell>
+          </AdminTableHeader>
+          <AdminTableBody>
+            {entries.map((entry) => (
+              <AdminTableRow key={entry.id} className="align-top">
+                <AdminTableCell className="whitespace-nowrap text-gray-400">{entry.createdAt.toLocaleString()}</AdminTableCell>
+                <AdminTableCell>{actorEmailById.get(entry.actorUserId) ?? "Unknown"}</AdminTableCell>
+                <AdminTableCell mono>{entry.action}</AdminTableCell>
+                <AdminTableCell>{entry.targetEmail ?? "—"}</AdminTableCell>
+                <AdminTableCell className="max-w-xs truncate text-gray-500" mono title={JSON.stringify(entry.metadata)}>
+                  {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
+                </AdminTableCell>
+              </AdminTableRow>
+            ))}
+          </AdminTableBody>
+        </AdminTable>
       )}
     </div>
   );

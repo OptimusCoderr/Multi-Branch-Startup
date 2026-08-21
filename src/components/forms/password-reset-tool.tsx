@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { generatePasswordResetLink } from "@/server/actions/platform-admin";
+import { AdminCard, AdminField, AdminInput, AdminFormError, AdminButton } from "@/components/ui-admin";
 
 type FormState = { error: string; link?: string };
 const initialState: FormState = { error: "" };
@@ -18,30 +19,25 @@ export function PasswordResetTool() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-gray-800 bg-gray-900 p-4">
+    <AdminCard className="flex flex-col gap-3">
       <form action={formAction} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          User&apos;s email
-          <input
-            name="email"
-            type="email"
-            required
-            className="w-72 rounded-md border border-gray-700 bg-gray-950 px-3 py-2 text-gray-100"
-          />
-        </label>
-        <button
+        <AdminField label="User's email">
+          <AdminInput name="email" type="email" required className="w-72" />
+        </AdminField>
+        <AdminButton
           type="submit"
-          disabled={isPending}
-          className="rounded-md bg-amber-500 px-4 py-2 text-sm font-medium text-gray-950 disabled:opacity-50"
+          className="bg-amber-500 text-gray-950 hover:bg-amber-400 focus-visible:ring-amber-300"
+          isPending={isPending}
+          pendingLabel="Generating…"
         >
-          {isPending ? "Generating…" : "Generate reset link"}
-        </button>
+          Generate reset link
+        </AdminButton>
       </form>
 
-      {state.error && <p className="text-sm text-red-400">{state.error}</p>}
+      <AdminFormError error={state.error} />
 
       {state.link && (
-        <div className="rounded-md bg-gray-950 p-3 text-sm">
+        <div className="rounded-lg bg-gray-950 p-3 text-sm">
           <p className="text-gray-400">
             Share this link with the user directly (phone, WhatsApp, etc.) — it lets them set a new password. It
             works once and expires after an hour.
@@ -54,6 +50,6 @@ export function PasswordResetTool() {
           </div>
         </div>
       )}
-    </div>
+    </AdminCard>
   );
 }
