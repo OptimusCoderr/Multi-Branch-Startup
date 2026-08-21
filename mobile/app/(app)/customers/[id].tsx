@@ -1,8 +1,11 @@
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, Link } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { Receipt } from "lucide-react-native";
 import { api } from "@/lib/api";
 import { useMe, formatMoney } from "@/lib/use-me";
+import { theme } from "@/lib/theme";
+import { Card, ListItem, EmptyState } from "@/components/ui";
 
 export default function CustomerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,7 +22,7 @@ export default function CustomerDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
       <View>
         <Text style={styles.name}>{customer.name}</Text>
         <Text style={styles.muted}>
@@ -28,36 +31,36 @@ export default function CustomerDetailScreen() {
       </View>
 
       <View style={styles.grid}>
-        <View style={styles.card}>
+        <Card style={{ flex: 1 }}>
           <Text style={styles.cardLabel}>Outstanding</Text>
           <Text style={[styles.cardValue, Number(customer.outstanding) > 0 && styles.outstanding]}>
             {formatMoney(customer.outstanding, currency)}
           </Text>
           {customer.overdueSaleCount > 0 && <Text style={styles.overdueNote}>{customer.overdueSaleCount} sale(s) overdue</Text>}
-        </View>
-        <View style={styles.card}>
+        </Card>
+        <Card style={{ flex: 1 }}>
           <Text style={styles.cardLabel}>Open sales</Text>
           <Text style={styles.cardValue}>{customer.openSaleCount}</Text>
-        </View>
+        </Card>
       </View>
 
       <View>
         <Text style={styles.sectionLabel}>Sales history</Text>
         {customer.sales.length === 0 ? (
-          <Text style={styles.muted}>No sales yet.</Text>
+          <EmptyState icon={Receipt} title="No sales yet" />
         ) : (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: theme.spacing.sm }}>
             {customer.sales.map((s) => {
               const outstanding = Number(s.grandTotal) - Number(s.amountPaid);
               return (
                 <Link key={s.id} href={`/sales/${s.id}`} asChild>
-                  <View style={styles.saleRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.saleNumber}>{s.saleNumber}</Text>
-                      <Text style={styles.muted}>{s.branchName}</Text>
-                    </View>
-                    <Text style={outstanding > 0 ? styles.outstanding : undefined}>{formatMoney(s.grandTotal, currency)}</Text>
-                  </View>
+                  <ListItem
+                    title={s.saleNumber}
+                    subtitle={s.branchName}
+                    trailing={
+                      <Text style={outstanding > 0 ? styles.outstanding : styles.amount}>{formatMoney(s.grandTotal, currency)}</Text>
+                    }
+                  />
                 </Link>
               );
             })}
@@ -69,25 +72,15 @@ export default function CustomerDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: theme.surface },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  name: { fontSize: 20, fontWeight: "700" },
-  muted: { color: "#9ca3af" },
-  grid: { flexDirection: "row", gap: 12 },
-  card: { flex: 1, borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10, padding: 12, gap: 4 },
-  cardLabel: { fontSize: 11, fontWeight: "600", color: "#9ca3af", textTransform: "uppercase" },
-  cardValue: { fontSize: 18, fontWeight: "700" },
+  name: { fontSize: theme.font.display, fontWeight: "700", color: theme.textPrimary },
+  muted: { color: theme.textFaint },
+  grid: { flexDirection: "row", gap: theme.spacing.md },
+  cardLabel: { fontSize: theme.font.micro, fontWeight: "600", color: theme.textFaint, textTransform: "uppercase" },
+  cardValue: { fontSize: theme.font.h1, fontWeight: "700", color: theme.textPrimary },
+  amount: { color: theme.textPrimary },
   outstanding: { color: "#b45309" },
-  overdueNote: { fontSize: 11, color: "#dc2626", fontWeight: "600" },
-  sectionLabel: { fontSize: 11, fontWeight: "600", color: "#9ca3af", textTransform: "uppercase", marginBottom: 8 },
-  saleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 12,
-  },
-  saleNumber: { fontWeight: "600", fontFamily: "monospace" },
+  overdueNote: { fontSize: theme.font.micro, color: theme.danger, fontWeight: "600" },
+  sectionLabel: { fontSize: theme.font.micro, fontWeight: "600", color: theme.textFaint, textTransform: "uppercase", marginBottom: 8 },
 });

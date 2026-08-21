@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { theme } from "@/lib/theme";
+import { Button, Field, Input } from "@/components/ui";
 
 export default function NewCustomerScreen() {
   const router = useRouter();
@@ -24,31 +25,32 @@ export default function NewCustomerScreen() {
 
   return (
     <View style={styles.container}>
-      <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Phone" keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
-      <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+      <Field label="Name">
+        <Input value={name} onChangeText={setName} />
+      </Field>
+      <Field label="Phone">
+        <Input keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+      </Field>
+      <Field label="Email">
+        <Input autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+      </Field>
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable
-        style={styles.button}
+      <Button
+        label="Create customer"
+        isLoading={createCustomer.isPending}
         onPress={() => {
           setError(null);
           if (!name.trim()) return setError("Name is required.");
           createCustomer.mutate();
         }}
-        disabled={createCustomer.isPending}
-      >
-        {createCustomer.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Create customer</Text>}
-      </Pressable>
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", padding: 16, gap: 12 },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  error: { color: "#dc2626" },
-  button: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
-  buttonText: { color: "#fff", fontWeight: "600" },
+  container: { flex: 1, backgroundColor: theme.surface, padding: theme.spacing.lg, gap: theme.spacing.md },
+  error: { color: theme.danger },
 });

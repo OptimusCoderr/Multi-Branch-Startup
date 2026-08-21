@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Switch } from "react-native";
+import { View, Text, Pressable, StyleSheet, KeyboardAvoidingView, Platform, Switch } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { ShieldCheck } from "lucide-react-native";
 import { authClient } from "@/lib/auth-client";
 import { theme } from "@/lib/theme";
+import { Button, Field, Input } from "@/components/ui";
 
 export default function TwoFactorScreen() {
   const router = useRouter();
@@ -42,15 +43,16 @@ export default function TwoFactorScreen() {
       </LinearGradient>
 
       <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder={useBackupCode ? "Backup code" : "6-digit code"}
-          autoCapitalize="none"
-          keyboardType={useBackupCode ? "default" : "number-pad"}
-          maxLength={useBackupCode ? 16 : 6}
-          value={code}
-          onChangeText={(v) => setCode(useBackupCode ? v : v.replace(/\D/g, ""))}
-        />
+        <Field label={useBackupCode ? "Backup code" : "6-digit code"}>
+          <Input
+            style={{ letterSpacing: 2 }}
+            autoCapitalize="none"
+            keyboardType={useBackupCode ? "default" : "number-pad"}
+            maxLength={useBackupCode ? 16 : 6}
+            value={code}
+            onChangeText={(v) => setCode(useBackupCode ? v : v.replace(/\D/g, ""))}
+          />
+        </Field>
 
         <View style={styles.trustRow}>
           <Text style={styles.trustLabel}>Trust this device for 30 days</Text>
@@ -59,9 +61,9 @@ export default function TwoFactorScreen() {
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <Pressable style={styles.button} onPress={handleVerify} disabled={isSubmitting}>
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify</Text>}
-        </Pressable>
+        <View style={styles.buttonWrap}>
+          <Button label="Verify" onPress={handleVerify} isLoading={isSubmitting} />
+        </View>
 
         <Pressable
           onPress={() => {
@@ -88,30 +90,27 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: theme.radius.xl,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
-  title: { fontSize: 22, fontWeight: "700", color: "#fff" },
-  subtitle: { fontSize: 14, color: "rgba(255,255,255,0.85)", textAlign: "center", paddingHorizontal: 24 },
-  form: { flex: 1, padding: 24, gap: 12, marginTop: -20, backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 16,
-    marginTop: 8,
-    letterSpacing: 2,
+  title: { fontSize: theme.font.display, fontWeight: "700", color: "#fff" },
+  subtitle: { fontSize: theme.font.body, color: "rgba(255,255,255,0.85)", textAlign: "center", paddingHorizontal: 24 },
+  form: {
+    flex: 1,
+    padding: 24,
+    gap: theme.spacing.md,
+    marginTop: -20,
+    backgroundColor: theme.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
-  trustRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 4 },
-  trustLabel: { fontSize: 14, color: "#374151" },
-  error: { color: "#dc2626", fontSize: 14 },
-  button: { backgroundColor: theme.primary, borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 8 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  switchModeText: { fontSize: 13, color: theme.primary, textAlign: "center", marginTop: 20, fontWeight: "600" },
-  backText: { fontSize: 13, color: "#9ca3af", textAlign: "center", marginTop: 16 },
+  trustRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  trustLabel: { fontSize: theme.font.body, color: "#374151" },
+  error: { color: theme.danger, fontSize: theme.font.body },
+  buttonWrap: { marginTop: 8 },
+  switchModeText: { fontSize: 13, color: theme.primary, textAlign: "center", marginTop: 12, fontWeight: "600" },
+  backText: { fontSize: 13, color: theme.textFaint, textAlign: "center", marginTop: 16 },
 });

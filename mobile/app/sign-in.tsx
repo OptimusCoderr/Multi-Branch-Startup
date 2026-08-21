@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Store } from "lucide-react-native";
 import { signIn } from "@/lib/auth-client";
 import { theme } from "@/lib/theme";
+import { Button, Field, Input } from "@/components/ui";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -41,21 +42,18 @@ export default function SignInScreen() {
       </LinearGradient>
 
       <View style={styles.form}>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-        <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
+        <Field label="Email">
+          <Input autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+        </Field>
+        <Field label="Password">
+          <Input secureTextEntry value={password} onChangeText={setPassword} />
+        </Field>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        <Pressable style={styles.button} onPress={handleSignIn} disabled={isSubmitting}>
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
-        </Pressable>
+        <View style={styles.buttonWrap}>
+          <Button label="Sign in" onPress={handleSignIn} isLoading={isSubmitting} />
+        </View>
 
         <Text style={styles.hint}>New companies and staff invitations are set up on the web app for now.</Text>
       </View>
@@ -68,18 +66,24 @@ const styles = StyleSheet.create({
   logoBadge: {
     width: 56,
     height: 56,
-    borderRadius: 16,
+    borderRadius: theme.radius.xl,
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
   },
-  title: { fontSize: 22, fontWeight: "700", color: "#fff" },
-  subtitle: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
-  form: { flex: 1, padding: 24, gap: 12, marginTop: -20, backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24 },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginTop: 8 },
-  error: { color: "#dc2626", fontSize: 14 },
-  button: { backgroundColor: theme.primary, borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 8 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  hint: { fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 24 },
+  title: { fontSize: theme.font.display, fontWeight: "700", color: "#fff" },
+  subtitle: { fontSize: theme.font.body, color: "rgba(255,255,255,0.85)" },
+  form: {
+    flex: 1,
+    padding: 24,
+    gap: theme.spacing.md,
+    marginTop: -20,
+    backgroundColor: theme.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  error: { color: theme.danger, fontSize: theme.font.body },
+  buttonWrap: { marginTop: 8 },
+  hint: { fontSize: theme.font.caption, color: theme.textFaint, textAlign: "center", marginTop: 24 },
 });
