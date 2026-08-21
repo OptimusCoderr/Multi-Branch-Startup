@@ -133,11 +133,36 @@ model User {
   // anyone else. Null means "not platform staff" — an ordinary user.
   platformRole PlatformRole?
 
+  // Managed entirely by Better Auth's two-factor plugin — flips true only
+  // after enrollment is confirmed with a valid TOTP code (see
+  // TwoFactor.verified below), never just on "enable" being called.
+  // Mandatory for company Owners and platform staff (SUPER_ADMIN/
+  // SUPPORT_AGENT); optional for everyone else — see
+  // requireMembershipWithTwoFactor()/requirePlatformStaffWithTwoFactor()
+  // in src/lib/auth/session.ts for where that's enforced.
+  twoFactorEnabled Boolean @default(false)
+
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]
+  twoFactors  TwoFactor[]
 
   @@map("user")
+}
+
+model TwoFactor {
+  id                      String    @id @default(cuid())
+  secret                  String
+  backupCodes             String
+  userId                  String
+  user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  verified                Boolean   @default(true)
+  failedVerificationCount Int       @default(0)
+  lockedUntil             DateTime?
+
+  @@index([secret])
+  @@index([userId])
+  @@map("twoFactor")
 }
 
 enum PlatformRole {

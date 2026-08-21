@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { requirePlatformStaff } from "@/lib/auth/session";
+import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { formatMoney } from "@/lib/format";
@@ -45,7 +45,7 @@ const VERIFICATION_LABELS: Record<string, string> = {
  */
 export default async function AdminCompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const staff = await requirePlatformStaff();
+  const staff = await requirePlatformStaffWithTwoFactor();
 
   const company = await prisma.company.findUnique({
     where: { id },

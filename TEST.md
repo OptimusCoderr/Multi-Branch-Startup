@@ -32,6 +32,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   15. [Low-stock alerts, branch transfers, and perishable batch tracking](#15-low-stock-alerts-branch-transfers-and-perishable-batch-tracking)
   16. [Business verification (CAC) and account enable/disable](#16-business-verification-cac-and-account-enabledisable)
   17. [Barcode/QR scanning and stock counts](#17-barcodeqr-scanning-and-stock-counts)
+  18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -493,6 +494,41 @@ one.
    a tally, but sees a message instead of the **Save count** button — matching the
    read-only-vs-adjust split used elsewhere in the app.
 
+### 18. Two-factor authentication (2FA) for Owners and platform staff
+
+Mandatory for the company Owner role and for platform staff (`SUPER_ADMIN`/`SUPPORT_AGENT`);
+optional — but available — for everyone else. Built on Better Auth's `two-factor` plugin
+(TOTP + backup codes only; the email/SMS "otp" method is left unconfigured, same situation as
+`sendResetPassword`, so the UI never offers it).
+
+1. Sign up a new company. As the Owner, confirm the dashboard shows a red "two-factor
+   authentication is required" banner, and visiting any gated page (`/products`, `/staff`,
+   `/transfers`, etc.) redirects to `/settings/security` instead of the page itself.
+   `/dashboard` and every `/settings/*` page stay reachable throughout — same "always leave
+   the fix-it page open" pattern as the billing-required gate.
+2. On `/settings/security`, confirm your password, then confirm the QR code renders, a
+   manual-entry key is shown, and 10 backup codes are listed. Scan the QR (or add the
+   manual key) in an authenticator app (Google Authenticator, Authy, 1Password, etc.), check
+   "I've saved these backup codes", and enter the 6-digit code. Confirm the page flips to
+   "Two-factor authentication is on" and gated pages are reachable again immediately (no
+   re-login needed).
+3. Confirm the **Disable two-factor authentication** button is absent for the Owner — the
+   copy explains it's required for your role. Sign out and sign back in: confirm you land on
+   `/two-factor` instead of `/dashboard`, entering a wrong code shows an error and keeps you
+   there, and the correct code (or a backup code, via "Use a backup code instead") completes
+   sign-in. Confirm a used backup code can't be reused.
+4. Invite a non-Owner staff member (e.g. Cashier). Confirm their dashboard shows no 2FA
+   banner and they are never redirected away from gated pages regardless of whether they've
+   set up 2FA — it's the same optional toggle, on the same `/settings/security` page, minus
+   the "required" copy and with a working **Disable** button once enabled.
+5. As a `SUPER_ADMIN` or `SUPPORT_AGENT` (`scripts/create-platform-admin.ts` to bootstrap
+   one), confirm every `/admin/*` page (companies list, support, audit log, team) redirects
+   to `/admin/security` until 2FA is set up, and that `/admin/security` itself always stays
+   reachable (it's what every other admin page redirects to, so it can never be part of the
+   loop). Confirm the same enroll/verify/backup-code flow works there too.
+6. Try **Regenerate backup codes** (password required) and confirm the old codes stop
+   working while the new ones don't.
+
 ## Mobile app
 
 ```bash
@@ -519,6 +555,12 @@ the branch picker is skipped entirely for a single-branch company, shown for mul
 recording a payment, viewing/creating customers, issuing/voiding a credit note, and
 printing (needs the Development Build + a real Bluetooth thermal printer — see the caveat
 below).
+
+2FA enrollment/management is web-only (`/settings/security`), but signing in from mobile
+with an account that already has 2FA enabled (set it up on web first) should land on the
+app's own `two-factor` screen instead of the dashboard — confirm entering the correct code
+(or a backup code, via "Use a backup code instead") completes sign-in, and a wrong code
+shows an error without navigating away.
 
 ### Testing the mobile API directly with curl
 

@@ -5,6 +5,7 @@ const LINKS = [
   { href: "/settings/billing", label: "Billing" },
   { href: "/settings/debt-reminders", label: "Debt reminders" },
   { href: "/settings/verification", label: "Verification" },
+  { href: "/settings/security", label: "Security" },
 ];
 
 export function SettingsNav({ current }: { current: string }) {

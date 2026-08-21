@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Building2, LifeBuoy, ScrollText, ShieldCheck } from "lucide-react";
+import { Building2, LifeBuoy, ScrollText, ShieldCheck, KeyRound } from "lucide-react";
 import { requirePlatformStaff } from "@/lib/auth/session";
 import { AdminSignOutButton } from "@/components/layout/admin-sign-out-button";
 import { LogoPlaceholder } from "@/components/logo-placeholder";
@@ -43,6 +43,13 @@ export default async function AdminLayout({ children }: { children: ReactNode })
               >
                 <ScrollText size={16} />
                 Audit log
+              </Link>
+              <Link
+                href="/admin/security"
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors hover:bg-gray-800 hover:text-white"
+              >
+                <KeyRound size={16} />
+                Security
               </Link>
               {staff.role === "SUPER_ADMIN" && (
                 <Link

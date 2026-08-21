@@ -1,8 +1,8 @@
-import { requirePlatformStaff } from "@/lib/auth/session";
+import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
 export default async function AdminAuditLogPage() {
-  await requirePlatformStaff();
+  await requirePlatformStaffWithTwoFactor();
 
   const entries = await prisma.platformAuditLog.findMany({
     orderBy: { createdAt: "desc" },

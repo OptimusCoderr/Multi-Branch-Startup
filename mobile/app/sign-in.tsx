@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
 import { Store } from "lucide-react-native";
 import { signIn } from "@/lib/auth-client";
 import { theme } from "@/lib/theme";
 
 export default function SignInScreen() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,10 +16,15 @@ export default function SignInScreen() {
   async function handleSignIn() {
     setError(null);
     setIsSubmitting(true);
-    const { error: signInError } = await signIn.email({ email, password });
+    const { data, error: signInError } = await signIn.email({ email, password });
     setIsSubmitting(false);
     if (signInError) {
       setError(signInError.message ?? "Could not sign in.");
+      return;
+    }
+    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+      router.push("/two-factor");
+      return;
     }
     // On success, app/_layout.tsx's AuthGate reacts to the session change
     // and redirects into (app) itself — no manual navigation needed here.

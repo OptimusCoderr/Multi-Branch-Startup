@@ -43,6 +43,7 @@ export default function RootLayout() {
           <AuthGate>
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="sign-in" />
+              <Stack.Screen name="two-factor" />
               <Stack.Screen name="(app)" />
             </Stack>
           </AuthGate>

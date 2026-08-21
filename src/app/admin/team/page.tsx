@@ -1,4 +1,4 @@
-import { requireSuperAdmin } from "@/lib/auth/session";
+import { requireSuperAdminWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { PromoteStaffForm } from "@/components/forms/promote-staff-form";
 import { DemoteStaffButton } from "@/components/forms/demote-staff-button";
@@ -9,7 +9,7 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 export default async function AdminTeamPage() {
-  const admin = await requireSuperAdmin();
+  const admin = await requireSuperAdminWithTwoFactor();
 
   const staff = await prisma.user.findMany({
     where: { platformRole: { not: null } },

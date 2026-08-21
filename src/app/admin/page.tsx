@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
+import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { formatMoney } from "@/lib/format";
 
@@ -54,6 +55,7 @@ type FilterKey = (typeof FILTERS)[number]["key"];
  * purposes, not something available from this summary list itself.
  */
 export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+  await requirePlatformStaffWithTwoFactor();
   const { filter: rawFilter } = await searchParams;
   const filter: FilterKey = FILTERS.some((f) => f.key === rawFilter) ? (rawFilter as FilterKey) : "all";
 

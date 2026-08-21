@@ -19,11 +19,16 @@ function SignInForm() {
     setError(null);
     setIsSubmitting(true);
 
-    const { error: signInError } = await authClient.signIn.email({ email, password });
+    const { data, error: signInError } = await authClient.signIn.email({ email, password });
 
     if (signInError) {
       setError(signInError.message ?? "Could not sign in.");
       setIsSubmitting(false);
+      return;
+    }
+
+    if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) {
+      router.push("/two-factor");
       return;
     }
 

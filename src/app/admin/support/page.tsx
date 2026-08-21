@@ -1,6 +1,9 @@
+import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { PasswordResetTool } from "@/components/forms/password-reset-tool";
 
-export default function AdminSupportPage() {
+export default async function AdminSupportPage() {
+  await requirePlatformStaffWithTwoFactor();
+
   return (
     <div className="flex flex-col gap-6">
       <div>
