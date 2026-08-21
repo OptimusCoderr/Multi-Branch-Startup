@@ -27,7 +27,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   } as CSSProperties;
 
   return (
-    <div className="min-h-screen bg-gray-50" style={themeStyle}>
+    <div className="brand-scope min-h-screen bg-gray-50" style={themeStyle}>
       <header
         data-layout={branding.layoutPreset}
         className="sticky top-0 z-10 flex flex-col bg-white/90 shadow-sm backdrop-blur print:hidden"

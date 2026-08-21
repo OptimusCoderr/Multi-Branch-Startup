@@ -2,6 +2,7 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { ProductForm } from "@/components/forms/product-form";
 import { createProduct } from "@/server/actions/products";
+import { PageHeader } from "@/components/ui";
 
 export default async function NewProductPage() {
   const membership = await requireMembership();
@@ -13,7 +14,7 @@ export default async function NewProductPage() {
 
   return (
     <div className="flex max-w-lg flex-col gap-6">
-      <h1 className="text-2xl font-semibold">New product</h1>
+      <PageHeader title="New product" />
       <ProductForm action={createProduct} submitLabel="Create product" />
     </div>
   );
