@@ -11,7 +11,15 @@ export function ProductForm({
   submitLabel,
 }: {
   action: (prev: ProductFormState, formData: FormData) => Promise<ProductFormState>;
-  defaultValues?: { sku: string; name: string; description: string | null; unitPrice: string; costPrice: string | null };
+  defaultValues?: {
+    sku: string;
+    name: string;
+    description: string | null;
+    unitPrice: string;
+    costPrice: string | null;
+    reorderPoint: string | null;
+    tracksBatches: boolean;
+  };
   submitLabel: string;
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -74,6 +82,37 @@ export function ProductForm({
           />
         </label>
       </div>
+
+      <label className="flex flex-col gap-1 text-sm">
+        Reorder point (optional)
+        <input
+          name="reorderPoint"
+          type="number"
+          min="0"
+          step="1"
+          defaultValue={defaultValues?.reorderPoint ?? ""}
+          className="rounded-md border border-gray-300 px-3 py-2"
+        />
+        <span className="text-xs text-gray-400">
+          Get a low-stock alert once total stock across all locations falls to or below this number. Leave blank for no alert.
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          name="tracksBatches"
+          type="checkbox"
+          defaultChecked={defaultValues?.tracksBatches ?? false}
+          className="mt-0.5 h-4 w-4 rounded border-gray-300"
+        />
+        <span>
+          Perishable / tracked by batch
+          <span className="block text-xs text-gray-400">
+            e.g. yogurt, packaged juices. Every delivery of this product will require a batch number and expiry date, and
+            older batches are sold first.
+          </span>
+        </span>
+      </label>
 
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
 

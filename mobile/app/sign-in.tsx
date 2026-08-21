@@ -1,6 +1,9 @@
 import { useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator } from "react-native";
+import { View, Text, TextInput, Pressable, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Store } from "lucide-react-native";
 import { signIn } from "@/lib/auth-client";
+import { theme } from "@/lib/theme";
 
 export default function SignInScreen() {
   const [email, setEmail] = useState("");
@@ -21,38 +24,55 @@ export default function SignInScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Multi-Branch Inventory</Text>
-      <Text style={styles.subtitle}>Sign in to your company account</Text>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <LinearGradient colors={theme.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <View style={styles.logoBadge}>
+          <Store color="#fff" size={26} strokeWidth={2.25} />
+        </View>
+        <Text style={styles.title}>Multi-Branch Inventory</Text>
+        <Text style={styles.subtitle}>Sign in to your company account</Text>
+      </LinearGradient>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
+      <View style={styles.form}>
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} />
 
-      {error && <Text style={styles.error}>{error}</Text>}
+        {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable style={styles.button} onPress={handleSignIn} disabled={isSubmitting}>
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
-      </Pressable>
+        <Pressable style={styles.button} onPress={handleSignIn} disabled={isSubmitting}>
+          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
+        </Pressable>
 
-      <Text style={styles.hint}>New companies and staff invitations are set up on the web app for now.</Text>
-    </View>
+        <Text style={styles.hint}>New companies and staff invitations are set up on the web app for now.</Text>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24, gap: 12, backgroundColor: "#fff" },
-  title: { fontSize: 22, fontWeight: "600", textAlign: "center" },
-  subtitle: { fontSize: 14, color: "#6b7280", textAlign: "center", marginBottom: 16 },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
+  hero: { paddingTop: 96, paddingBottom: 40, alignItems: "center", gap: 6 },
+  logoBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  title: { fontSize: 22, fontWeight: "700", color: "#fff" },
+  subtitle: { fontSize: 14, color: "rgba(255,255,255,0.85)" },
+  form: { flex: 1, padding: 24, gap: 12, marginTop: -20, backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, marginTop: 8 },
   error: { color: "#dc2626", fontSize: 14 },
-  button: { backgroundColor: "#171717", borderRadius: 8, paddingVertical: 12, alignItems: "center", marginTop: 8 },
+  button: { backgroundColor: theme.primary, borderRadius: 10, paddingVertical: 14, alignItems: "center", marginTop: 8 },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   hint: { fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 24 },
 });

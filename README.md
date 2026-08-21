@@ -506,11 +506,20 @@ This is being built in phases, each one shipping something testable end-to-end (
 npm install
 cp .env.example .env   # then fill in DATABASE_URL and BETTER_AUTH_SECRET
 npx prisma migrate dev
-npm run db:seed        # seeds the permission catalog and subscription plans
+npm run db:seed        # seeds permissions, subscription plans, and a local admin login
 npm run dev
 ```
 
 Generate a `BETTER_AUTH_SECRET` with `openssl rand -base64 32`.
+
+`db:seed` also creates a super-admin account you can sign in with right away
+(see `/admin`), from `ADMIN_EMAIL`/`ADMIN_PASSWORD` in `.env` —
+`.env.example` ships with working defaults (`admin@example.com` /
+`LocalAdmin123!`) for local use. This is deliberately a fixed,
+predictable credential for local testing, unlike
+`scripts/create-platform-admin.ts` (which always generates a fresh
+random password for a real deployment) — never set these to anything
+real outside local dev.
 
 ### Least-privilege runtime role
 

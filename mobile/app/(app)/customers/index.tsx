@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "expo-router";
 import { api, type CustomerSummary } from "@/lib/api";
 import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
+import { theme } from "@/lib/theme";
 
 export default function CustomersListScreen() {
   const { data: me } = useMe();
@@ -55,7 +56,7 @@ export default function CustomersListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#fff" },
-  newButton: { backgroundColor: "#171717", margin: 16, marginBottom: 0, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
+  newButton: { backgroundColor: theme.primary, margin: 16, marginBottom: 0, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
   newButtonText: { color: "#fff", fontWeight: "600" },
   muted: { color: "#9ca3af", padding: 16 },
   subtitle: { color: "#9ca3af" },

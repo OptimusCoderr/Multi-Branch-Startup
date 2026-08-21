@@ -27,6 +27,7 @@ function friendlyError(err: unknown, fallback: string): string {
   if (
     err instanceof transferService.TransferStateError ||
     err instanceof transferService.TransferNotFoundError ||
+    err instanceof transferService.BatchRequiredError ||
     err instanceof InsufficientStockError
   ) {
     return err.message;
@@ -40,7 +41,9 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
 
   const parsed = requestTransferSchema.safeParse({
     productId: formData.get("productId"),
+    sourceType: formData.get("sourceType"),
     sourceWarehouseId: formData.get("sourceWarehouseId"),
+    sourceBranchId: formData.get("sourceBranchId"),
     destinationBranchId: formData.get("destinationBranchId"),
     quantity: formData.get("quantity"),
     notes: formData.get("notes"),
@@ -53,9 +56,20 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
   const { ipAddress, userAgent } = await requestMeta();
   let transferId = "";
 
+  const source =
+    parsed.data.sourceType === "WAREHOUSE"
+      ? { sourceWarehouseId: parsed.data.sourceWarehouseId! }
+      : { sourceBranchId: parsed.data.sourceBranchId! };
+
   try {
     await db.$transaction(async (tx) => {
-      const transfer = await transferService.requestTransfer(tx, membership.companyId, membership.membershipId, parsed.data);
+      const transfer = await transferService.requestTransfer(tx, membership.companyId, membership.membershipId, {
+        productId: parsed.data.productId,
+        quantity: parsed.data.quantity,
+        destinationBranchId: parsed.data.destinationBranchId,
+        notes: parsed.data.notes,
+        ...source,
+      });
       transferId = transfer.id;
 
       await writeAuditLog(tx, {
@@ -269,6 +283,9 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
     quantity: formData.get("quantity"),
     externalSourceName: formData.get("externalSourceName"),
     notes: formData.get("notes"),
+    batchNumber: formData.get("batchNumber"),
+    expiryDate: formData.get("expiryDate"),
+    manufactureDate: formData.get("manufactureDate"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid delivery details." };
@@ -278,21 +295,41 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
   const { ipAddress, userAgent } = await requestMeta();
   let transferId = "";
 
-  await db.$transaction(async (tx) => {
-    const transfer = await transferService.receiveExternalStock(tx, membership.companyId, membership.membershipId, parsed.data);
-    transferId = transfer.id;
+  const batch =
+    parsed.data.batchNumber && parsed.data.expiryDate
+      ? {
+          batchNumber: parsed.data.batchNumber,
+          expiryDate: parsed.data.expiryDate,
+          manufactureDate: parsed.data.manufactureDate,
+        }
+      : undefined;
 
-    await writeAuditLog(tx, {
-      companyId: membership.companyId,
-      actorMembershipId: membership.membershipId,
-      action: "transfer.external_receipt",
-      entityType: "StockTransfer",
-      entityId: transfer.id,
-      metadata: { productId: transfer.productId, quantity: transfer.quantity, source: parsed.data.externalSourceName },
-      ipAddress,
-      userAgent,
+  try {
+    await db.$transaction(async (tx) => {
+      const transfer = await transferService.receiveExternalStock(tx, membership.companyId, membership.membershipId, {
+        productId: parsed.data.productId,
+        destinationBranchId: parsed.data.destinationBranchId,
+        quantity: parsed.data.quantity,
+        externalSourceName: parsed.data.externalSourceName,
+        notes: parsed.data.notes,
+        batch,
+      });
+      transferId = transfer.id;
+
+      await writeAuditLog(tx, {
+        companyId: membership.companyId,
+        actorMembershipId: membership.membershipId,
+        action: "transfer.external_receipt",
+        entityType: "StockTransfer",
+        entityId: transfer.id,
+        metadata: { productId: transfer.productId, quantity: transfer.quantity, source: parsed.data.externalSourceName },
+        ipAddress,
+        userAgent,
+      });
     });
-  });
+  } catch (err) {
+    return { error: friendlyError(err, "Could not record the delivery.") };
+  }
 
   revalidatePath("/transfers");
   redirect(`/transfers/${transferId}`);

@@ -12,6 +12,8 @@ export const productSchema = z.object({
   description: z.preprocess(emptyToUndefined, z.string().trim().max(2000).optional()),
   unitPrice: z.coerce.number().positive("Price must be greater than 0").max(1_000_000_000),
   costPrice: z.preprocess(emptyToUndefined, z.coerce.number().nonnegative().max(1_000_000_000).optional()),
+  reorderPoint: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().max(1_000_000_000).optional()),
+  tracksBatches: z.preprocess((v) => v === "on" || v === true, z.boolean()).default(false),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;

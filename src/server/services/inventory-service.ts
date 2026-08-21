@@ -3,7 +3,7 @@ import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "warehouse" | "branch" | "product" | "warehouseStock" | "branchStock" | "stockMovement"
+  "warehouse" | "branch" | "product" | "warehouseStock" | "branchStock" | "stockMovement" | "productBatch"
 >;
 
 export class InsufficientStockError extends Error {
@@ -92,13 +92,74 @@ export async function incrementWarehouseStock(
   });
 }
 
-/** See decrementWarehouseStock — same atomic guard, applied to branch stock. */
+/**
+ * See decrementWarehouseStock — same atomic guard, applied to branch
+ * stock. Additionally, for a batch-tracked product (Product.tracksBatches),
+ * consumes the soonest-expiring batches first (FEFO) at this branch —
+ * every stock decrement funnels through here (sales, dispatch-side of a
+ * branch-to-branch transfer), so this is the one place batch consumption
+ * can happen transparently without every caller needing to know batches
+ * exist. Best-effort: if batches at this branch sum to less than
+ * `quantity` (e.g. stock was adjusted by hand without a matching batch
+ * correction), consumes what batches there are and stops — the aggregate
+ * BranchStock decrement above is what actually gates whether the sale
+ * was allowed at all; batch remaining-quantity is a derived tracking
+ * signal, not a second source of truth to block on.
+ */
 export async function decrementBranchStock(tx: ScopedTx, productId: string, branchId: string, quantity: number) {
   const result = await tx.branchStock.updateMany({
     where: { productId, branchId, quantity: { gte: quantity } },
     data: { quantity: { decrement: quantity } },
   });
   if (result.count === 0) throw new InsufficientStockError();
+
+  const product = await tx.product.findUnique({ where: { id: productId }, select: { tracksBatches: true } });
+  if (!product?.tracksBatches) return;
+
+  let remainingToConsume = quantity;
+  const batches = await tx.productBatch.findMany({
+    where: { productId, branchId, quantityRemaining: { gt: 0 } },
+    orderBy: { expiryDate: "asc" },
+  });
+
+  for (const batch of batches) {
+    if (remainingToConsume <= 0) break;
+    const consumeFromThisBatch = Math.min(batch.quantityRemaining, remainingToConsume);
+
+    const updated = await tx.productBatch.updateMany({
+      where: { id: batch.id, quantityRemaining: { gte: consumeFromThisBatch } },
+      data: { quantityRemaining: { decrement: consumeFromThisBatch } },
+    });
+    if (updated.count > 0) remainingToConsume -= consumeFromThisBatch;
+  }
+}
+
+/**
+ * Records a newly-received batch for a batch-tracked product — called
+ * wherever stock for such a product actually enters a branch (today:
+ * receiveExternalStock() in transfer-service.ts). quantityRemaining
+ * starts equal to quantityReceived; decrementBranchStock() consumes it
+ * down FEFO as the product sells.
+ */
+export async function createProductBatch(
+  tx: ScopedTx,
+  companyId: string,
+  membershipId: string,
+  input: { productId: string; branchId: string; batchNumber: string; expiryDate: Date; manufactureDate?: Date; quantity: number },
+) {
+  await tx.productBatch.create({
+    data: {
+      companyId,
+      productId: input.productId,
+      branchId: input.branchId,
+      batchNumber: input.batchNumber,
+      expiryDate: input.expiryDate,
+      manufactureDate: input.manufactureDate ?? null,
+      quantityReceived: input.quantity,
+      quantityRemaining: input.quantity,
+      receivedByMembershipId: membershipId,
+    },
+  });
 }
 
 export async function incrementBranchStock(tx: ScopedTx, productId: string, branchId: string, quantity: number) {
@@ -136,4 +197,75 @@ export async function recordStockMovement(tx: ScopedTx, input: RecordStockMoveme
       performedByMembershipId: input.performedByMembershipId,
     },
   });
+}
+
+export type LowStockProduct = { productId: string; name: string; sku: string; totalStock: number; reorderPoint: number };
+
+/**
+ * Products at or below their configured reorder point, summed across
+ * every warehouse and branch — a company-wide total, not per-location,
+ * so an owner reasons about one number per product rather than a
+ * location matrix. Products with no reorderPoint set are never included
+ * (null means "no alert configured," not "alert at zero").
+ */
+export async function getLowStockProducts(tx: ScopedTx): Promise<LowStockProduct[]> {
+  const products = await tx.product.findMany({
+    where: { isActive: true, reorderPoint: { not: null } },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      reorderPoint: true,
+      warehouseStocks: { select: { quantity: true } },
+      branchStocks: { select: { quantity: true } },
+    },
+  });
+
+  return products
+    .map((p) => ({
+      productId: p.id,
+      name: p.name,
+      sku: p.sku,
+      totalStock: p.warehouseStocks.reduce((sum, w) => sum + w.quantity, 0) + p.branchStocks.reduce((sum, b) => sum + b.quantity, 0),
+      reorderPoint: p.reorderPoint!,
+    }))
+    .filter((p) => p.totalStock <= p.reorderPoint)
+    .sort((a, b) => a.totalStock - b.totalStock);
+}
+
+export type ExpiringBatch = {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku: string;
+  branchName: string;
+  batchNumber: string;
+  expiryDate: Date;
+  quantityRemaining: number;
+  isExpired: boolean;
+};
+
+/** Batches with stock still remaining, expiring within `withinDays` (default 14) — including already-expired ones, sorted soonest first. */
+export async function getExpiringBatches(tx: ScopedTx, withinDays = 14): Promise<ExpiringBatch[]> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + withinDays);
+  const now = new Date();
+
+  const batches = await tx.productBatch.findMany({
+    where: { quantityRemaining: { gt: 0 }, expiryDate: { lte: cutoff } },
+    orderBy: { expiryDate: "asc" },
+    include: { product: { select: { id: true, name: true, sku: true } }, branch: { select: { name: true } } },
+  });
+
+  return batches.map((b) => ({
+    id: b.id,
+    productId: b.product.id,
+    productName: b.product.name,
+    productSku: b.product.sku,
+    branchName: b.branch.name,
+    batchNumber: b.batchNumber,
+    expiryDate: b.expiryDate,
+    quantityRemaining: b.quantityRemaining,
+    isExpired: b.expiryDate < now,
+  }));
 }

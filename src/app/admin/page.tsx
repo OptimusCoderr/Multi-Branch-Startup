@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db/prisma";
 import { formatMoney } from "@/lib/format";
 
@@ -19,10 +20,10 @@ const SUBSCRIPTION_STYLES: Record<string, string> = {
 /**
  * Deliberately read-only: every value here comes straight off Company /
  * Subscription / counts, with no mutation affordance anywhere on this page.
- * A platform admin can see that a company exists and roughly how big it
- * is — not touch its data, not see inside a company's own sales/customers/
- * staff records. If that scope ever needs to widen, it should be a
- * conscious follow-up decision, not something that crept in here.
+ * Each row links to /admin/companies/[id] for a deeper (still read-only)
+ * look at that company's actual sales/staff/customer data — a deliberate,
+ * logged tenant-isolation exception for support purposes, not something
+ * available from this summary list itself.
  */
 export default async function AdminDashboardPage() {
   const companies = await prisma.company.findMany({
@@ -61,6 +62,7 @@ export default async function AdminDashboardPage() {
               <th className="px-4 py-3">Warehouses</th>
               <th className="px-4 py-3">Staff</th>
               <th className="px-4 py-3">Signed up</th>
+              <th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
@@ -90,6 +92,11 @@ export default async function AdminDashboardPage() {
                 <td className="px-4 py-3 font-mono text-gray-300">{company._count.warehouses}</td>
                 <td className="px-4 py-3 font-mono text-gray-300">{company.memberships.length}</td>
                 <td className="px-4 py-3 text-gray-400">{company.createdAt.toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-right">
+                  <Link href={`/admin/companies/${company.id}`} className="text-indigo-400 hover:underline">
+                    View
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

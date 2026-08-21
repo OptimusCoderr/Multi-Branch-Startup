@@ -16,6 +16,7 @@ type ScopedTx = Pick<
   | "branch"
   | "stockMovement"
   | "customer"
+  | "productBatch"
 >;
 
 export class SaleValidationError extends Error {

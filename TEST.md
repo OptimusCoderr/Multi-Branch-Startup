@@ -28,6 +28,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   11. [Branding](#11-branding)
   12. [Billing (Paystack)](#12-billing-paystack)
   13. [Security & accountability](#13-security--accountability)
+  14. [Platform admin & support](#14-platform-admin--support)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -53,8 +54,9 @@ Open `.env` and fill in:
 - `BETTER_AUTH_SECRET` — generate with `openssl rand -base64 32`
 
 Everything else in `.env.example` (`PAYSTACK_SECRET_KEY`, `TERMII_API_KEY`, `CRON_SECRET`,
-`RUNTIME_DATABASE_URL`) has a working fallback or "not configured" path for local testing —
-see the relevant section below for what to do about each.
+`RUNTIME_DATABASE_URL`, `ADMIN_EMAIL`/`ADMIN_PASSWORD`) has a working fallback, "not
+configured" path, or sensible default for local testing — see the relevant section below
+for what to do about each.
 
 ```bash
 npx prisma migrate dev
@@ -63,7 +65,13 @@ npm run dev
 ```
 
 The app is now running at `http://localhost:3000`. `db:seed` is idempotent — safe to
-re-run any time (e.g. after pulling a change that adds a new plan or permission).
+re-run any time (e.g. after pulling a change that adds a new plan or permission). It also
+creates a super-admin login from `ADMIN_EMAIL`/`ADMIN_PASSWORD` in `.env`
+(`.env.example`'s defaults: `admin@example.com` / `LocalAdmin123!`) — sign in with those
+and visit `/admin` immediately, no separate setup step. That's a fixed, predictable
+credential deliberately meant for local use only — see
+[Platform admin & support](#14-platform-admin--support) below, and never set those two
+variables to anything real outside local dev.
 
 ### Least-privilege database role (optional locally, required in production)
 
@@ -179,18 +187,20 @@ Two independent intake paths — test both:
    branch stock in one step. This is also the path a business with **zero warehouses**
    uses to stock branches at all — confirm it still works for a company that's never
    created a warehouse.
-2. **Warehouse-sourced transfer**: `/transfers/new` — request a transfer from a warehouse
-   to a branch. As a *different* staff member than the requester, approve it, dispatch it,
-   then receive it. Confirm:
+2. **Warehouse-sourced or branch-sourced transfer**: `/transfers/new` — request a transfer
+   from either a warehouse or another branch (pick the source type; the picker only shows
+   when both are available). As a *different* staff member than the requester, approve it,
+   dispatch it, then receive it. Confirm:
    - The requester cannot also approve their own request (self-approval is blocked by
-     default).
-   - Warehouse stock decrements at dispatch, branch stock increments at receipt — not
-     both at once.
+     default) — no Approve button is shown to the requester at all, just an explanation.
+   - The source location's stock decrements at dispatch, branch stock increments at
+     receipt — not both at once.
+   - A branch cannot be selected as its own destination when it's already the source.
    - Receiving a *different* quantity than requested is recorded as-is and flagged as a
      discrepancy, not silently corrected.
-3. With **zero warehouses**, visit `/transfers/new` directly — it should explain there are
-   no warehouses and point you to `/transfers/new-external` or `/warehouses/new`, not show
-   a broken form with an empty source dropdown.
+3. With **zero warehouses and fewer than two branches**, visit `/transfers/new` directly —
+   it should explain there's no source available and point you to `/transfers/new-external`,
+   not show a broken form with an empty source dropdown.
 
 ### 5. Sales and payments
 
@@ -341,16 +351,73 @@ Confirm:
   psql "${RUNTIME_DATABASE_URL%%\?*}" -c 'DELETE FROM "AuditLog" WHERE id = (SELECT id FROM "AuditLog" LIMIT 1);'
   # expect: ERROR:  permission denied for table AuditLog
   ```
-- **Audit log coverage**: there's no in-app page to browse `AuditLog` — inspect it
-  directly (`psql` or Prisma Studio: `npx prisma studio`). Confirm a row was written for
-  things you did above: staff invited, a permission changed, a sale recorded, a transfer's
-  state changed, a credit note issued.
+- **Audit log coverage**: `/audit-log` (a role needs `AUDIT_LOG_VIEW`) lists the
+  per-company trail with an entity-type filter. Confirm a row was written for things you
+  did above: staff invited, a permission changed, a sale recorded, a transfer's state
+  changed, a credit note issued. For anything not shown there, `psql`/Prisma Studio
+  (`npx prisma studio`) still work directly against the `AuditLog` table.
 - **Rate limiting**: rapidly submit the same sale/payment/staff-invite action many times in
   a row (a simple loop, or spam-clicking) — should eventually get a clear rate-limit
   error rather than either silently succeeding unboundedly or crashing.
 - **Security headers**: `curl -I http://localhost:3000/` and confirm `Content-Security-Policy`,
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Strict-Transport-Security`,
   and `Referrer-Policy` are all present.
+
+### 14. Platform admin & support
+
+Platform staff (`User.platformRole`) are entirely separate from any company's
+Membership/Role system — they see across every company via `/admin`, not as a member of
+one.
+
+1. Sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env` (seeded automatically by
+   `npm run db:seed` — see [Environment setup](#environment-setup)) and visit `/admin`.
+   Confirm it lists every company you've created while testing, with plan/subscription
+   status and branch/warehouse/staff counts — but no access to any company's actual sales,
+   products, or staff data (view-only by design).
+2. `/admin/team` (super admin only) — add a new person by email as a **Support agent**. If
+   the email has no account yet, one is created and a password shown once — copy it.
+3. Sign in as that support agent. Confirm they can reach `/admin` (companies) and
+   `/admin/support`, but visiting `/admin/team` directly redirects them back to `/admin` —
+   they can't grant platform access to anyone, including themselves.
+4. `/admin/support` — the password-reset tool. Enter a real test user's email, generate a
+   reset link, and confirm it actually works: open the link in a private window, set a new
+   password, sign in with it. The old password should no longer work. An email with no
+   account should clearly say so, not silently fail.
+5. Back as the super admin, remove the support agent's access from `/admin/team`.
+   Confirm their *next* request to `/admin` bounces them to `/dashboard` (or `/onboarding`
+   if they have no company either) — signing in still works, they just lose platform
+   access.
+6. `/admin/audit-log` — confirm every action above (support agent added, a reset link
+   generated, access removed) shows up, attributed to the right person.
+
+### 15. Low-stock alerts, branch transfers, and perishable batch tracking
+
+1. On a product's edit page, set a **reorder point** (e.g. `5`) and leave it blank on
+   another. Deliver stock below that number via `/transfers/new-external`. Confirm:
+   - `/dashboard` shows a "Low stock" card with the total count and the affected product
+     names — the product with no reorder point set is never included, even at zero stock.
+   - `/stock` shows a red "Low stock" badge next to the affected product, with the current
+     total vs. the reorder point.
+2. Mark a product **"Perishable / tracked by batch"** when creating or editing it. Confirm:
+   - `/transfers/new-external` requires a batch number and expiry date for that product
+     (and only that product — a non-tracked product's form has no batch fields at all), and
+     rejects the delivery server-side if submitted without them.
+   - `/batches` lists the batch under "Expiring soon" (or "Expired" once its date passes),
+     with the correct remaining quantity; the "All" tab shows every batch regardless of
+     expiry.
+   - `/dashboard` shows an "Expiring soon" card counting batches expiring within 14 days,
+     separately calling out how many are already expired.
+3. Record a sale of a batch-tracked product, or dispatch it out via a branch-to-branch
+   transfer, from a branch with two batches at different expiry dates. Confirm the
+   **earlier-expiring batch's `quantityRemaining` is consumed first** (FEFO) — check
+   `/batches` before and after. This should happen transparently; nothing on the sale or
+   transfer form asks which batch to use.
+4. Request a transfer sourced from **another branch** (not a warehouse) via `/transfers/new`
+   — the source-type picker only appears when both a warehouse and a second branch are
+   available; otherwise the form defaults to whichever source actually exists. Confirm you
+   cannot pick the same branch as both source and destination, and that the rest of the
+   lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
+   a warehouse-sourced transfer.
 
 ## Mobile app
 

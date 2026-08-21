@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useMe, formatMoney } from "@/lib/use-me";
+import { theme } from "@/lib/theme";
 
 type LineItem = { productId: string; name: string; unitPrice: number; quantity: number };
 
@@ -145,7 +146,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 12, fontWeight: "600", color: "#6b7280", marginBottom: 6, textTransform: "uppercase" },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  chipSelected: { backgroundColor: "#171717", borderColor: "#171717" },
+  chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { color: "#374151" },
   chipTextSelected: { color: "#fff" },
   input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
@@ -166,6 +167,6 @@ const styles = StyleSheet.create({
   lineTotal: { width: 90, textAlign: "right", fontWeight: "500" },
   total: { textAlign: "right", fontWeight: "700", fontSize: 16, marginTop: 8 },
   error: { color: "#dc2626" },
-  submitButton: { backgroundColor: "#171717", borderRadius: 8, paddingVertical: 14, alignItems: "center" },
+  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 14, alignItems: "center" },
   submitButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 });

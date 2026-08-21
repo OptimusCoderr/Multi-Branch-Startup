@@ -9,6 +9,12 @@ export function startOfCurrentMonth(): Date {
   return new Date(now.getFullYear(), now.getMonth(), 1);
 }
 
+export function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export type PeriodSummary = {
   revenue: Prisma.Decimal;
   collected: Prisma.Decimal;
