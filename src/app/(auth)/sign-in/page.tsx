@@ -68,7 +68,7 @@ function SignInForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          style={{ backgroundColor: accent }}
+          style={{ background: "var(--accent-gradient)" }}
           className="rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-transform active:scale-[0.98] disabled:opacity-50"
         >
           {isSubmitting ? "Signing in…" : "Sign in"}

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Building2, LifeBuoy, ScrollText, ShieldCheck } from "lucide-react";
 import { requirePlatformStaff } from "@/lib/auth/session";
 import { AdminSignOutButton } from "@/components/layout/admin-sign-out-button";
+import { LogoPlaceholder } from "@/components/logo-placeholder";
 
 const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super admin",
@@ -18,6 +19,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
+              <LogoPlaceholder size={22} color="#a5b4fc" />
               <span className="rounded-full bg-gradient-to-r from-indigo-500/20 to-fuchsia-500/20 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-indigo-300">
                 {ROLE_LABEL[staff.role]}
               </span>
