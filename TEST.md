@@ -724,7 +724,7 @@ must submit before they can record more sales at that branch that day.
    there's no separate revision table, the audit log is the ledger.
 
 Mobile support for offline sale recording and a lightweight submit/status screen is
-covered in a later section once that work lands — for now this workflow is web-only.
+covered under "Offline sale recording and daily reports" in the Mobile app section below.
 
 ## Mobile app
 
@@ -759,6 +759,48 @@ app's own `two-factor` screen instead of the dashboard — confirm entering the 
 (or a backup code, via "Use a backup code instead") completes sign-in, and a wrong code
 shows an error without navigating away.
 
+### Offline sale recording and daily reports
+
+Offline support is scoped to *recording a sale* — everything else (the daily report
+itself, approvals, everything on web) still needs connectivity. Uses
+`@react-native-async-storage/async-storage` for the local queue (`mobile/lib/offline-queue.ts`)
+and `expo-network` for connectivity detection (`mobile/lib/network-status.ts`).
+
+1. With the device/simulator online, go to **Sales → Record sale**, add a product, submit.
+   Confirm it behaves exactly as before (no change to the online path) and lands on the new
+   sale's detail page.
+2. Turn on airplane mode (or otherwise cut network — a simulator's network toggle works
+   too), then record another sale. Confirm it does **not** error: you see "Saved offline —
+   this sale will sync automatically once you're back online" and land back on the Sales
+   list, which now shows a **"N sale(s) waiting to sync"** banner with a manual **Sync now**
+   button.
+3. Kill and relaunch the app while still offline. Confirm the pending-sync banner still
+   shows the queued sale — it's backed by AsyncStorage, not in-memory state, so it survives
+   a restart.
+4. Turn network back on. Within a few seconds (or foreground the app if it was backgrounded)
+   confirm the banner clears and the sale appears in the Sales list with a real sale number
+   — check it on the web app too, same company, to confirm it actually reached the server.
+5. Force a **duplicate-sync scenario**: this is what actually protects stock from being
+   double-decremented if a sync response gets lost — verify it directly instead by POSTing
+   `/api/mobile/v1/sales` twice with the same `clientRequestId` (see the curl section below)
+   and confirming both calls return the same `saleId`, not two different sales.
+6. Force a **rejected sync**: queue a sale offline for more of a product than is actually in
+   stock (adjust stock down on web first, or queue several sales against a low-stock item),
+   then reconnect. Confirm the failing item stays in the pending list with its rejection
+   reason shown inline (not retried forever), and a **Discard** button to remove it; sales
+   queued after it that don't have the same problem still sync normally — one bad item
+   doesn't block the rest of the queue.
+7. Go to **Sales → Daily report**. Confirm it shows today's live totals per branch
+   (sales count, gross total, payments collected, system cash collected), matches what
+   `/sales/reports/new` shows on web for the same account. Enter a cash count that doesn't
+   match, submit, confirm it flips to a submitted/read-only state showing the status badge.
+8. Confirm recording a further sale at that branch is blocked — same rule as web, enforced
+   server-side regardless of which client asks. Have an Owner send the report back on web;
+   confirm the mobile report screen reflects `SENT BACK` and allows resubmission.
+9. Scroll down on the report screen — confirm **Recent reports** lists your own past
+   reports with status badges and any cash discrepancy called out, view-only (approval is
+   web-only, by design — there's no Approve/Reject here).
+
 ### Testing the mobile API directly with curl
 
 Useful for isolating "is this a backend bug or a UI bug" without touching the app at all:
@@ -779,6 +821,30 @@ curl http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN"
 `/me` and `/dashboard` should stay reachable (`200`) even with an inactive subscription;
 every other `/api/mobile/v1/*` route should `402` in that case — confirm this by
 temporarily setting `Subscription.status = 'CANCELLED'` for the test company in `psql`.
+
+Idempotent offline sync, directly — POST the same `clientRequestId` twice and confirm both
+responses carry the same `saleId` (this is what makes a retried sync after a lost response
+safe, instead of double-creating the sale and double-decrementing stock):
+
+```bash
+BRANCH_ID="..."
+PRODUCT_ID="..."
+CRID="test-$(date +%s)"
+
+curl -s -X POST http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"branchId\":\"$BRANCH_ID\",\"lineItems\":[{\"productId\":\"$PRODUCT_ID\",\"quantity\":1}],\"clientRequestId\":\"$CRID\"}"
+
+# Same clientRequestId again — should return the identical saleId, not a new sale.
+curl -s -X POST http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"branchId\":\"$BRANCH_ID\",\"lineItems\":[{\"productId\":\"$PRODUCT_ID\",\"quantity\":1}],\"clientRequestId\":\"$CRID\"}"
+
+curl http://localhost:3000/api/mobile/v1/sales/report -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:3000/api/mobile/v1/sales/report -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d "{\"branchId\":\"$BRANCH_ID\",\"declaredCash\":100}"
+curl http://localhost:3000/api/mobile/v1/sales/reports -H "Authorization: Bearer $TOKEN"
+```
 
 ### Bluetooth printer testing — needs real hardware
 
