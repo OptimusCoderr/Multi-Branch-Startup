@@ -105,6 +105,7 @@ model Company {
   productBatches    ProductBatch[]
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
+  dailySalesReports DailySalesReport[]
 
   @@index([status])
   @@index([verificationStatus])
@@ -561,6 +562,7 @@ model Branch {
   expenses          Expense[]
   productBatches    ProductBatch[]
   purchaseOrders    PurchaseOrder[]
+  dailySalesReports DailySalesReport[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -1104,6 +1106,14 @@ model Sale {
   voidedAt             DateTime?
   voidReason           String?
 
+  // Idempotency key set only by the mobile app's offline sync queue — a
+  // sale created on web/normal online flows never sets this. Lets a retried
+  // sync request (the server already created the Sale but the phone never
+  // saw the response) return the existing Sale instead of creating a
+  // duplicate and double-decrementing stock. Nullable + unique: Postgres
+  // treats multiple NULLs as distinct, so ordinary sales never collide here.
+  clientRequestId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1112,6 +1122,7 @@ model Sale {
   creditNotes CreditNote[]
 
   @@unique([companyId, saleNumber])
+  @@unique([companyId, clientRequestId])
   @@index([companyId, branchId])
   @@index([companyId, status])
   @@index([companyId, customerId])
@@ -1218,6 +1229,65 @@ model CreditNote {
   @@unique([companyId, creditNoteNumber])
   @@index([companyId, saleId])
   @@index([companyId, status])
+}
+
+// ---------------------------------------------------------------------------
+// Daily sales reports — end-of-day accountability. A staff member's sales at
+// one branch, for one business day, get submitted for the Owner to approve,
+// send back (with a note, reopening that day for corrections before
+// resubmission), or reject. Not a DRAFT-first workflow — the row is created
+// at submission time, computed fresh from real Sale/Payment data, never
+// trusted from the client. See src/server/services/sales-report-service.ts.
+// ---------------------------------------------------------------------------
+
+enum SalesReportStatus {
+  SUBMITTED
+  APPROVED
+  SENT_BACK
+  REJECTED
+}
+
+model DailySalesReport {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  // Plain string, no relation — same pattern as Sale.soldByMembershipId /
+  // StockTransfer.requestedByMembershipId — removing a Membership must never
+  // cascade into rewriting a historical report.
+  membershipId String
+  // Normalized to that business day's midnight in Company.timezone (see
+  // src/lib/business-day.ts) — Sale/Payment timestamps are UTC, but a
+  // report buckets by the business's *local* day.
+  reportDate DateTime
+
+  status SalesReportStatus @default(SUBMITTED)
+
+  salesCount        Int
+  grossSalesTotal   Decimal  @db.Decimal(12, 2)
+  discountTotal     Decimal  @db.Decimal(12, 2)
+  paymentsCollected Decimal  @db.Decimal(12, 2)
+  // The reconciliation ground truth: CASH-mode payments this staff recorded
+  // today at this branch, summed server-side — never client-supplied.
+  cashCollected   Decimal  @db.Decimal(12, 2)
+  declaredCash    Decimal? @db.Decimal(12, 2)
+  cashDiscrepancy Decimal? @db.Decimal(12, 2)
+
+  staffNote String?
+  ownerNote String?
+
+  submittedAt             DateTime  @default(now())
+  respondedByMembershipId String?
+  respondedAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, branchId, membershipId, reportDate])
+  @@index([companyId, status])
+  @@index([companyId, branchId, reportDate])
 }
 
 // ---------------------------------------------------------------------------

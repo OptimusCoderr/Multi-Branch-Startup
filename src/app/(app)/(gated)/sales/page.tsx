@@ -41,10 +41,23 @@ export default async function SalesPage() {
 
   const canRecord = permissions.has(PERMISSIONS.SALES_RECORD);
   const canExport = permissions.has(PERMISSIONS.REPORTS_VIEW);
+  const canSeeReports = permissions.has(PERMISSIONS.SALES_REPORTS_SUBMIT) || permissions.has(PERMISSIONS.SALES_REPORTS_VIEW);
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Sales" actions={canRecord && <LinkButton href="/sales/new">New sale</LinkButton>} />
+      <PageHeader
+        title="Sales"
+        actions={
+          <>
+            {canSeeReports && (
+              <LinkButton href="/sales/reports" variant="secondary">
+                Daily reports
+              </LinkButton>
+            )}
+            {canRecord && <LinkButton href="/sales/new">New sale</LinkButton>}
+          </>
+        }
+      />
 
       {canExport && (
         <Card>

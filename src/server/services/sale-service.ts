@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { decrementBranchStock, incrementBranchStock, recordStockMovement } from "@/server/services/inventory-service";
 import { getCreditedTotal } from "@/server/services/credit-note-service";
+import { assertNoOpenReportBlockingSale } from "@/server/services/sales-report-service";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
@@ -19,6 +20,8 @@ type ScopedTx = Pick<
   | "customer"
   | "productBatch"
   | "creditNote"
+  | "membership"
+  | "dailySalesReport"
 >;
 
 export class SaleValidationError extends Error {
@@ -61,10 +64,28 @@ export async function createSale(
     customerEmail?: string;
     dueDate?: Date;
     lineItems: { productId: string; quantity: number }[];
+    /** True for Owner/Admin recorders — they're exempt from the end-of-day report lock. See sales-report-service.ts. */
+    isReportExempt?: boolean;
+    /** Set only by the mobile app's offline sync queue, for idempotent retries — see Sale.clientRequestId's schema comment. */
+    clientRequestId?: string;
   },
 ) {
   if (input.lineItems.length === 0) {
     throw new SaleValidationError("A sale needs at least one line item.");
+  }
+
+  // Idempotent replay: the offline mobile queue may retry a sync request
+  // whose server-side write actually succeeded but whose response the
+  // phone never received (dropped connection). Returning the existing sale
+  // here — before any stock is touched — means a retry can never
+  // double-create a sale or double-decrement stock.
+  if (input.clientRequestId) {
+    const existing = await tx.sale.findUnique({ where: { companyId_clientRequestId: { companyId, clientRequestId: input.clientRequestId } } });
+    if (existing) return existing;
+  }
+
+  if (!input.isReportExempt) {
+    await assertNoOpenReportBlockingSale(tx, companyId, membershipId, input.branchId);
   }
 
   // When an existing customer is selected, their contact details are
@@ -84,6 +105,12 @@ export async function createSale(
     customerName = customer.name;
     customerPhone = customer.phone ?? undefined;
     customerEmail = customer.email ?? undefined;
+  } else if (!customerName?.trim()) {
+    // No customer selected and no name given — default to the staff member
+    // recording the sale, so a sale is never left with no one attached to
+    // it (point 3: an unnamed walk-in is still accountable to someone).
+    const recorder = await tx.membership.findUnique({ where: { id: membershipId }, include: { user: true } });
+    customerName = recorder?.displayName ?? recorder?.user.name ?? undefined;
   }
 
   const productIds = [...new Set(input.lineItems.map((li) => li.productId))];
@@ -131,6 +158,7 @@ export async function createSale(
       grandTotal,
       amountPaid: 0,
       soldByMembershipId: membershipId,
+      clientRequestId: input.clientRequestId ?? null,
     },
   });
 

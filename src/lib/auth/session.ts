@@ -72,6 +72,17 @@ function isOwnerMembership(membership: AuthenticatedMembership): boolean {
   return membership.roleName === "Owner" && membership.roleIsSystem;
 }
 
+/**
+ * True for the seeded "Owner" or "Admin" system roles — used to exempt
+ * whoever approves end-of-day sales reports from needing to submit one
+ * against themselves (see sales-report-service.ts). Same "never a
+ * company-created role that happens to share the name" guard as
+ * isOwnerMembership.
+ */
+export function isOwnerOrAdminMembership(membership: AuthenticatedMembership): boolean {
+  return membership.roleIsSystem && (membership.roleName === "Owner" || membership.roleName === "Admin");
+}
+
 /** For Server Components/pages: redirects to /sign-in if unauthenticated. */
 export async function requireSession() {
   const session = await getSession();

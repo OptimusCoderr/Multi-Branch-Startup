@@ -30,6 +30,7 @@ export const TENANT_SCOPED_MODELS = [
   "ProductBatch",
   "Supplier",
   "PurchaseOrder",
+  "DailySalesReport",
 ] as const;
 
 type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

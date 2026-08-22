@@ -687,6 +687,45 @@ toggle and doesn't change.
    code's own background should stay white (for scannability) even though the surrounding
    panel is dark.
 
+### 23. End-of-day sales reports, approval, and cash reconciliation
+
+Per staff member, per branch, per business day (bucketed by `Company.timezone`, default
+`Africa/Lagos`). Owner/Admin are exempt — they approve, they don't submit. Everyone else
+must submit before they can record more sales at that branch that day.
+
+1. As a Cashier, record a sale **without** typing a customer name (leave "Customer name"
+   blank, no existing customer picked). Confirm the sale's customer shows as *your own
+   name* — every sale always has someone attached, even a nameless walk-in.
+2. Record a `CASH` payment on a sale. Go to **Sales → Daily reports → Submit today's
+   report**. Confirm the preview card shows today's live sales count/gross total/payments
+   collected/cash collected for the branch you pick, computed server-side (not trusted from
+   the client).
+3. Enter a "cash counted" amount that deliberately **doesn't** match the system's cash
+   total, add a note, submit. Confirm the report detail page shows `SUBMITTED` and calls
+   out the discrepancy in an amber card.
+4. Try to record another sale at that same branch as the same Cashier — confirm it's
+   blocked with a message pointing at the open report. Recording at a *different* branch,
+   or as a different staff member at the same branch, is unaffected.
+5. As Owner (or a role granted `sales_reports.approve`), open the report and **send it
+   back** with a note. Confirm status flips to `SENT BACK` and the Cashier's block lifts
+   immediately — they can record more sales and resubmit. A resubmission recomputes totals
+   fresh (it doesn't trust the first submission's numbers) and returns the report to
+   `SUBMITTED`.
+6. Approve a `SUBMITTED` report — confirm it becomes `APPROVED` (terminal; no further
+   action available) and records who approved it and when.
+7. **Reject** a report instead — confirm it becomes `REJECTED` (terminal) with the owner's
+   note visible; a rejected report does **not** re-open the sales block (the Owner is
+   expected to handle it directly, e.g. voiding sales), unlike a send-back.
+8. Confirm a Cashier without `sales_reports.view` only ever sees their own reports on
+   `/sales/reports`; a Branch Manager (or anyone) granted that permission sees everyone's,
+   with a staff-name column.
+9. Full history of a report across send-back/resubmit cycles is reconstructable from
+   `/audit-log` (`sales_report.submitted`/`.approved`/`.sent_back`/`.rejected` entries) —
+   there's no separate revision table, the audit log is the ledger.
+
+Mobile support for offline sale recording and a lightweight submit/status screen is
+covered in a later section once that work lands — for now this workflow is web-only.
+
 ## Mobile app
 
 ```bash

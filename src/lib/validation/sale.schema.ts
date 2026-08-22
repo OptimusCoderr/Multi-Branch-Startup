@@ -14,6 +14,9 @@ export const createSaleSchema = z.object({
   customerEmail: z.preprocess(emptyToUndefined, z.string().trim().email("Enter a valid email").optional()),
   dueDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
   lineItems: z.array(saleLineItemSchema).min(1, "Add at least one product"),
+  // Mobile-only, set by the offline sync queue for idempotent retries — the
+  // web form never sends this.
+  clientRequestId: z.preprocess(emptyToUndefined, z.string().trim().min(1).max(100).optional()),
 });
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
 
