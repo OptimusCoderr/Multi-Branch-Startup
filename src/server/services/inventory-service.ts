@@ -254,7 +254,15 @@ type RecordStockMovementInput = {
   companyId: string;
   productId: string;
   quantityDelta: number;
-  reason: "TRANSFER_IN" | "TRANSFER_OUT" | "EXTERNAL_RECEIPT" | "SALE" | "SALE_VOID_RESTOCK" | "ADJUSTMENT" | "INITIAL_STOCK";
+  reason:
+    | "TRANSFER_IN"
+    | "TRANSFER_OUT"
+    | "EXTERNAL_RECEIPT"
+    | "SALE"
+    | "SALE_VOID_RESTOCK"
+    | "ADJUSTMENT"
+    | "INITIAL_STOCK"
+    | "PURCHASE_RECEIPT";
   referenceType: string;
   referenceId: string;
   performedByMembershipId: string;

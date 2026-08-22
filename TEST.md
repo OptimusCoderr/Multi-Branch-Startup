@@ -35,6 +35,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
   19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
   20. [Warehouse-level batch tracking](#20-warehouse-level-batch-tracking)
+  21. [Purchase orders and suppliers](#21-purchase-orders-and-suppliers)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -595,6 +596,60 @@ walkthrough, which this extends.
    batch or a transfer with both a branch and a warehouse destination set, or neither —
    confirm the database rejects it (a CHECK constraint backs the app-level logic here, the
    same defense-in-depth pattern used elsewhere in this schema).
+
+### 21. Purchase orders and suppliers
+
+Formalizes buying from a supplier as a real commitment record, checked against actual
+receipt — the natural next link in this app's stock-accountability chain alongside stock
+transfers. Today, `receiveExternalStock` (§15/§20) records a delivery *after the fact*;
+a purchase order lets you say "I ordered 50 units at ₦2,000 each" up front, then
+reconcile what actually arrives against it, one line item at a time.
+
+1. Go to **Purchase orders** in the left nav → **Manage suppliers** → **New supplier**.
+   Create a supplier (name required; phone/email/address/notes optional). Confirm it
+   appears in the `/suppliers` list, and that a role without `purchase_orders.manage`
+   (e.g. Cashier) can't see "New supplier" and gets a permission message if they visit
+   `/suppliers/new` directly.
+2. From `/purchase-orders`, click **New purchase order**. Pick the supplier, a
+   destination (a warehouse or a branch — the picker only appears when you have both;
+   otherwise it defaults to whichever exists), and add two line items: one ordinary
+   product and one **batch-tracked** product ("Perishable / tracked by batch"), each
+   with a quantity and a unit cost. Confirm the running total updates as you edit rows,
+   and that submitting creates the PO in **DRAFT** status with a sequential `PO-000001`-
+   style number, then lands you on its detail page.
+3. On the detail page, confirm **DRAFT** POs have no receive forms — only **"Mark as
+   ordered"** and **"Cancel purchase order"** (cancel is available from DRAFT or
+   ORDERED, as long as nothing's been received yet). Click **Cancel**, confirm it moves
+   to **CANCELLED** and both actions disappear. Create a second PO the same way to
+   continue.
+4. Click **"Mark as ordered"** — status moves to **ORDERED**, and a per-line **Receive**
+   form now appears for each line item still outstanding.
+5. Receive the ordinary product's line **in full**. Confirm: the line shows "Fully
+   received" and its Receive form disappears; the PO status becomes
+   **PARTIALLY_RECEIVED** (the batch-tracked line is still outstanding);
+   `/stock` shows the destination's quantity incremented by the received amount.
+6. Receive the batch-tracked product's line **partially** (less than ordered). Confirm
+   the Receive form requires a batch number and expiry date (same as an external
+   delivery), that the PO stays **PARTIALLY_RECEIVED**, and that `/batches?tab=all`
+   shows the new batch at the destination with the received quantity.
+7. Try to receive **more than the remaining quantity** on that same line — confirm it's
+   rejected (not silently capped) with a clear "Cannot receive more than N unit(s) still
+   outstanding" error.
+8. Receive the rest of the batch-tracked line, with a **different batch number**
+   (e.g. a second delivery). Confirm: the PO status becomes **RECEIVED**; `/batches`
+   now shows **two distinct batch rows** for that product at the destination (not one
+   row overwritten); the line's Receive form is gone since nothing's outstanding.
+9. Confirm a role with only `purchase_orders.view` + `purchase_orders.receive`
+   (Warehouse Manager's default) can open a PO and receive against it, but sees no
+   "New purchase order", "Mark as ordered", or "Cancel" controls — those require
+   `purchase_orders.manage` (Branch Manager gets all three by default, mirroring its
+   existing `transfers.receive_external` asymmetry with Warehouse Manager). Confirm a
+   Cashier (no purchase-order permissions at all) is blocked from `/purchase-orders`,
+   `/purchase-orders/[id]`, and `/suppliers` entirely.
+10. Confirm every step above wrote an audit-log entry (`purchase_order.created`,
+    `.ordered`, `.cancelled`, `.line_item_received`, `supplier.created`) visible at
+    `/audit-log`, and that the underlying `StockMovement` rows use reason
+    `PURCHASE_RECEIPT` with `referenceType: "PurchaseOrder"`.
 
 ## Mobile app
 
