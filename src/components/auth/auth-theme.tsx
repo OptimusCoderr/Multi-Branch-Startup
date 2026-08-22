@@ -13,7 +13,7 @@ export type AuthTheme = { accent: string };
  * random hue on every page load; that made the brand feel inconsistent
  * rather than distinctive, so it's fixed now.
  */
-const AUTH_THEME: AuthTheme = { accent: "#4f46e5" }; // indigo-600 — reads clearly as text/focus-ring on white
+const AUTH_THEME: AuthTheme = { accent: "#7c3aed" }; // violet-600 — reads clearly as text/focus-ring on white
 
 const AuthThemeContext = createContext<AuthTheme>(AUTH_THEME);
 

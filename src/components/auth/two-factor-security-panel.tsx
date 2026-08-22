@@ -14,7 +14,7 @@ const STYLES: Record<Variant, Record<string, string>> = {
     heading: "text-gray-900",
     muted: "text-gray-500",
     input: "rounded-md border border-gray-300 px-3 py-2 text-gray-900",
-    primaryButton: "rounded-md bg-[var(--brand-primary,#4f46e5)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50",
+    primaryButton: "rounded-md bg-[var(--brand-primary,#7c3aed)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50",
     secondaryButton: "rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50",
     dangerButton: "rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-50",
     codeBox: "rounded-md bg-gray-50 border border-gray-200 p-3 font-mono text-sm text-gray-800",
