@@ -16,7 +16,7 @@ export function Checkbox({
     <label className="flex items-start gap-2 text-sm">
       <input
         type="checkbox"
-        className={`mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-ring,#c7d2fe)] ${className}`}
+        className={`mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-[var(--brand-primary)] focus:ring-2 focus:ring-[var(--brand-ring,#c4b5fd)] ${className}`}
         {...props}
       />
       <span>

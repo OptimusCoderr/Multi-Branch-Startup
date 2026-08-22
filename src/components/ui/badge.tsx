@@ -7,7 +7,7 @@ const VARIANT_CLASSES: Record<BadgeVariant, string> = {
   warning: "bg-amber-100 text-amber-700",
   danger: "bg-red-100 text-red-700",
   neutral: "bg-gray-100 text-gray-500",
-  brand: "bg-[var(--brand-primary-subtle,#eef2ff)] text-[var(--brand-primary)]",
+  brand: "bg-[var(--brand-primary-subtle,#ede9fe)] text-[var(--brand-primary)]",
 };
 
 export function Badge({ variant = "neutral", children }: { variant?: BadgeVariant; children: ReactNode }) {

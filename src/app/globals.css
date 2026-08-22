@@ -36,7 +36,7 @@ body {
    per-company --brand-primary/--brand-secondary instead, see
    src/app/(app)/layout.tsx. */
 :root {
-  --accent-gradient: linear-gradient(135deg, #6366f1, #d946ef);
+  --accent-gradient: linear-gradient(135deg, #7c3aed, #1e1b2e);
 }
 
 /* Derived hover/active/subtle states for the per-company brand color,

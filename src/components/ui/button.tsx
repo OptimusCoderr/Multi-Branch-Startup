@@ -9,7 +9,7 @@ const SOLID_BASE =
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
-    "bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-hover,#4338ca)] focus-visible:ring-[var(--brand-ring,#818cf8)]",
+    "bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-hover,#6d28d9)] focus-visible:ring-[var(--brand-ring,#c4b5fd)]",
   secondary: "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:ring-gray-400",
   ghost: "text-gray-600 hover:bg-gray-100 focus-visible:ring-gray-400",
   danger: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-400",
