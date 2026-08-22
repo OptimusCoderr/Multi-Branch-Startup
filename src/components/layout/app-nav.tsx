@@ -52,11 +52,20 @@ const NAV_LINKS: { href: string; label: string; icon: LucideIcon; planFeatureKey
   { href: "/settings/branding", label: "Settings", icon: Settings },
 ];
 
-export function AppNav({ planFeatures, canManageBilling }: { planFeatures: PlanFeatures; canManageBilling: boolean }) {
+export function AppNav({
+  planFeatures,
+  canManageBilling,
+  onNavigate,
+}: {
+  planFeatures: PlanFeatures;
+  canManageBilling: boolean;
+  /** Fired when a link is actually followed — lets the mobile drawer close itself on navigate. */
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-wrap gap-1 text-sm">
+    <nav className="flex flex-col gap-0.5 text-sm">
       {NAV_LINKS.map((link) => {
         const active = link.href === "/settings/branding" ? pathname.startsWith("/settings") : pathname.startsWith(link.href);
         const cap = link.planFeatureKey ? planFeatures[link.planFeatureKey] : undefined;
@@ -67,7 +76,7 @@ export function AppNav({ planFeatures, canManageBilling }: { planFeatures: PlanF
           const title = canManageBilling
             ? `${link.label} isn't included on your current plan — upgrade to unlock it.`
             : `${link.label} isn't included on your company's current plan. Ask an Owner or Admin to upgrade.`;
-          const lockedClassName = "flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium text-gray-300 grayscale";
+          const lockedClassName = "flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-gray-300 grayscale";
 
           // Only link to billing for someone who can actually act on it —
           // otherwise this is a dead end (/settings/billing itself blocks
@@ -76,18 +85,24 @@ export function AppNav({ planFeatures, canManageBilling }: { planFeatures: PlanF
           if (!canManageBilling) {
             return (
               <span key={link.href} title={title} className={lockedClassName}>
-                <Icon size={16} strokeWidth={2} />
+                <Icon size={17} strokeWidth={2} />
                 {link.label}
-                <Lock size={11} strokeWidth={2.5} />
+                <Lock size={11} strokeWidth={2.5} className="ml-auto" />
               </span>
             );
           }
 
           return (
-            <Link key={link.href} href="/settings/billing" title={title} className={`${lockedClassName} transition-colors hover:bg-gray-50 hover:text-gray-400`}>
-              <Icon size={16} strokeWidth={2} />
+            <Link
+              key={link.href}
+              href="/settings/billing"
+              title={title}
+              onClick={onNavigate}
+              className={`${lockedClassName} transition-colors hover:bg-gray-50 hover:text-gray-400`}
+            >
+              <Icon size={17} strokeWidth={2} />
               {link.label}
-              <Lock size={11} strokeWidth={2.5} />
+              <Lock size={11} strokeWidth={2.5} className="ml-auto" />
             </Link>
           );
         }
@@ -96,14 +111,15 @@ export function AppNav({ planFeatures, canManageBilling }: { planFeatures: PlanF
           <Link
             key={link.href}
             href={link.href}
+            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-medium transition-colors ${
+            className={`flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium transition-colors ${
               active
                 ? "bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]"
                 : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
             }`}
           >
-            <Icon size={16} strokeWidth={2} />
+            <Icon size={17} strokeWidth={2} />
             {link.label}
           </Link>
         );
