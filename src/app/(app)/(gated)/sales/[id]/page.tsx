@@ -61,30 +61,30 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       <div>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900">{sale.saleNumber}</h1>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">{sale.saleNumber}</h1>
             <Badge variant={STATUS_VARIANTS[sale.status] ?? "neutral"}>{sale.status.replace("_", " ")}</Badge>
           </div>
           <Link href={`/sales/${sale.id}/print`} className="text-sm text-[var(--brand-primary)] hover:underline">
             Print invoice
           </Link>
         </div>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {sale.branch.name} · Sold by {nameOf(sale.soldByMembershipId)} · {sale.createdAt.toLocaleString()}
         </p>
         {sale.customerName && (
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             Customer: {sale.customerName} {sale.customerPhone ? `· ${sale.customerPhone}` : ""}
           </p>
         )}
         {sale.status === "VOIDED" && (
-          <p className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          <p className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
             Voided by {nameOf(sale.voidedByMembershipId)} on {sale.voidedAt?.toLocaleString()} — {sale.voidReason}
           </p>
         )}
       </div>
 
       <Card>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Line items</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Line items</p>
         <Table>
           <TableHeader>
             <TableHeaderCell>Product</TableHeaderCell>
@@ -109,15 +109,15 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           <p>Paid: {formatMoney(sale.amountPaid.toString(), currency)}</p>
           {creditedTotal.gt(0) && <p>Credited: {formatMoney(creditedTotal.toString(), currency)}</p>}
           {outstanding.gt(0) && sale.status !== "VOIDED" && (
-            <p className="font-medium text-amber-700">Outstanding: {formatMoney(outstanding.toString(), currency)}</p>
+            <p className="font-medium text-amber-700 dark:text-amber-400">Outstanding: {formatMoney(outstanding.toString(), currency)}</p>
           )}
         </div>
       </Card>
 
       <Card>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Payments</p>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Payments</p>
         {sale.payments.length === 0 ? (
-          <p className="text-sm text-gray-400">No payments recorded yet.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500">No payments recorded yet.</p>
         ) : (
           <ul className="flex flex-col gap-1 text-sm">
             {sale.payments.map((p) => (
@@ -140,14 +140,14 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
 
       {sale.creditNotes.length > 0 && (
         <Card>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Credit notes</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Credit notes</p>
           <ul className="flex flex-col gap-2 text-sm">
             {sale.creditNotes.map((cn) => (
-              <li key={cn.id} className="flex flex-col gap-1 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
+              <li key={cn.id} className="flex flex-col gap-1 border-b border-gray-100 dark:border-gray-800 pb-2 last:border-0 last:pb-0">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-xs">{cn.creditNoteNumber}</span>
                   <div className="flex items-center gap-3">
-                    <span className={cn.status === "VOIDED" ? "text-gray-400 line-through" : "font-medium"}>
+                    <span className={cn.status === "VOIDED" ? "text-gray-400 dark:text-gray-500 line-through" : "font-medium"}>
                       {formatMoney(cn.amount.toString(), currency)}
                     </span>
                     <Link href={`/credit-notes/${cn.id}/print`} className="text-xs text-[var(--brand-primary)] hover:underline">
@@ -156,11 +156,11 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
                     {canVoidCreditNote && cn.status === "ISSUED" && <VoidCreditNoteForm saleId={sale.id} creditNoteId={cn.id} />}
                   </div>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {cn.reason} · Issued by {nameOf(cn.issuedByMembershipId)} · {cn.createdAt.toLocaleString()}
                 </p>
                 {cn.status === "VOIDED" && (
-                  <p className="text-xs text-gray-400">
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
                     Voided by {nameOf(cn.voidedByMembershipId)} on {cn.voidedAt?.toLocaleString()} — {cn.voidReason}
                   </p>
                 )}

@@ -20,7 +20,7 @@ export function DebtReminderSettingsForm({
     <form action={formAction} className="flex max-w-md flex-col gap-4">
       {!smsConfigured && (
         <Card variant="warning">
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             SMS is not configured in this environment yet — reminders can be enabled here, but sending will fail
             until a real Termii API key is set.
           </p>
@@ -44,7 +44,7 @@ export function DebtReminderSettingsForm({
         />
       </Field>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-400 dark:text-gray-500">
         A customer is never reminded more than once every 3 days, and can opt out individually from their customer
         page. This runs automatically once a day when deployed; from the customers page, staff with permission can
         also send reminders on demand.

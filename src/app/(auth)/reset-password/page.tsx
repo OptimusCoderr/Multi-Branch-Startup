@@ -23,7 +23,7 @@ function ResetPasswordForm() {
     return (
       <div>
         <h1 className="text-2xl font-semibold">Link expired or invalid</h1>
-        <p className="mt-2 text-sm text-gray-500">
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
           This password reset link is no longer valid. Ask whoever helped you (a support agent, or your company&apos;s
           Owner/Admin) to generate a new one.
         </p>
@@ -35,7 +35,7 @@ function ResetPasswordForm() {
     return (
       <div>
         <h1 className="text-2xl font-semibold">Password updated</h1>
-        <p className="mt-2 text-sm text-gray-500">You can sign in with your new password now.</p>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">You can sign in with your new password now.</p>
         <Link
           href="/sign-in"
           className="mt-4 inline-block rounded-md px-4 py-2 text-sm font-medium text-white"
@@ -80,7 +80,7 @@ function ResetPasswordForm() {
           New password
           <input
             type="password"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -93,7 +93,7 @@ function ResetPasswordForm() {
           Confirm new password
           <input
             type="password"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
@@ -102,7 +102,7 @@ function ResetPasswordForm() {
           />
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="submit"

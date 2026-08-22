@@ -102,7 +102,7 @@ export function CreateSaleForm({
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-gray-700">Line items</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Line items</p>
         {rows.map((row, i) => {
           const product = productById.get(row.productId);
           return (
@@ -123,7 +123,7 @@ export function CreateSaleForm({
                 onChange={(e) => updateRow(i, { quantity: Number(e.target.value) })}
                 className="w-24"
               />
-              <span className="w-28 text-right text-sm text-gray-500">
+              <span className="w-28 text-right text-sm text-gray-500 dark:text-gray-400">
                 {product ? formatMoney(Number(product.unitPrice) * row.quantity, currency) : "—"}
               </span>
               <Button type="button" variant="danger-link" onClick={() => removeRow(i)} disabled={rows.length === 1}>

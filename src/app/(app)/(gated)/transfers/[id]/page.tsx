@@ -8,12 +8,12 @@ import { RejectTransferForm } from "@/components/forms/reject-transfer-form";
 import { ReceiveTransferForm } from "@/components/forms/receive-transfer-form";
 
 const STATUS_STYLES: Record<string, string> = {
-  REQUESTED: "bg-yellow-100 text-yellow-700",
-  APPROVED: "bg-blue-100 text-blue-700",
-  IN_TRANSIT: "bg-indigo-100 text-indigo-700",
-  RECEIVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-gray-100 text-gray-500",
+  REQUESTED: "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400",
+  APPROVED: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400",
+  IN_TRANSIT: "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-400",
+  RECEIVED: "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400",
+  REJECTED: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400",
+  CANCELLED: "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400",
 };
 
 export default async function TransferDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -89,7 +89,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             {transfer.status.replace("_", " ")}
           </span>
         </div>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {transfer.quantity} units ·{" "}
           {transfer.sourceType === "EXTERNAL"
             ? `External: ${transfer.externalSourceName}`
@@ -98,16 +98,16 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               : transfer.sourceWarehouse?.name}{" "}
           → {transfer.destinationBranch ? transfer.destinationBranch.name : `${transfer.destinationWarehouse!.name} (warehouse)`}
         </p>
-        {transfer.notes && <p className="mt-2 text-sm text-gray-600">Notes: {transfer.notes}</p>}
+        {transfer.notes && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Notes: {transfer.notes}</p>}
         {hasDiscrepancy && (
-          <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
             Discrepancy: {transfer.receivedQuantity} received vs {transfer.quantity} requested.
           </p>
         )}
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="text-xs font-semibold uppercase text-gray-400">Timeline</p>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Timeline</p>
         <ol className="mt-2 flex flex-col gap-2 text-sm">
           {events.map((e, i) => (
             <li key={i}>
@@ -121,7 +121,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         {transfer.status === "REQUESTED" && (
           <>
             {isSelfApproval && canApprove && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
                 You requested this transfer — another staff member with approval rights must approve it.
               </p>
             )}
@@ -137,7 +137,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             )}
             {(isRequester || canApprove) && (
               <form action={cancelTransfer.bind(null, transfer.id)}>
-                <button type="submit" className="text-sm text-gray-500 hover:underline">
+                <button type="submit" className="text-sm text-gray-500 dark:text-gray-400 hover:underline">
                   Cancel request
                 </button>
               </form>
@@ -156,7 +156,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             )}
             {canReceive && (
               <div>
-                <p className="mb-2 text-sm text-gray-500">
+                <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                   Receiving now (without a separate dispatch step) will move the stock directly.
                 </p>
                 <ReceiveTransferForm
@@ -168,7 +168,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             )}
             {(isRequester || canApprove) && (
               <form action={cancelTransfer.bind(null, transfer.id)}>
-                <button type="submit" className="text-sm text-gray-500 hover:underline">
+                <button type="submit" className="text-sm text-gray-500 dark:text-gray-400 hover:underline">
                   Cancel transfer
                 </button>
               </form>

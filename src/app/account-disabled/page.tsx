@@ -17,11 +17,11 @@ export default async function AccountDisabledPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4 text-center">
       <h1 className="text-2xl font-semibold">Account disabled</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         {membership.company.name}&apos;s account has been disabled by a platform administrator
         {membership.company.disabledReason ? `: ${membership.company.disabledReason}` : "."}
       </p>
-      <p className="text-sm text-gray-500">Contact support if you believe this is a mistake.</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">Contact support if you believe this is a mistake.</p>
     </main>
   );
 }

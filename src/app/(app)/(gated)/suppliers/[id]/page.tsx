@@ -16,7 +16,7 @@ export default async function EditSupplierPage({ params }: { params: Promise<{ i
   if (!supplier) notFound();
 
   if (!permissions.has(PERMISSIONS.PURCHASE_ORDERS_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to edit suppliers.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to edit suppliers.</p>;
   }
 
   return (

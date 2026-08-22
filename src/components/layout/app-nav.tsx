@@ -78,7 +78,7 @@ export function AppNav({
           const title = canManageBilling
             ? `${link.label} isn't included on your current plan — upgrade to unlock it.`
             : `${link.label} isn't included on your company's current plan. Ask an Owner or Admin to upgrade.`;
-          const lockedClassName = "flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-gray-300 grayscale";
+          const lockedClassName = "flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium text-gray-300 grayscale dark:text-gray-700";
 
           // Only link to billing for someone who can actually act on it —
           // otherwise this is a dead end (/settings/billing itself blocks
@@ -100,7 +100,7 @@ export function AppNav({
               href="/settings/billing"
               title={title}
               onClick={onNavigate}
-              className={`${lockedClassName} transition-colors hover:bg-gray-50 hover:text-gray-400`}
+              className={`${lockedClassName} transition-colors hover:bg-gray-50 hover:text-gray-400 dark:hover:bg-gray-900`}
             >
               <Icon size={17} strokeWidth={2} />
               {link.label}
@@ -118,7 +118,7 @@ export function AppNav({
             className={`flex items-center gap-2.5 rounded-lg px-3 py-2 font-medium transition-colors ${
               active
                 ? "bg-[var(--brand-primary)]/10 text-[var(--brand-primary)]"
-                : "text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-900 dark:hover:text-gray-100"
             }`}
           >
             <Icon size={17} strokeWidth={2} />

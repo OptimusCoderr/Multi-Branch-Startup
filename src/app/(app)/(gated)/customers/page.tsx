@@ -27,7 +27,7 @@ export default async function CustomersPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.CUSTOMERS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view customers.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view customers.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -66,7 +66,7 @@ export default async function CustomersPage() {
         (company?.debtReminderEnabled ? (
           <SendRemindersButton />
         ) : (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             Automated debt reminders are off.{" "}
             <Link href="/settings/debt-reminders" className="text-[var(--brand-primary)] hover:underline">
               Turn them on
@@ -99,15 +99,15 @@ export default async function CustomersPage() {
               return (
                 <TableRow key={c.id}>
                   <TableCell>{c.name}</TableCell>
-                  <TableCell className="text-gray-500">{c.phone ?? "—"}</TableCell>
+                  <TableCell className="text-gray-500 dark:text-gray-400">{c.phone ?? "—"}</TableCell>
                   <TableCell>
                     {balance && balance.outstanding.gt(0) ? (
-                      <span className={overdue ? "font-medium text-red-600" : "font-medium text-amber-700"}>
+                      <span className={overdue ? "font-medium text-red-600 dark:text-red-400" : "font-medium text-amber-700 dark:text-amber-400"}>
                         {formatMoney(balance.outstanding.toString(), currency)}
                         {overdue ? " (overdue)" : ""}
                       </span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400 dark:text-gray-500">—</span>
                     )}
                   </TableCell>
                   <TableCell>

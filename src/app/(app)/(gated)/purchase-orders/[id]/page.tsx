@@ -33,7 +33,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.PURCHASE_ORDERS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view purchase orders.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view purchase orders.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -85,11 +85,11 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
         actions={<Badge variant={STATUS_VARIANTS[po.status] ?? "neutral"}>{po.status.replace("_", " ")}</Badge>}
       />
 
-      {po.expectedDate && <p className="text-sm text-gray-500">Expected delivery: {po.expectedDate.toLocaleDateString()}</p>}
-      {po.notes && <p className="text-sm text-gray-600">Notes: {po.notes}</p>}
+      {po.expectedDate && <p className="text-sm text-gray-500 dark:text-gray-400">Expected delivery: {po.expectedDate.toLocaleDateString()}</p>}
+      {po.notes && <p className="text-sm text-gray-600 dark:text-gray-400">Notes: {po.notes}</p>}
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="text-xs font-semibold uppercase text-gray-400">Timeline</p>
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Timeline</p>
         <ol className="mt-2 flex flex-col gap-2 text-sm">
           {events.map((e, i) => (
             <li key={i}>
@@ -114,7 +114,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
             return (
               <TableRow key={li.id}>
                 <TableCell>
-                  {li.product.name} <span className="text-gray-400">({li.product.sku})</span>
+                  {li.product.name} <span className="text-gray-400 dark:text-gray-500">({li.product.sku})</span>
                 </TableCell>
                 <TableCell mono>{formatMoney(li.unitCost.toString(), currency)}</TableCell>
                 <TableCell mono>{li.quantityOrdered}</TableCell>
@@ -130,7 +130,7 @@ export default async function PurchaseOrderDetailPage({ params }: { params: Prom
                         requiresBatch={li.product.tracksBatches}
                       />
                     ) : (
-                      <span className="text-sm text-gray-400">Fully received</span>
+                      <span className="text-sm text-gray-400 dark:text-gray-500">Fully received</span>
                     )}
                   </TableCell>
                 )}

@@ -10,7 +10,7 @@ export default async function StockPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.STOCK_LEVELS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view stock levels.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view stock levels.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -59,7 +59,7 @@ export default async function StockPage() {
             return (
               <Card key={product.id}>
                 <p className="flex items-center gap-2 font-medium">
-                  {product.name} <span className="font-mono text-xs text-gray-500">({product.sku})</span>
+                  {product.name} <span className="font-mono text-xs text-gray-500 dark:text-gray-400">({product.sku})</span>
                   {isLowStock && (
                     <Badge variant="danger">
                       Low stock ({totalStock} ≤ {product.reorderPoint})
@@ -69,10 +69,10 @@ export default async function StockPage() {
                 <div className={`mt-3 grid grid-cols-1 gap-4 ${showWarehouseColumn ? "sm:grid-cols-2" : ""}`}>
                   {showWarehouseColumn && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Warehouses</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Warehouses</p>
                       <ul className="mt-1 flex flex-col gap-1 text-sm">
                         {product.warehouseStocks.length === 0 ? (
-                          <li className="text-gray-400">None</li>
+                          <li className="text-gray-400 dark:text-gray-500">None</li>
                         ) : (
                           product.warehouseStocks.map((stock) => (
                             <li key={stock.id} className="flex justify-between">
@@ -85,10 +85,10 @@ export default async function StockPage() {
                     </div>
                   )}
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Branches</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Branches</p>
                     <ul className="mt-1 flex flex-col gap-1 text-sm">
                       {product.branchStocks.length === 0 ? (
-                        <li className="text-gray-400">No branches yet</li>
+                        <li className="text-gray-400 dark:text-gray-500">No branches yet</li>
                       ) : (
                         product.branchStocks.map((stock) => (
                           <li key={stock.id} className="flex justify-between">

@@ -8,7 +8,7 @@ export default async function NewExternalDeliveryPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL)) {
-    return <p className="text-gray-500">You don&apos;t have permission to record external deliveries.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to record external deliveries.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -26,7 +26,7 @@ export default async function NewExternalDeliveryPage() {
     <div className="flex max-w-lg flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">Record an external delivery</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           Stock delivered directly from a supplier, straight to a warehouse or a branch.
         </p>
       </div>

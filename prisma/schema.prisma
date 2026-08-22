@@ -145,12 +145,26 @@ model User {
   // in src/lib/auth/session.ts for where that's enforced.
   twoFactorEnabled Boolean @default(false)
 
+  // Null = no personal override — falls back to the signed-in company's
+  // BrandingSettings.defaultTheme (see src/lib/theme.ts's resolveTheme),
+  // then to DARK globally. Set the moment someone flips the ThemeToggle
+  // while signed in, so their choice follows them across devices; an
+  // anonymous visitor's toggle only ever touches the `theme` cookie.
+  theme Theme?
+
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]
   twoFactors  TwoFactor[]
 
   @@map("user")
+}
+
+// Shared by User.theme (personal override) and BrandingSettings.defaultTheme
+// (company-wide default) — see src/lib/theme.ts for the resolution order.
+enum Theme {
+  LIGHT
+  DARK
 }
 
 model TwoFactor {
@@ -1223,6 +1237,10 @@ model BrandingSettings {
   secondaryColor String?
   logoUrl        String?
   layoutPreset   LayoutPreset @default(DEFAULT)
+  // The theme a member of this company sees until they personally
+  // override it (User.theme) — Owner-configurable, same "set the company
+  // default, let individuals override" pattern as everything else here.
+  defaultTheme   Theme        @default(DARK)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }

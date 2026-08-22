@@ -36,6 +36,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
   20. [Warehouse-level batch tracking](#20-warehouse-level-batch-tracking)
   21. [Purchase orders and suppliers](#21-purchase-orders-and-suppliers)
+  22. [Dark mode](#22-dark-mode)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -650,6 +651,41 @@ reconcile what actually arrives against it, one line item at a time.
     `.ordered`, `.cancelled`, `.line_item_received`, `supplier.created`) visible at
     `/audit-log`, and that the underlying `StockMovement` rows use reason
     `PURCHASE_RECEIPT` with `referenceType: "PurchaseOrder"`.
+
+### 22. Dark mode
+
+Dark is the default everywhere (marketing site, auth pages, and the authenticated app) and
+switchable via a sun/moon toggle. The choice is remembered per-browser (a `theme` cookie,
+read server-side so there's no flash of the wrong theme) and, once signed in, per-account
+(`User.theme`, synced to the cookie at sign-in so it follows you to a new device). A
+company's Owner can also set the default their staff see (`/settings/branding`) until each
+person picks their own. The always-dark `/admin` platform surface is unrelated to this
+toggle and doesn't change.
+
+1. Visit the homepage in a private/incognito window (no cookie yet) — confirm it renders
+   dark by default. Click the toggle (top-right) — confirm it flips to light immediately,
+   and stays light after a reload (cookie persisted).
+2. Go to `/sign-up` and `/sign-in` — confirm both are dark by default too, and that the
+   toggle there is independent of being signed in.
+3. Sign up a new company. Confirm the dashboard (and every other page — products, sales,
+   purchase orders, transfers, reports, settings, etc.) renders dark by default, with
+   readable text/borders/cards throughout, not just a dark page background with
+   unreadable light-mode components.
+4. Toggle to light while signed in. Confirm it flips immediately everywhere (sidebar,
+   tables, forms, badges). Sign out, then sign back in from a **different browser/private
+   window** (a "new device," no existing cookie) — confirm the very first authenticated
+   page you land on already reflects your light preference, not the company default —
+   your choice followed you, with no visible flash of the wrong theme first.
+5. As the Owner, go to `/settings/branding` and change **Default theme** to Light. Confirm
+   it saves. Invite a new staff member (who hasn't set a personal preference) and confirm
+   their first sign-in reflects the company's new default rather than the global dark
+   default.
+6. Confirm `/admin` (platform staff) still renders its own fixed dark theme regardless of
+   what the `theme` cookie says, and that toggling the marketing-site/app theme has no
+   effect on it.
+7. Spot-check a two-factor QR code enrollment (`/settings/security`) in dark mode — the QR
+   code's own background should stay white (for scannability) even though the surrounding
+   panel is dark.
 
 ## Mobile app
 

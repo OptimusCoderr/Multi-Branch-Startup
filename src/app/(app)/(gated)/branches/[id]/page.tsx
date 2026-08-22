@@ -15,7 +15,7 @@ export default async function EditBranchPage({ params }: { params: Promise<{ id:
   if (!branch) notFound();
 
   if (!permissions.has(PERMISSIONS.BRANCHES_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to edit branches.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to edit branches.</p>;
   }
 
   return (
@@ -23,7 +23,7 @@ export default async function EditBranchPage({ params }: { params: Promise<{ id:
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Edit branch</h1>
         <form action={deactivateBranch.bind(null, branch.id)}>
-          <button type="submit" className="text-sm text-red-600 hover:underline">
+          <button type="submit" className="text-sm text-red-600 dark:text-red-400 hover:underline">
             {branch.isActive ? "Deactivate" : "Reactivate"}
           </button>
         </form>

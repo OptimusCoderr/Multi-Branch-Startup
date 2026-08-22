@@ -9,7 +9,7 @@ export default async function NewPurchaseOrderPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.PURCHASE_ORDERS_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to create purchase orders.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to create purchase orders.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -25,7 +25,7 @@ export default async function NewPurchaseOrderPage() {
     return (
       <div className="flex max-w-lg flex-col gap-4">
         <h1 className="text-2xl font-semibold">New purchase order</h1>
-        <p className="text-gray-500">
+        <p className="text-gray-500 dark:text-gray-400">
           You need at least one supplier before creating a purchase order.{" "}
           <Link href="/suppliers/new" className="text-[var(--brand-primary)] hover:underline">
             Add a supplier
@@ -40,7 +40,7 @@ export default async function NewPurchaseOrderPage() {
     return (
       <div className="flex max-w-lg flex-col gap-4">
         <h1 className="text-2xl font-semibold">New purchase order</h1>
-        <p className="text-gray-500">You need at least one branch or warehouse to receive stock into before creating a purchase order.</p>
+        <p className="text-gray-500 dark:text-gray-400">You need at least one branch or warehouse to receive stock into before creating a purchase order.</p>
       </div>
     );
   }

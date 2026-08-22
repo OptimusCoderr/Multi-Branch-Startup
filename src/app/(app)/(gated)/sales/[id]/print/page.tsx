@@ -36,8 +36,8 @@ export default async function SaleInvoicePrintPage({ params }: { params: Promise
         <PrintButton />
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-8 print:border-0 print:p-0">
-        <div className="flex items-start justify-between border-b border-gray-200 pb-4">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-8 print:border-0 print:p-0">
+        <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-800 pb-4">
           <div className="flex items-center gap-2">
             {branding.logoUrl && (
               <Image src={branding.logoUrl} alt="" width={32} height={32} unoptimized className="rounded" />
@@ -46,28 +46,28 @@ export default async function SaleInvoicePrintPage({ params }: { params: Promise
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold">INVOICE</p>
-            <p className="font-mono text-sm text-gray-500">{sale.saleNumber}</p>
+            <p className="font-mono text-sm text-gray-500 dark:text-gray-400">{sale.saleNumber}</p>
           </div>
         </div>
 
         <div className="mt-4 flex justify-between text-sm">
           <div>
-            <p className="text-xs font-semibold uppercase text-gray-400">Bill to</p>
+            <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Bill to</p>
             <p>{sale.customerName ?? "Walk-in customer"}</p>
-            {sale.customerPhone && <p className="text-gray-500">{sale.customerPhone}</p>}
-            {sale.customerEmail && <p className="text-gray-500">{sale.customerEmail}</p>}
+            {sale.customerPhone && <p className="text-gray-500 dark:text-gray-400">{sale.customerPhone}</p>}
+            {sale.customerEmail && <p className="text-gray-500 dark:text-gray-400">{sale.customerEmail}</p>}
           </div>
           <div className="text-right">
-            <p className="text-xs font-semibold uppercase text-gray-400">Details</p>
+            <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Details</p>
             <p>{sale.branch.name}</p>
-            <p className="text-gray-500">{sale.createdAt.toLocaleDateString()}</p>
-            {sale.dueDate && <p className="text-gray-500">Due {sale.dueDate.toLocaleDateString()}</p>}
+            <p className="text-gray-500 dark:text-gray-400">{sale.createdAt.toLocaleDateString()}</p>
+            {sale.dueDate && <p className="text-gray-500 dark:text-gray-400">Due {sale.dueDate.toLocaleDateString()}</p>}
           </div>
         </div>
 
         <table className="mt-6 w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-gray-200 text-gray-500">
+            <tr className="border-b border-gray-200 dark:border-gray-800 text-gray-500 dark:text-gray-400">
               <th className="pb-2">Item</th>
               <th className="pb-2">Qty</th>
               <th className="pb-2">Unit price</th>
@@ -76,7 +76,7 @@ export default async function SaleInvoicePrintPage({ params }: { params: Promise
           </thead>
           <tbody>
             {sale.lineItems.map((li) => (
-              <tr key={li.id} className="border-b border-gray-100">
+              <tr key={li.id} className="border-b border-gray-100 dark:border-gray-800">
                 <td className="py-2">{li.product.name}</td>
                 <td className="py-2">{li.quantity}</td>
                 <td className="py-2">{formatMoney(li.unitPriceAtSale.toString(), currency)}</td>
@@ -92,17 +92,17 @@ export default async function SaleInvoicePrintPage({ params }: { params: Promise
           <p>Paid: {formatMoney(sale.amountPaid.toString(), currency)}</p>
           {creditedTotal.gt(0) && <p>Credited: {formatMoney(creditedTotal.toString(), currency)}</p>}
           {outstanding.gt(0) && sale.status !== "VOIDED" && (
-            <p className="font-semibold text-amber-700">Balance due: {formatMoney(outstanding.toString(), currency)}</p>
+            <p className="font-semibold text-amber-700 dark:text-amber-400">Balance due: {formatMoney(outstanding.toString(), currency)}</p>
           )}
         </div>
 
         {sale.status === "VOIDED" && (
-          <p className="mt-6 border-t border-gray-200 pt-4 text-center text-sm font-semibold text-red-600">
+          <p className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-4 text-center text-sm font-semibold text-red-600 dark:text-red-400">
             THIS SALE HAS BEEN VOIDED — {sale.voidReason}
           </p>
         )}
 
-        <p className="mt-8 text-center text-xs text-gray-400">Thank you for your business.</p>
+        <p className="mt-8 text-center text-xs text-gray-400 dark:text-gray-500">Thank you for your business.</p>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ export const DEFAULT_BRANDING = {
   secondaryColor: "#1e1b2e" as string | null,
   logoUrl: null as string | null,
   layoutPreset: "DEFAULT" as "DEFAULT" | "COMPACT",
+  defaultTheme: "DARK" as "LIGHT" | "DARK",
 };
 
 export async function getBrandingSettings(companyId: string) {

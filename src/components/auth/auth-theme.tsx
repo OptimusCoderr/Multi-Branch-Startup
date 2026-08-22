@@ -2,6 +2,7 @@
 
 import { createContext, useContext, type ReactNode } from "react";
 import { LogoPlaceholder } from "@/components/logo-placeholder";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export type AuthTheme = { accent: string };
 
@@ -39,7 +40,8 @@ const VALUE_PROPS = [
 export function AuthThemeShell({ children }: { children: ReactNode }) {
   return (
     <AuthThemeContext.Provider value={AUTH_THEME}>
-      <main className="flex min-h-screen flex-col lg:flex-row">
+      <main className="relative flex min-h-screen flex-col bg-white dark:bg-gray-950 lg:flex-row">
+        <ThemeToggle className="absolute right-4 top-4 z-10" />
         <div
           className="relative hidden shrink-0 flex-col justify-between overflow-hidden p-10 text-white lg:flex lg:w-[40%]"
           style={{ background: "var(--accent-gradient)" }}
@@ -70,9 +72,9 @@ export function AuthThemeShell({ children }: { children: ReactNode }) {
           <div className="w-full max-w-sm">
             <div className="mb-6 flex items-center gap-2.5 lg:hidden">
               <LogoPlaceholder size={30} color={AUTH_THEME.accent} />
-              <span className="font-display text-lg font-semibold">Multi-Branch Inventory</span>
+              <span className="font-display text-lg font-semibold text-gray-900 dark:text-gray-100">Multi-Branch Inventory</span>
             </div>
-            <div className="flex flex-col gap-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8 sm:shadow-lg lg:border-0 lg:p-0 lg:shadow-none">
+            <div className="flex flex-col gap-6 rounded-2xl border border-gray-100 bg-white p-6 text-gray-900 shadow-sm dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100 sm:p-8 sm:shadow-lg lg:border-0 lg:p-0 lg:shadow-none">
               {children}
             </div>
           </div>

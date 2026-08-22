@@ -10,11 +10,12 @@ const SOLID_BASE =
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary:
     "bg-[var(--brand-primary)] text-white hover:bg-[var(--brand-primary-hover,#6d28d9)] focus-visible:ring-[var(--brand-ring,#c4b5fd)]",
-  secondary: "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:ring-gray-400",
-  ghost: "text-gray-600 hover:bg-gray-100 focus-visible:ring-gray-400",
+  secondary:
+    "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus-visible:ring-gray-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800",
+  ghost: "text-gray-600 hover:bg-gray-100 focus-visible:ring-gray-400 dark:text-gray-300 dark:hover:bg-gray-800",
   danger: "bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-400",
   link: "text-sm font-medium text-[var(--brand-primary)] hover:underline disabled:no-underline",
-  "danger-link": "text-sm font-medium text-red-600 hover:underline disabled:no-underline",
+  "danger-link": "text-sm font-medium text-red-600 hover:underline disabled:no-underline dark:text-red-400",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

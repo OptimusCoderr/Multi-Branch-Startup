@@ -15,8 +15,8 @@ export function SendRemindersButton() {
       <Button type="submit" variant="secondary" size="sm" isPending={isPending} pendingLabel="Sending…">
         Send reminders now
       </Button>
-      {state.error && <span className="text-sm text-red-600">{state.error}</span>}
-      {state.summary && <span className="text-sm text-gray-500">{state.summary}</span>}
+      {state.error && <span className="text-sm text-red-600 dark:text-red-400">{state.error}</span>}
+      {state.summary && <span className="text-sm text-gray-500 dark:text-gray-400">{state.summary}</span>}
     </form>
   );
 }

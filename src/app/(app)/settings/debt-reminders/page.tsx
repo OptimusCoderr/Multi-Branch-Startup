@@ -11,7 +11,7 @@ export default async function DebtReminderSettingsPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.SETTINGS_COMPANY)) {
-    return <p className="text-gray-500">You don&apos;t have permission to change company settings.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to change company settings.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);

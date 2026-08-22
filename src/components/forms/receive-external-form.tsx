@@ -43,7 +43,7 @@ export function ReceiveExternalForm({
 
       {showDestinationTypePicker && (
         <fieldset className="flex flex-col gap-1.5 text-sm">
-          <legend className="mb-0.5 text-gray-500">Receiving location</legend>
+          <legend className="mb-0.5 text-gray-500 dark:text-gray-400">Receiving location</legend>
           <div className="flex gap-4">
             <label className="flex items-center gap-1.5">
               <input
@@ -105,7 +105,7 @@ export function ReceiveExternalForm({
       {requiresBatch && (
         <Card variant="warning">
           <div className="flex flex-col gap-4">
-            <p className="text-xs font-medium text-amber-800">
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-300">
               This product is perishable / batch-tracked — batch details are required for this delivery.
             </p>
             <Field label="Batch number">

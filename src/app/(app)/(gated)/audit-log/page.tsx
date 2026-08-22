@@ -10,7 +10,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.AUDIT_LOG_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view the audit log.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view the audit log.</p>;
   }
 
   const { entityType } = await searchParams;
@@ -37,7 +37,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
       <div className="flex flex-wrap gap-2 text-sm">
         <a
           href="/audit-log"
-          className={`rounded-full px-3 py-1 ${!entityType ? "bg-[var(--brand-primary)] text-white" : "border border-gray-300 text-gray-600"}`}
+          className={`rounded-full px-3 py-1 ${!entityType ? "bg-[var(--brand-primary)] text-white" : "border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"}`}
         >
           All
         </a>
@@ -45,7 +45,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
           <a
             key={t.entityType}
             href={`/audit-log?entityType=${encodeURIComponent(t.entityType)}`}
-            className={`rounded-full px-3 py-1 ${entityType === t.entityType ? "bg-[var(--brand-primary)] text-white" : "border border-gray-300 text-gray-600"}`}
+            className={`rounded-full px-3 py-1 ${entityType === t.entityType ? "bg-[var(--brand-primary)] text-white" : "border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"}`}
           >
             {t.entityType}
           </a>
@@ -66,13 +66,13 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
           <TableBody>
             {entries.map((entry) => (
               <TableRow key={entry.id} className="align-top">
-                <TableCell className="whitespace-nowrap text-gray-500">{entry.createdAt.toLocaleString()}</TableCell>
+                <TableCell className="whitespace-nowrap text-gray-500 dark:text-gray-400">{entry.createdAt.toLocaleString()}</TableCell>
                 <TableCell>{entry.actorMembershipId ? (names.get(entry.actorMembershipId) ?? "Unknown") : "System"}</TableCell>
                 <TableCell mono>{entry.action}</TableCell>
-                <TableCell className="text-gray-500">
+                <TableCell className="text-gray-500 dark:text-gray-400">
                   {entry.entityType} <span className="font-mono text-xs">{entry.entityId.slice(0, 8)}</span>
                 </TableCell>
-                <TableCell className="max-w-xs truncate text-xs text-gray-500" mono title={JSON.stringify(entry.metadata)}>
+                <TableCell className="max-w-xs truncate text-xs text-gray-500 dark:text-gray-400" mono title={JSON.stringify(entry.metadata)}>
                   {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
                 </TableCell>
               </TableRow>

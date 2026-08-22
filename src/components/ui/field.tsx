@@ -21,12 +21,12 @@ export function Field({
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-gray-700">
-        {label} {optional && <span className="font-normal text-gray-400">(optional)</span>}
+      <span className="font-medium text-gray-700 dark:text-gray-300">
+        {label} {optional && <span className="font-normal text-gray-400 dark:text-gray-500">(optional)</span>}
       </span>
       {children}
-      {hint && !error && <span className="text-xs text-gray-400">{hint}</span>}
-      {error && <span className="text-xs text-red-600">{error}</span>}
+      {hint && !error && <span className="text-xs text-gray-400 dark:text-gray-500">{hint}</span>}
+      {error && <span className="text-xs text-red-600 dark:text-red-400">{error}</span>}
     </label>
   );
 }

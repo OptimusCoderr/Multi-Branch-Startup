@@ -40,7 +40,7 @@ export default async function WarehousesPage() {
         actions={canManage && <LinkButton href="/warehouses/new">New warehouse</LinkButton>}
       />
       {atLimit && (
-        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 underline">
+        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 dark:text-amber-400 underline">
           Upgrade for more warehouses
         </Link>
       )}
@@ -63,7 +63,7 @@ export default async function WarehousesPage() {
             {warehouses.map((w) => (
               <TableRow key={w.id}>
                 <TableCell>{w.name}</TableCell>
-                <TableCell className="text-gray-500">{w.address ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{w.address ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={w.isActive ? "success" : "neutral"}>{w.isActive ? "Active" : "Inactive"}</Badge>
                 </TableCell>

@@ -73,7 +73,7 @@ export function CreatePurchaseOrderForm({
 
       {showDestinationTypePicker && (
         <fieldset className="flex flex-col gap-1.5 text-sm">
-          <legend className="mb-0.5 text-gray-500">Deliver to</legend>
+          <legend className="mb-0.5 text-gray-500 dark:text-gray-400">Deliver to</legend>
           <div className="flex gap-4">
             <label className="flex items-center gap-1.5">
               <input
@@ -129,7 +129,7 @@ export function CreatePurchaseOrderForm({
       </Field>
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-gray-700">Line items</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Line items</p>
         {rows.map((row, i) => {
           const product = productById.get(row.productId);
           return (
@@ -160,7 +160,7 @@ export function CreatePurchaseOrderForm({
                 className="w-28"
                 aria-label="Unit cost"
               />
-              <span className="w-28 text-right text-sm text-gray-500">
+              <span className="w-28 text-right text-sm text-gray-500 dark:text-gray-400">
                 {product ? formatMoney(row.unitCost * row.quantityOrdered, currency) : "—"}
               </span>
               <Button type="button" variant="danger-link" onClick={() => removeRow(i)} disabled={rows.length === 1}>

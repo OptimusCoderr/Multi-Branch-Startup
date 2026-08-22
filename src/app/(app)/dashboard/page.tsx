@@ -60,7 +60,7 @@ export default async function DashboardPage() {
     <div className="flex flex-col gap-6">
       {!active && (
         <Card variant="danger">
-          <p className="text-sm text-red-700">
+          <p className="text-sm text-red-700 dark:text-red-400">
             Your subscription needs attention — access to products, sales, and other features is
             restricted until this is resolved.{" "}
             <Link href="/settings/billing" className="font-medium underline">
@@ -71,7 +71,7 @@ export default async function DashboardPage() {
       )}
       {needsTwoFactor && (
         <Card variant="danger">
-          <p className="text-sm text-red-700">
+          <p className="text-sm text-red-700 dark:text-red-400">
             Two-factor authentication is required for the account Owner — access to products, sales, and other
             features is restricted until it&apos;s set up.{" "}
             <Link href="/settings/security" className="font-medium underline">
@@ -82,7 +82,7 @@ export default async function DashboardPage() {
       )}
       {showVerificationBanner && (
         <Card variant="warning">
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             {company.verificationStatus === "REJECTED"
               ? "Your business verification was rejected — resubmit your CAC certificate when it's ready."
               : "You haven't submitted a CAC certificate for verification yet — nothing is restricted, but a verified badge helps customers trust your business."}{" "}
@@ -98,7 +98,7 @@ export default async function DashboardPage() {
       )}
       {active && subscription?.status === "TRIALING" && subscription.trialEndsAt && (
         <Card variant="warning">
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             You&apos;re on a free trial until {subscription.trialEndsAt.toLocaleDateString()}.{" "}
             <Link href="/settings/billing" className="font-medium underline">
               Add a plan
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
 
       <div>
         <h1 className="font-display text-2xl font-semibold tracking-tight">Welcome to {membership.companyName}</h1>
-        <p className="mt-1 text-gray-500">Manage {summary} from the navigation above.</p>
+        <p className="mt-1 text-gray-500 dark:text-gray-400">Manage {summary} from the navigation above.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -58,7 +58,7 @@ export default async function SalesPage() {
             <Button type="submit" variant="secondary">
               Export CSV
             </Button>
-            <span className="text-xs text-gray-400">Leave both blank to export every sale, for accounting/tax use.</span>
+            <span className="text-xs text-gray-400 dark:text-gray-500">Leave both blank to export every sale, for accounting/tax use.</span>
           </form>
         </Card>
       )}
@@ -81,7 +81,7 @@ export default async function SalesPage() {
               <TableRow key={s.id}>
                 <TableCell mono>{s.saleNumber}</TableCell>
                 <TableCell>{s.branch.name}</TableCell>
-                <TableCell className="text-gray-500">{s.customerName ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{s.customerName ?? "—"}</TableCell>
                 <TableCell>{formatMoney(s.grandTotal.toString(), membership.companyCurrency)}</TableCell>
                 <TableCell>{formatMoney(s.amountPaid.toString(), membership.companyCurrency)}</TableCell>
                 <TableCell>

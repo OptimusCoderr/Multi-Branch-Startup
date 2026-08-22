@@ -18,7 +18,7 @@ export default async function BillingRequiredPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 px-4 text-center">
       <h1 className="text-2xl font-semibold">Subscription needs attention</h1>
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         {subscription?.status === "PAST_DUE"
           ? "A recent payment didn't go through and the grace period has ended."
           : subscription?.status === "CANCELLED"

@@ -29,7 +29,7 @@ export default async function PurchaseOrdersPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.PURCHASE_ORDERS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view purchase orders.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view purchase orders.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -73,7 +73,7 @@ export default async function PurchaseOrdersPage() {
               <TableRow key={po.id}>
                 <TableCell mono>{po.poNumber}</TableCell>
                 <TableCell>{po.supplier.name}</TableCell>
-                <TableCell className="text-gray-500">
+                <TableCell className="text-gray-500 dark:text-gray-400">
                   {po.destinationBranch ? po.destinationBranch.name : `${po.destinationWarehouse!.name} (warehouse)`}
                 </TableCell>
                 <TableCell mono>{po.lineItems.length}</TableCell>

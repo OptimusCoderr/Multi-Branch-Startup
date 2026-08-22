@@ -8,7 +8,7 @@ export default async function NewWarehousePage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.WAREHOUSES_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to create warehouses.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to create warehouses.</p>;
   }
 
   return (

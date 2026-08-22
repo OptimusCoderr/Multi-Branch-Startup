@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   } as CSSProperties;
 
   return (
-    <div className="brand-scope min-h-screen bg-gray-50" style={themeStyle}>
+    <div className="brand-scope min-h-screen bg-gray-50 dark:bg-gray-900" style={themeStyle}>
       <AppShell
         companyName={membership.companyName}
         roleName={membership.roleName ?? "Staff"}

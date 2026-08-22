@@ -22,7 +22,7 @@ export default async function SuppliersPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.PURCHASE_ORDERS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view suppliers.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view suppliers.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -59,8 +59,8 @@ export default async function SuppliersPage() {
             {suppliers.map((s) => (
               <TableRow key={s.id}>
                 <TableCell>{s.name}</TableCell>
-                <TableCell className="text-gray-500">{s.phone ?? "—"}</TableCell>
-                <TableCell className="text-gray-500">{s.email ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{s.phone ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{s.email ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={s.isActive ? "success" : "neutral"}>{s.isActive ? "Active" : "Archived"}</Badge>
                 </TableCell>

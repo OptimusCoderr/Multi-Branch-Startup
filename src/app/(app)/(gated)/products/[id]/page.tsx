@@ -16,7 +16,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
   if (!product) notFound();
 
   if (!permissions.has(PERMISSIONS.PRODUCTS_EDIT)) {
-    return <p className="text-gray-500">You don&apos;t have permission to edit products.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to edit products.</p>;
   }
 
   return (

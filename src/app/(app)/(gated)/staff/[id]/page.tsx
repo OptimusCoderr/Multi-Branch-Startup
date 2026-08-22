@@ -44,19 +44,19 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
     <div className="flex max-w-3xl flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">{staffMember.displayName ?? staffMember.user.name}</h1>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           {staffMember.user.email} · {staffMember.status}
         </p>
       </div>
 
       {canManageRoles && !isSelf && (
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Role</p>
+        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Role</p>
           <ChangeRoleForm membershipId={staffMember.id} roles={roles} currentRoleId={staffMember.roleId} />
         </div>
       )}
       {canManageRoles && isSelf && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           You can&apos;t change your own role — ask another staff member with role-management access.
         </p>
       )}
@@ -65,19 +65,19 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
         <div className="flex gap-3">
           {staffMember.status === "ACTIVE" ? (
             <form action={suspendStaff.bind(null, staffMember.id)}>
-              <button type="submit" className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+              <button type="submit" className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">
                 Suspend
               </button>
             </form>
           ) : staffMember.status === "SUSPENDED" ? (
             <form action={reactivateStaff.bind(null, staffMember.id)}>
-              <button type="submit" className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700">
+              <button type="submit" className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300">
                 Reactivate
               </button>
             </form>
           ) : null}
           <form action={removeStaff.bind(null, staffMember.id)}>
-            <button type="submit" className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+            <button type="submit" className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40">
               Remove from company
             </button>
           </form>
@@ -85,16 +85,16 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
       )}
 
       {canManagePermissions && isSelf && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           You can&apos;t change your own permission overrides — ask another staff member with permission-management
           access.
         </p>
       )}
 
       {canManagePermissions && !isSelf && (
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="mb-1 text-xs font-semibold uppercase text-gray-400">Permission overrides</p>
-          <p className="mb-3 text-sm text-gray-500">
+        <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+          <p className="mb-1 text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Permission overrides</p>
+          <p className="mb-3 text-sm text-gray-500 dark:text-gray-400">
             Grant or deny individual permissions on top of {staffMember.role?.name ?? "their role"}. Deny always wins.
           </p>
           {categories.map((category) => (
@@ -112,12 +112,12 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                       <div
                         key={permission.id}
                         data-testid={`permission-row-${permission.key}`}
-                        className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-gray-50"
+                        className="flex items-center justify-between rounded-md px-2 py-1 text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
                       >
                         <div>
-                          <span className={effective ? "text-gray-900" : "text-gray-400"}>{permission.description}</span>
+                          <span className={effective ? "text-gray-900 dark:text-gray-100" : "text-gray-400 dark:text-gray-500"}>{permission.description}</span>
                           {override && (
-                            <span className="ml-2 text-xs text-gray-400">
+                            <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">
                               ({override === "GRANT" ? "granted" : "denied"} — overrides role)
                             </span>
                           )}
@@ -127,7 +127,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                             <button
                               type="submit"
                               disabled={override === "GRANT"}
-                              className="rounded px-2 py-0.5 text-xs text-green-700 hover:bg-green-50 disabled:opacity-30"
+                              className="rounded px-2 py-0.5 text-xs text-green-700 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-950/40 disabled:opacity-30"
                             >
                               Grant
                             </button>
@@ -136,7 +136,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                             <button
                               type="submit"
                               disabled={override === "DENY"}
-                              className="rounded px-2 py-0.5 text-xs text-red-700 hover:bg-red-50 disabled:opacity-30"
+                              className="rounded px-2 py-0.5 text-xs text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-30"
                             >
                               Deny
                             </button>
@@ -145,7 +145,7 @@ export default async function StaffDetailPage({ params }: { params: Promise<{ id
                             <button
                               type="submit"
                               disabled={!override}
-                              className="rounded px-2 py-0.5 text-xs text-gray-600 hover:bg-gray-100 disabled:opacity-30"
+                              className="rounded px-2 py-0.5 text-xs text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-30"
                             >
                               Reset
                             </button>
