@@ -2,22 +2,24 @@
 
 import { useTransition } from "react";
 import { demotePlatformStaff } from "@/server/actions/platform-admin";
+import { AdminButton } from "@/components/ui-admin";
 
 export function DemoteStaffButton({ userId }: { userId: string }) {
   const [isPending, startTransition] = useTransition();
 
   return (
-    <button
+    <AdminButton
       type="button"
-      disabled={isPending}
+      variant="danger-link"
+      isPending={isPending}
+      pendingLabel="Removing…"
       onClick={() =>
         startTransition(async () => {
           await demotePlatformStaff(userId);
         })
       }
-      className="text-sm text-red-400 hover:underline disabled:opacity-50"
     >
-      {isPending ? "Removing…" : "Remove access"}
-    </button>
+      Remove access
+    </AdminButton>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -7,6 +7,7 @@ import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
 import { buildInvoiceReceipt, buildCreditNoteReceipt } from "@/lib/escpos";
 import { printBytes, BluetoothPrinterError } from "@/lib/bluetooth-printer";
 import { theme } from "@/lib/theme";
+import { Button, Card, Field, Input } from "@/components/ui";
 
 const PAYMENT_MODES = ["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"];
 
@@ -16,9 +17,11 @@ function PrintButton({ label, onPress }: { label: string; onPress: () => Promise
 
   return (
     <View style={{ gap: 4 }}>
-      <Pressable
-        style={styles.printButton}
-        disabled={printing}
+      <Button
+        label={label}
+        variant="secondary"
+        size="sm"
+        isLoading={printing}
         onPress={async () => {
           setPrinting(true);
           setPrintError(null);
@@ -30,9 +33,7 @@ function PrintButton({ label, onPress }: { label: string; onPress: () => Promise
             setPrinting(false);
           }
         }}
-      >
-        {printing ? <ActivityIndicator size="small" /> : <Text style={styles.printButtonText}>{label}</Text>}
-      </Pressable>
+      />
       {printError && <Text style={styles.error}>{printError}</Text>}
     </View>
   );
@@ -150,7 +151,7 @@ export default function SaleDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
       <View style={styles.headerRow}>
         <View>
           <Text style={styles.saleNumber}>{sale.saleNumber}</Text>
@@ -161,7 +162,7 @@ export default function SaleDetailScreen() {
         <PrintButton label="Print invoice" onPress={printInvoice} />
       </View>
 
-      <View style={styles.card}>
+      <Card>
         <Text style={styles.cardTitle}>Line items</Text>
         {sale.lineItems.map((li, i) => (
           <View key={i} style={styles.lineRow}>
@@ -192,10 +193,10 @@ export default function SaleDetailScreen() {
             <Text style={styles.outstandingLabel}>{formatMoney(outstanding, currency)}</Text>
           </View>
         )}
-      </View>
+      </Card>
 
       {sale.payments.length > 0 && (
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>Payments</Text>
           {sale.payments.map((p) => (
             <View key={p.id} style={styles.lineRow}>
@@ -205,19 +206,20 @@ export default function SaleDetailScreen() {
               <Text>{formatMoney(p.amount, currency)}</Text>
             </View>
           ))}
-        </View>
+        </Card>
       )}
 
       {canRecordPayment && (
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>Record payment</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={`Amount (up to ${formatMoney(outstanding, currency)})`}
-            keyboardType="decimal-pad"
-            value={amount}
-            onChangeText={setAmount}
-          />
+          <Field label="Amount">
+            <Input
+              placeholder={`Up to ${formatMoney(outstanding, currency)}`}
+              keyboardType="decimal-pad"
+              value={amount}
+              onChangeText={setAmount}
+            />
+          </Field>
           <View style={styles.chipRow}>
             {PAYMENT_MODES.map((m) => (
               <Pressable key={m} onPress={() => setMode(m)} style={[styles.chip, mode === m && styles.chipSelected]}>
@@ -226,22 +228,20 @@ export default function SaleDetailScreen() {
             ))}
           </View>
           {error && <Text style={styles.error}>{error}</Text>}
-          <Pressable
-            style={styles.submitButton}
+          <Button
+            label="Record payment"
+            isLoading={recordPayment.isPending}
             onPress={() => {
               setError(null);
               if (!amount) return setError("Enter an amount.");
               recordPayment.mutate();
             }}
-            disabled={recordPayment.isPending}
-          >
-            {recordPayment.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Record payment</Text>}
-          </Pressable>
-        </View>
+          />
+        </Card>
       )}
 
       {sale.creditNotes.length > 0 && (
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>Credit notes</Text>
           {sale.creditNotes.map((cn) => (
             <View key={cn.id} style={{ gap: 6 }}>
@@ -256,84 +256,72 @@ export default function SaleDetailScreen() {
                 <PrintButton label="Print" onPress={() => printCreditNote(cn)} />
                 {canVoidCreditNote && cn.status === "ISSUED" && (
                   <View style={{ flex: 1, gap: 6 }}>
-                    <TextInput
-                      style={styles.input}
+                    <Input
                       placeholder="Void reason"
                       value={voidReasons[cn.id] ?? ""}
                       onChangeText={(text) => setVoidReasons((prev) => ({ ...prev, [cn.id]: text }))}
                     />
-                    <Pressable
-                      style={styles.secondaryButton}
+                    <Button
+                      label="Void"
+                      variant="secondary"
+                      size="sm"
                       onPress={() => voidCreditNote.mutate(cn.id)}
-                      disabled={voidCreditNote.isPending || !(voidReasons[cn.id] ?? "").trim()}
-                    >
-                      <Text style={styles.secondaryButtonText}>Void</Text>
-                    </Pressable>
+                      isLoading={voidCreditNote.isPending}
+                      disabled={!(voidReasons[cn.id] ?? "").trim()}
+                    />
                   </View>
                 )}
               </View>
               <View style={styles.divider} />
             </View>
           ))}
-        </View>
+        </Card>
       )}
 
       {canCreditNote && (
-        <View style={styles.card}>
+        <Card>
           <Text style={styles.cardTitle}>Issue credit note</Text>
-          <TextInput
-            style={styles.input}
-            placeholder={`Amount (up to ${formatMoney(outstanding, currency)})`}
-            keyboardType="decimal-pad"
-            value={cnAmount}
-            onChangeText={setCnAmount}
-          />
-          <TextInput style={styles.input} placeholder="Reason" value={cnReason} onChangeText={setCnReason} />
+          <Field label="Amount">
+            <Input placeholder={`Up to ${formatMoney(outstanding, currency)}`} keyboardType="decimal-pad" value={cnAmount} onChangeText={setCnAmount} />
+          </Field>
+          <Field label="Reason">
+            <Input value={cnReason} onChangeText={setCnReason} />
+          </Field>
           {cnError && <Text style={styles.error}>{cnError}</Text>}
-          <Pressable
-            style={styles.submitButton}
+          <Button
+            label="Issue credit note"
+            isLoading={issueCreditNote.isPending}
             onPress={() => {
               setCnError(null);
               if (!cnAmount) return setCnError("Enter an amount.");
               if (!cnReason.trim()) return setCnError("A reason is required.");
               issueCreditNote.mutate();
             }}
-            disabled={issueCreditNote.isPending}
-          >
-            {issueCreditNote.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Issue credit note</Text>}
-          </Pressable>
-        </View>
+          />
+        </Card>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: theme.surface },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  saleNumber: { fontSize: 20, fontWeight: "700", fontFamily: "monospace" },
-  muted: { color: "#9ca3af" },
+  saleNumber: { fontSize: 20, fontWeight: "700", fontFamily: "monospace", color: theme.textPrimary },
+  muted: { color: theme.textFaint },
   mono: { fontFamily: "monospace", fontSize: 12 },
-  voidedTag: { color: "#dc2626", fontWeight: "700" },
-  card: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10, padding: 14, gap: 8 },
-  cardTitle: { fontSize: 11, fontWeight: "600", color: "#9ca3af", textTransform: "uppercase", marginBottom: 2 },
+  voidedTag: { color: theme.danger, fontWeight: "700" },
+  cardTitle: { fontSize: theme.font.micro, fontWeight: "600", color: theme.textFaint, textTransform: "uppercase", marginBottom: 2 },
   lineRow: { flexDirection: "row", justifyContent: "space-between" },
-  row: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
-  divider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 4 },
+  row: { flexDirection: "row", gap: theme.spacing.sm, alignItems: "flex-start" },
+  divider: { height: 1, backgroundColor: theme.border, marginVertical: 4 },
   bold: { fontWeight: "700" },
   outstandingLabel: { color: "#b45309", fontWeight: "600" },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  chip: { borderWidth: 1, borderColor: theme.borderStrong, borderRadius: theme.radius.full, paddingHorizontal: 12, paddingVertical: 6 },
   chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { color: "#374151", fontSize: 12 },
   chipTextSelected: { color: "#fff" },
-  error: { color: "#dc2626", fontSize: 12 },
-  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
-  submitButtonText: { color: "#fff", fontWeight: "600" },
-  secondaryButton: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingVertical: 10, alignItems: "center" },
-  secondaryButtonText: { color: "#374151", fontWeight: "600" },
-  printButton: { borderWidth: 1, borderColor: theme.primary, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12 },
-  printButtonText: { color: theme.primary, fontWeight: "600", fontSize: 12 },
+  error: { color: theme.danger, fontSize: 12 },
 });

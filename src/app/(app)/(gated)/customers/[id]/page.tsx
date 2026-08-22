@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
@@ -7,12 +6,25 @@ import { formatMoney } from "@/lib/format";
 import { getCustomerBalance } from "@/server/services/customer-service";
 import { CustomerForm } from "@/components/forms/customer-form";
 import { updateCustomer, archiveCustomer } from "@/server/actions/customers";
+import {
+  Card,
+  Badge,
+  Button,
+  LinkButton,
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  type BadgeVariant,
+} from "@/components/ui";
 
-const STATUS_STYLES: Record<string, string> = {
-  CONFIRMED: "bg-yellow-100 text-yellow-700",
-  PARTIALLY_PAID: "bg-blue-100 text-blue-700",
-  PAID: "bg-green-100 text-green-700",
-  VOIDED: "bg-gray-100 text-gray-500",
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  CONFIRMED: "warning",
+  PARTIALLY_PAID: "brand",
+  PAID: "success",
+  VOIDED: "neutral",
 };
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -48,63 +60,61 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     <div className="flex max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{customer.name}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-gray-900">{customer.name}</h1>
           <p className="mt-1 text-sm text-gray-500">
             {customer.phone ?? "No phone"} {customer.email ? `· ${customer.email}` : ""}
           </p>
         </div>
         {canManage && (
           <form action={archiveCustomer.bind(null, customer.id)}>
-            <button type="submit" className="text-sm text-red-600 hover:underline">
+            <Button type="submit" variant="danger-link">
               {customer.isActive ? "Archive" : "Reactivate"}
-            </button>
+            </Button>
           </form>
         )}
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Outstanding balance</p>
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Outstanding balance</p>
           <p className={`mt-1 text-xl font-semibold ${balance.outstanding.gt(0) ? "text-amber-700" : ""}`}>
             {formatMoney(balance.outstanding.toString(), currency)}
           </p>
           {balance.overdueSaleCount > 0 && (
             <p className="mt-1 text-xs font-medium text-red-600">{balance.overdueSaleCount} sale(s) overdue</p>
           )}
-        </div>
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Open sales</p>
+        </Card>
+        <Card>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Open sales</p>
           <p className="mt-1 text-xl font-semibold">{balance.openSaleCount}</p>
-        </div>
+        </Card>
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Sales history</p>
+      <Card>
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Sales history</p>
         {sales.length === 0 ? (
           <p className="text-sm text-gray-400">No sales linked to this customer yet.</p>
         ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-gray-500">
-                <th className="pb-1">Invoice</th>
-                <th className="pb-1">Branch</th>
-                <th className="pb-1">Total</th>
-                <th className="pb-1">Outstanding</th>
-                <th className="pb-1">Due</th>
-                <th className="pb-1">Status</th>
-                <th className="pb-1"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table>
+            <TableHeader>
+              <TableHeaderCell>Invoice</TableHeaderCell>
+              <TableHeaderCell>Branch</TableHeaderCell>
+              <TableHeaderCell>Total</TableHeaderCell>
+              <TableHeaderCell>Outstanding</TableHeaderCell>
+              <TableHeaderCell>Due</TableHeaderCell>
+              <TableHeaderCell>Status</TableHeaderCell>
+              <TableHeaderCell align="right"></TableHeaderCell>
+            </TableHeader>
+            <TableBody>
               {sales.map((s) => {
                 const outstanding = s.grandTotal.sub(s.amountPaid);
                 const overdue = outstanding.gt(0) && s.dueDate && s.dueDate < now;
                 return (
-                  <tr key={s.id} className="border-t border-gray-100">
-                    <td className="py-1 font-mono text-xs">{s.saleNumber}</td>
-                    <td className="py-1">{s.branch.name}</td>
-                    <td className="py-1">{formatMoney(s.grandTotal.toString(), currency)}</td>
-                    <td className="py-1">
+                  <TableRow key={s.id}>
+                    <TableCell mono>{s.saleNumber}</TableCell>
+                    <TableCell>{s.branch.name}</TableCell>
+                    <TableCell>{formatMoney(s.grandTotal.toString(), currency)}</TableCell>
+                    <TableCell>
                       {outstanding.gt(0) ? (
                         <span className={overdue ? "font-medium text-red-600" : "text-amber-700"}>
                           {formatMoney(outstanding.toString(), currency)}
@@ -112,51 +122,43 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                       ) : (
                         "—"
                       )}
-                    </td>
-                    <td className="py-1 text-gray-500">{s.dueDate ? s.dueDate.toLocaleDateString() : "—"}</td>
-                    <td className="py-1">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[s.status] ?? ""}`}>
-                        {s.status.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td className="py-1 text-right">
-                      <Link href={`/sales/${s.id}`} className="text-[var(--brand-primary)] hover:underline">
+                    </TableCell>
+                    <TableCell className="text-gray-500">{s.dueDate ? s.dueDate.toLocaleDateString() : "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant={STATUS_VARIANTS[s.status] ?? "neutral"}>{s.status.replace("_", " ")}</Badge>
+                    </TableCell>
+                    <TableCell align="right">
+                      <LinkButton href={`/sales/${s.id}`} variant="link">
                         View
-                      </Link>
-                    </td>
-                  </tr>
+                      </LinkButton>
+                    </TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         )}
-      </div>
+      </Card>
 
       {reminders.length > 0 && (
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase text-gray-400">Reminder history</p>
+        <Card>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Reminder history</p>
           <ul className="flex flex-col gap-1 text-sm">
             {reminders.map((r) => (
               <li key={r.id} className="flex items-center justify-between">
                 <span className="text-gray-500">
                   {r.createdAt.toLocaleString()} · {formatMoney(r.outstandingSnapshot.toString(), currency)}
                 </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
-                    r.status === "SENT" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                  }`}
-                >
-                  {r.status}
-                </span>
+                <Badge variant={r.status === "SENT" ? "success" : "danger"}>{r.status}</Badge>
               </li>
             ))}
           </ul>
-        </div>
+        </Card>
       )}
 
       {canManage && (
         <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">Edit customer</h2>
+          <h2 className="font-display text-lg font-semibold text-gray-900">Edit customer</h2>
           <CustomerForm
             action={updateCustomer.bind(null, customer.id)}
             defaultValues={{

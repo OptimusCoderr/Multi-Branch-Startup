@@ -4,6 +4,7 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SettingsNav } from "@/components/layout/settings-nav";
 import { CacVerificationForm } from "@/components/forms/cac-verification-form";
+import { PageHeader, Card } from "@/components/ui";
 
 const STATUS_COPY: Record<string, { label: string; icon: typeof ShieldCheck; className: string }> = {
   UNVERIFIED: { label: "Not yet verified", icon: ShieldAlert, className: "bg-gray-100 text-gray-600" },
@@ -32,13 +33,10 @@ export default async function VerificationSettingsPage() {
   return (
     <div className="flex flex-col gap-6">
       <SettingsNav current="/settings/verification" />
-      <div>
-        <h1 className="text-2xl font-semibold">Business verification</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Submit your CAC certificate to get a verified badge on your company. Businesses without a CAC can still
-          use the app — a platform admin can approve you to operate without one.
-        </p>
-      </div>
+      <PageHeader
+        title="Business verification"
+        description="Submit your CAC certificate to get a verified badge on your company. Businesses without a CAC can still use the app — a platform admin can approve you to operate without one."
+      />
 
       <div className={`flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${status.className}`}>
         <Icon size={16} strokeWidth={2.25} />
@@ -46,7 +44,9 @@ export default async function VerificationSettingsPage() {
       </div>
 
       {company.verificationStatus === "REJECTED" && company.verificationNote && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">Reason: {company.verificationNote}</p>
+        <Card variant="danger">
+          <p className="text-sm text-red-700">Reason: {company.verificationNote}</p>
+        </Card>
       )}
 
       {company.verificationStatus === "APPROVED_WITHOUT_CAC" && (
@@ -57,10 +57,12 @@ export default async function VerificationSettingsPage() {
       )}
 
       {company.verificationStatus === "UNVERIFIED" && deadlinePassed && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Your 5-day submission window has passed. You can still submit your certificate below whenever it&apos;s
-          ready — nothing about your account is restricted in the meantime.
-        </p>
+        <Card variant="warning">
+          <p className="text-sm text-amber-800">
+            Your 5-day submission window has passed. You can still submit your certificate below whenever it&apos;s
+            ready — nothing about your account is restricted in the meantime.
+          </p>
+        </Card>
       )}
 
       {canSubmit && (

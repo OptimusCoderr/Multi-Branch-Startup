@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { Route } from "next";
 import { ShoppingCart, TrendingUp, TrendingDown, Wallet, Users, ArrowRight, AlertTriangle, Clock } from "lucide-react";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
@@ -10,54 +9,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { getPeriodSummary, getOutstandingDebt, startOfCurrentMonth, startOfToday } from "@/server/services/report-service";
 import { getCustomerBalances } from "@/server/services/customer-service";
 import { getLowStockProducts, getExpiringBatches } from "@/server/services/inventory-service";
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-  tint,
-  href,
-}: {
-  icon: typeof ShoppingCart;
-  label: string;
-  value: string;
-  detail?: string;
-  tint: string;
-  href?: Route;
-}) {
-  const content = (
-    <>
-      <div
-        className="flex h-9 w-9 items-center justify-center rounded-xl"
-        // color-mix() rather than string-concatenating an alpha hex suffix
-        // (`${tint}1a`) — that only produces valid CSS when tint is a hex
-        // literal; the "Today's sales" card passes a CSS var()
-        // (var(--brand-primary)), which `${tint}1a` mangles into
-        // "var(--brand-primary)1a", an invalid value the browser silently
-        // drops. color-mix() works uniformly for both hex and var() tints.
-        style={{ backgroundColor: `color-mix(in srgb, ${tint} 12%, transparent)`, color: tint }}
-      >
-        <Icon size={18} strokeWidth={2.25} />
-      </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</p>
-        <p className="mt-1 font-display text-2xl font-semibold text-gray-900">{value}</p>
-        {detail && <p className="mt-0.5 text-xs text-gray-500">{detail}</p>}
-      </div>
-    </>
-  );
-  const className = "flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md";
-
-  if (href) {
-    return (
-      <Link href={href} className={className}>
-        {content}
-      </Link>
-    );
-  }
-  return <div className={className}>{content}</div>;
-}
+import { StatCard, Card, LinkButton } from "@/components/ui";
 
 export default async function DashboardPage() {
   const membership = await requireMembership();
@@ -107,44 +59,52 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       {!active && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Your subscription needs attention — access to products, sales, and other features is
-          restricted until this is resolved.{" "}
-          <Link href="/settings/billing" className="font-medium underline">
-            Review billing
-          </Link>
-        </div>
+        <Card variant="danger">
+          <p className="text-sm text-red-700">
+            Your subscription needs attention — access to products, sales, and other features is
+            restricted until this is resolved.{" "}
+            <Link href="/settings/billing" className="font-medium underline">
+              Review billing
+            </Link>
+          </p>
+        </Card>
       )}
       {needsTwoFactor && (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          Two-factor authentication is required for the account Owner — access to products, sales, and other
-          features is restricted until it&apos;s set up.{" "}
-          <Link href="/settings/security" className="font-medium underline">
-            Set up now
-          </Link>
-        </div>
+        <Card variant="danger">
+          <p className="text-sm text-red-700">
+            Two-factor authentication is required for the account Owner — access to products, sales, and other
+            features is restricted until it&apos;s set up.{" "}
+            <Link href="/settings/security" className="font-medium underline">
+              Set up now
+            </Link>
+          </p>
+        </Card>
       )}
       {showVerificationBanner && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {company.verificationStatus === "REJECTED"
-            ? "Your business verification was rejected — resubmit your CAC certificate when it's ready."
-            : "You haven't submitted a CAC certificate for verification yet — nothing is restricted, but a verified badge helps customers trust your business."}{" "}
-          {canManageCompanySettings ? (
-            <Link href="/settings/verification" className="font-medium underline">
-              Go to verification
-            </Link>
-          ) : (
-            "Ask an Owner or Admin to submit it."
-          )}
-        </div>
+        <Card variant="warning">
+          <p className="text-sm text-amber-800">
+            {company.verificationStatus === "REJECTED"
+              ? "Your business verification was rejected — resubmit your CAC certificate when it's ready."
+              : "You haven't submitted a CAC certificate for verification yet — nothing is restricted, but a verified badge helps customers trust your business."}{" "}
+            {canManageCompanySettings ? (
+              <Link href="/settings/verification" className="font-medium underline">
+                Go to verification
+              </Link>
+            ) : (
+              "Ask an Owner or Admin to submit it."
+            )}
+          </p>
+        </Card>
       )}
       {active && subscription?.status === "TRIALING" && subscription.trialEndsAt && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          You&apos;re on a free trial until {subscription.trialEndsAt.toLocaleDateString()}.{" "}
-          <Link href="/settings/billing" className="font-medium underline">
-            Add a plan
-          </Link>
-        </div>
+        <Card variant="warning">
+          <p className="text-sm text-amber-800">
+            You&apos;re on a free trial until {subscription.trialEndsAt.toLocaleDateString()}.{" "}
+            <Link href="/settings/billing" className="font-medium underline">
+              Add a plan
+            </Link>
+          </p>
+        </Card>
       )}
 
       <div>
@@ -210,13 +170,10 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <Link
-        href="/reports"
-        className="group flex w-fit items-center gap-1.5 text-sm font-medium text-[var(--brand-primary)] hover:underline"
-      >
+      <LinkButton href="/reports" variant="link" className="group flex w-fit items-center gap-1.5">
         View full reports
         <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-      </Link>
+      </LinkButton>
     </div>
   );
 }

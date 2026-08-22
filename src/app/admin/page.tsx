@@ -3,28 +3,40 @@ import { ShieldCheck } from "lucide-react";
 import { requirePlatformStaffWithTwoFactor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { formatMoney } from "@/lib/format";
+import {
+  AdminPageHeader,
+  AdminBadge,
+  AdminTable,
+  AdminTableHeader,
+  AdminTableHeaderCell,
+  AdminTableBody,
+  AdminTableRow,
+  AdminTableCell,
+  AdminEmptyState,
+  type AdminBadgeVariant,
+} from "@/components/ui-admin";
 
-const STATUS_STYLES: Record<string, string> = {
-  TRIAL: "bg-blue-500/20 text-blue-300",
-  ACTIVE: "bg-green-500/20 text-green-300",
-  SUSPENDED: "bg-red-500/20 text-red-300",
-  CANCELLED: "bg-gray-500/20 text-gray-400",
+const STATUS_VARIANTS: Record<string, AdminBadgeVariant> = {
+  TRIAL: "brand",
+  ACTIVE: "success",
+  SUSPENDED: "danger",
+  CANCELLED: "neutral",
 };
 
-const SUBSCRIPTION_STYLES: Record<string, string> = {
-  TRIALING: "bg-yellow-500/20 text-yellow-300",
-  ACTIVE: "bg-green-500/20 text-green-300",
-  PAST_DUE: "bg-amber-500/20 text-amber-300",
-  CANCELLED: "bg-red-500/20 text-red-300",
-  INCOMPLETE: "bg-gray-500/20 text-gray-400",
+const SUBSCRIPTION_VARIANTS: Record<string, AdminBadgeVariant> = {
+  TRIALING: "warning",
+  ACTIVE: "success",
+  PAST_DUE: "warning",
+  CANCELLED: "danger",
+  INCOMPLETE: "neutral",
 };
 
-const VERIFICATION_STYLES: Record<string, string> = {
-  UNVERIFIED: "bg-gray-500/20 text-gray-400",
-  PENDING_REVIEW: "bg-amber-500/20 text-amber-300",
-  VERIFIED: "bg-green-500/20 text-green-300",
-  REJECTED: "bg-red-500/20 text-red-300",
-  APPROVED_WITHOUT_CAC: "bg-blue-500/20 text-blue-300",
+const VERIFICATION_VARIANTS: Record<string, AdminBadgeVariant> = {
+  UNVERIFIED: "neutral",
+  PENDING_REVIEW: "warning",
+  VERIFIED: "success",
+  REJECTED: "danger",
+  APPROVED_WITHOUT_CAC: "brand",
 };
 
 const VERIFICATION_LABELS: Record<string, string> = {
@@ -98,13 +110,12 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Companies</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          {totals.companies} companies · {totals.active} active/trialing · {totals.staff} staff seats total
-          {totals.needsAttention > 0 && ` · ${totals.needsAttention} need verification attention`}
-        </p>
-      </div>
+      <AdminPageHeader
+        title="Companies"
+        description={`${totals.companies} companies · ${totals.active} active/trialing · ${totals.staff} staff seats total${
+          totals.needsAttention > 0 ? ` · ${totals.needsAttention} need verification attention` : ""
+        }`}
+      />
 
       <nav className="flex flex-wrap gap-1 text-sm">
         {FILTERS.map((f) => (
@@ -120,68 +131,65 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
         ))}
       </nav>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-800">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-gray-800 bg-gray-900 text-gray-400">
-              <th className="px-4 py-3">Company</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Verification</th>
-              <th className="px-4 py-3">Plan</th>
-              <th className="px-4 py-3">Subscription</th>
-              <th className="px-4 py-3">Staff</th>
-              <th className="px-4 py-3">Signed up</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
+      {filtered.length === 0 ? (
+        <AdminEmptyState>No companies match this filter.</AdminEmptyState>
+      ) : (
+        <AdminTable>
+          <AdminTableHeader>
+            <AdminTableHeaderCell>Company</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Status</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Verification</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Plan</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Subscription</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Staff</AdminTableHeaderCell>
+            <AdminTableHeaderCell>Signed up</AdminTableHeaderCell>
+            <AdminTableHeaderCell align="right"></AdminTableHeaderCell>
+          </AdminTableHeader>
+          <AdminTableBody>
             {filtered.map((company) => (
-              <tr key={company.id} className="border-b border-gray-900 last:border-0">
-                <td className="px-4 py-3 font-medium">
+              <AdminTableRow key={company.id}>
+                <AdminTableCell className="font-medium text-gray-100">
                   <span className="flex items-center gap-1.5">
                     {company.name}
                     {company.verificationStatus === "VERIFIED" && (
                       <ShieldCheck size={14} className="text-green-400" aria-label="Verified" />
                     )}
                   </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[company.status] ?? ""}`}>
-                    {company.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${VERIFICATION_STYLES[company.verificationStatus] ?? ""}`}>
+                </AdminTableCell>
+                <AdminTableCell>
+                  <AdminBadge variant={STATUS_VARIANTS[company.status] ?? "neutral"}>{company.status}</AdminBadge>
+                </AdminTableCell>
+                <AdminTableCell>
+                  <AdminBadge variant={VERIFICATION_VARIANTS[company.verificationStatus] ?? "neutral"}>
                     {isOverdue(company) ? "Overdue" : VERIFICATION_LABELS[company.verificationStatus]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-300">
+                  </AdminBadge>
+                </AdminTableCell>
+                <AdminTableCell>
                   {company.subscription
                     ? `${company.subscription.plan.name} (${formatMoney(company.subscription.plan.priceKobo / 100, "NGN")}/mo)`
                     : "—"}
-                </td>
-                <td className="px-4 py-3">
+                </AdminTableCell>
+                <AdminTableCell>
                   {company.subscription ? (
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${SUBSCRIPTION_STYLES[company.subscription.status] ?? ""}`}>
+                    <AdminBadge variant={SUBSCRIPTION_VARIANTS[company.subscription.status] ?? "neutral"}>
                       {company.subscription.status.replace("_", " ")}
-                    </span>
+                    </AdminBadge>
                   ) : (
                     <span className="text-gray-500">No subscription</span>
                   )}
-                </td>
-                <td className="px-4 py-3 font-mono text-gray-300">{company.memberships.length}</td>
-                <td className="px-4 py-3 text-gray-400">{company.createdAt.toLocaleDateString()}</td>
-                <td className="px-4 py-3 text-right">
+                </AdminTableCell>
+                <AdminTableCell mono>{company.memberships.length}</AdminTableCell>
+                <AdminTableCell className="text-gray-400">{company.createdAt.toLocaleDateString()}</AdminTableCell>
+                <AdminTableCell align="right">
                   <Link href={`/admin/companies/${company.id}`} className="text-indigo-400 hover:underline">
                     View
                   </Link>
-                </td>
-              </tr>
+                </AdminTableCell>
+              </AdminTableRow>
             ))}
-          </tbody>
-        </table>
-        {filtered.length === 0 && <p className="p-4 text-gray-500">No companies match this filter.</p>}
-      </div>
+          </AdminTableBody>
+        </AdminTable>
+      )}
     </div>
   );
 }

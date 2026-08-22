@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { updateStaffRole } from "@/server/actions/staff";
+import { Field, Select, FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -19,24 +20,19 @@ export function ChangeRoleForm({
 
   return (
     <form action={formAction} className="flex items-end gap-3">
-      <label className="flex flex-col gap-1 text-sm">
-        Role
-        <select name="roleId" defaultValue={currentRoleId ?? ""} required className="rounded-md border border-gray-300 px-3 py-2">
+      <Field label="Role">
+        <Select name="roleId" defaultValue={currentRoleId ?? ""} required>
           {roles.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name}
             </option>
           ))}
-        </select>
-      </label>
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 disabled:opacity-50"
-      >
-        {isPending ? "Saving…" : "Change role"}
-      </button>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+        </Select>
+      </Field>
+      <Button type="submit" variant="secondary" size="sm" isPending={isPending} pendingLabel="Saving…">
+        Change role
+      </Button>
+      <FormError error={state.error} />
     </form>
   );
 }

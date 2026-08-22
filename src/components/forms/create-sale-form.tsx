@@ -3,6 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { createSale } from "@/server/actions/sales";
 import { formatMoney } from "@/lib/format";
+import { Field, Input, Select, Checkbox, FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -52,120 +53,97 @@ export function CreateSaleForm({
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="lineItems" value={JSON.stringify(validLineItems)} />
 
-      <label className="flex flex-col gap-1 text-sm">
-        Branch
-        <select name="branchId" required className="rounded-md border border-gray-300 px-3 py-2">
+      <Field label="Branch">
+        <Select name="branchId" required>
           <option value="">Select a branch</option>
           {branches.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Customer
-        <select
-          name="customerId"
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2"
-        >
+      <Field label="Customer">
+        <Select name="customerId" value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
           <option value="">Walk-in / new customer</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name} {c.phone ? `(${c.phone})` : ""}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
 
       {!customerId && (
         <div className="grid grid-cols-3 gap-4">
-          <label className="flex flex-col gap-1 text-sm">
-            Customer name
-            <input name="customerName" className="rounded-md border border-gray-300 px-3 py-2" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Phone
-            <input name="customerPhone" className="rounded-md border border-gray-300 px-3 py-2" />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Email
-            <input name="customerEmail" type="email" className="rounded-md border border-gray-300 px-3 py-2" />
-          </label>
+          <Field label="Customer name">
+            <Input name="customerName" />
+          </Field>
+          <Field label="Phone">
+            <Input name="customerPhone" />
+          </Field>
+          <Field label="Email">
+            <Input name="customerEmail" type="email" />
+          </Field>
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={isCredit} onChange={(e) => setIsCredit(e.target.checked)} />
-        This is a credit sale (set a payment due date)
-      </label>
+      <Checkbox
+        checked={isCredit}
+        onChange={(e) => setIsCredit(e.target.checked)}
+        label="This is a credit sale (set a payment due date)"
+      />
 
       {isCredit && (
-        <label className="flex flex-col gap-1 text-sm">
-          Payment due date
-          <input name="dueDate" type="date" className="w-48 rounded-md border border-gray-300 px-3 py-2" />
-        </label>
+        <Field label="Payment due date">
+          <Input name="dueDate" type="date" className="w-48" />
+        </Field>
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium">Line items</p>
+        <p className="text-sm font-medium text-gray-700">Line items</p>
         {rows.map((row, i) => {
           const product = productById.get(row.productId);
           return (
             <div key={i} className="flex items-center gap-2">
-              <select
-                value={row.productId}
-                onChange={(e) => updateRow(i, { productId: e.target.value })}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2"
-              >
+              <Select value={row.productId} onChange={(e) => updateRow(i, { productId: e.target.value })} className="flex-1">
                 <option value="">Select a product</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name} ({p.sku}) — {formatMoney(p.unitPrice, currency)}
                   </option>
                 ))}
-              </select>
-              <input
+              </Select>
+              <Input
                 type="number"
                 min="1"
                 step="1"
                 value={row.quantity}
                 onChange={(e) => updateRow(i, { quantity: Number(e.target.value) })}
-                className="w-24 rounded-md border border-gray-300 px-3 py-2"
+                className="w-24"
               />
               <span className="w-28 text-right text-sm text-gray-500">
                 {product ? formatMoney(Number(product.unitPrice) * row.quantity, currency) : "—"}
               </span>
-              <button
-                type="button"
-                onClick={() => removeRow(i)}
-                disabled={rows.length === 1}
-                className="text-sm text-red-600 hover:underline disabled:opacity-30"
-              >
+              <Button type="button" variant="danger-link" onClick={() => removeRow(i)} disabled={rows.length === 1}>
                 Remove
-              </button>
+              </Button>
             </div>
           );
         })}
-        <button type="button" onClick={addRow} className="self-start text-sm text-[var(--brand-primary)] hover:underline">
+        <Button type="button" variant="link" onClick={addRow} className="self-start">
           + Add product
-        </button>
+        </Button>
       </div>
 
       <div className="flex justify-end text-lg font-semibold">Total: {formatMoney(total, currency)}</div>
 
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <FormError error={state.error} />
 
-      <button
-        type="submit"
-        disabled={isPending || validLineItems.length === 0}
-        className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Recording…" : "Record sale"}
-      </button>
+      <Button type="submit" isPending={isPending} pendingLabel="Recording…" disabled={validLineItems.length === 0}>
+        Record sale
+      </Button>
     </form>
   );
 }

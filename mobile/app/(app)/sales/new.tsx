@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { ScanLine } from "lucide-react-native";
@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { useMe, formatMoney } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
+import { Button, Field, Input, ListItem } from "@/components/ui";
 
 type LineItem = { productId: string; name: string; unitPrice: number; quantity: number };
 
@@ -86,7 +87,7 @@ export default function NewSaleScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
       {branches.length > 1 && (
         <View>
           <Text style={styles.label}>Branch</Text>
@@ -104,10 +105,9 @@ export default function NewSaleScreen() {
         <Text style={styles.muted}>No branches yet — create one on the web app before recording a sale.</Text>
       )}
 
-      <View>
-        <Text style={styles.label}>Customer name (optional)</Text>
-        <TextInput style={styles.input} placeholder="Walk-in" value={customerName} onChangeText={setCustomerName} />
-      </View>
+      <Field label="Customer name (optional)">
+        <Input placeholder="Walk-in" value={customerName} onChangeText={setCustomerName} />
+      </Field>
 
       <View>
         <View style={styles.labelRow}>
@@ -117,15 +117,15 @@ export default function NewSaleScreen() {
             <Text style={styles.scanButtonText}>Scan</Text>
           </Pressable>
         </View>
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: theme.spacing.sm }}>
           {(productsData?.products ?? []).map((p) => (
-            <Pressable key={p.id} style={styles.productRow} onPress={() => addProduct(p.id, p.name, Number(p.unitPrice))}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.productName}>{p.name}</Text>
-                <Text style={styles.muted}>{p.sku}</Text>
-              </View>
-              <Text style={styles.muted}>{formatMoney(p.unitPrice, currency)}</Text>
-            </Pressable>
+            <ListItem
+              key={p.id}
+              title={p.name}
+              subtitle={p.sku}
+              trailing={<Text style={styles.muted}>{formatMoney(p.unitPrice, currency)}</Text>}
+              onPress={() => addProduct(p.id, p.name, Number(p.unitPrice))}
+            />
           ))}
         </View>
       </View>
@@ -133,7 +133,7 @@ export default function NewSaleScreen() {
       {lineItems.length > 0 && (
         <View>
           <Text style={styles.label}>Line items</Text>
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: theme.spacing.sm }}>
             {lineItems.map((li) => (
               <View key={li.productId} style={styles.lineItemRow}>
                 <Text style={{ flex: 1 }}>{li.name}</Text>
@@ -154,9 +154,7 @@ export default function NewSaleScreen() {
 
       {error && <Text style={styles.error}>{error}</Text>}
 
-      <Pressable style={styles.submitButton} onPress={handleSubmit} disabled={createSale.isPending}>
-        {createSale.isPending ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Record sale</Text>}
-      </Pressable>
+      <Button label="Record sale" onPress={handleSubmit} isLoading={createSale.isPending} />
 
       <BarcodeScannerModal
         visible={scannerOpen}
@@ -169,34 +167,30 @@ export default function NewSaleScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  label: { fontSize: 12, fontWeight: "600", color: "#6b7280", marginBottom: 6, textTransform: "uppercase" },
+  container: { flex: 1, backgroundColor: theme.surface },
+  label: { fontSize: theme.font.caption, fontWeight: "600", color: theme.textMuted, marginBottom: 6, textTransform: "uppercase" },
   labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   scanButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8 },
   scanButtonText: { color: theme.primary, fontWeight: "600", fontSize: 13 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  chip: { borderWidth: 1, borderColor: theme.borderStrong, borderRadius: theme.radius.full, paddingHorizontal: 14, paddingVertical: 8 },
   chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { color: "#374151" },
   chipTextSelected: { color: "#fff" },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  productRow: {
-    flexDirection: "row",
-    alignItems: "center",
+  muted: { color: theme.textFaint, fontSize: theme.font.caption },
+  lineItemRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  stepperButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
-    padding: 10,
+    borderColor: theme.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  productName: { fontWeight: "500" },
-  muted: { color: "#9ca3af", fontSize: 12 },
-  lineItemRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  stepperButton: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#d1d5db", alignItems: "center", justifyContent: "center" },
   stepperText: { fontSize: 16, fontWeight: "600" },
   qty: { width: 24, textAlign: "center" },
   lineTotal: { width: 90, textAlign: "right", fontWeight: "500" },
   total: { textAlign: "right", fontWeight: "700", fontSize: 16, marginTop: 8 },
-  error: { color: "#dc2626" },
-  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 14, alignItems: "center" },
-  submitButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  error: { color: theme.danger },
 });

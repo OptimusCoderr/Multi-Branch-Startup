@@ -1,9 +1,12 @@
-import { View, Text, FlatList, StyleSheet, Pressable, RefreshControl } from "react-native";
+import { View, Text, FlatList, StyleSheet, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "expo-router";
+import { Users } from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { api, type CustomerSummary } from "@/lib/api";
 import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
+import { Button, ListItem, EmptyState, SkeletonCard } from "@/components/ui";
 
 export default function CustomersListScreen() {
   const { data: me } = useMe();
@@ -14,39 +17,44 @@ export default function CustomersListScreen() {
   return (
     <View style={styles.container}>
       {canManage && (
-        <Link href="/customers/new" asChild>
-          <Pressable style={styles.newButton}>
-            <Text style={styles.newButtonText}>+ New customer</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.newButtonWrap}>
+          <Link href="/customers/new" asChild>
+            <Button label="New customer" />
+          </Link>
+        </View>
       )}
 
       {isLoading ? (
-        <Text style={styles.muted}>Loading…</Text>
+        <View style={{ padding: theme.spacing.lg, gap: theme.spacing.sm }}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
       ) : (
         <FlatList
           data={data?.customers ?? []}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-          ListEmptyComponent={<Text style={styles.muted}>No customers yet.</Text>}
-          contentContainerStyle={{ padding: 16, gap: 8 }}
-          renderItem={({ item }: { item: CustomerSummary }) => (
-            <Link href={`/customers/${item.id}`} asChild>
-              <Pressable style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.subtitle}>{item.phone ?? "No phone"}</Text>
-                </View>
-                {Number(item.outstanding) > 0 ? (
-                  <Text style={[styles.outstanding, item.overdueSaleCount > 0 && styles.overdue]}>
-                    {formatMoney(item.outstanding, currency)}
-                    {item.overdueSaleCount > 0 ? " (overdue)" : ""}
-                  </Text>
-                ) : (
-                  <Text style={styles.muted}>—</Text>
-                )}
-              </Pressable>
-            </Link>
+          ListEmptyComponent={<EmptyState icon={Users} title="No customers yet" />}
+          contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.sm }}
+          renderItem={({ item, index }: { item: CustomerSummary; index: number }) => (
+            <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 30)}>
+              <Link href={`/customers/${item.id}`} asChild>
+                <ListItem
+                  title={item.name}
+                  subtitle={item.phone ?? "No phone"}
+                  trailing={
+                    Number(item.outstanding) > 0 ? (
+                      <Text style={[styles.outstanding, item.overdueSaleCount > 0 && styles.overdue]}>
+                        {formatMoney(item.outstanding, currency)}
+                        {item.overdueSaleCount > 0 ? " (overdue)" : ""}
+                      </Text>
+                    ) : (
+                      <Text style={styles.muted}>—</Text>
+                    )
+                  }
+                />
+              </Link>
+            </Animated.View>
           )}
         />
       )}
@@ -55,21 +63,9 @@ export default function CustomersListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  newButton: { backgroundColor: theme.primary, margin: 16, marginBottom: 0, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
-  newButtonText: { color: "#fff", fontWeight: "600" },
-  muted: { color: "#9ca3af", padding: 16 },
-  subtitle: { color: "#9ca3af" },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 12,
-  },
-  name: { fontWeight: "600" },
+  container: { flex: 1, backgroundColor: theme.surface },
+  newButtonWrap: { padding: theme.spacing.lg, paddingBottom: 0 },
+  muted: { color: theme.textFaint },
   outstanding: { color: "#b45309", fontWeight: "600" },
-  overdue: { color: "#dc2626" },
+  overdue: { color: theme.danger },
 });

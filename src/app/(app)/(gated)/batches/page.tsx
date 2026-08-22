@@ -2,6 +2,8 @@ import Link from "next/link";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { PageHeader, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, Badge, EmptyState } from "@/components/ui";
+import { PackageSearch } from "lucide-react";
 
 const TABS = [
   { key: "expiring", label: "Expiring soon" },
@@ -45,10 +47,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Batches</h1>
-        <p className="mt-1 text-sm text-gray-500">Perishable and batch-tracked stock, by expiry date.</p>
-      </div>
+      <PageHeader title="Batches" description="Perishable and batch-tracked stock, by expiry date." />
 
       <div className="flex gap-1 border-b border-gray-200 text-sm">
         {TABS.map((t) => (
@@ -67,55 +66,46 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
       </div>
 
       {batches.length === 0 ? (
-        <p className="text-gray-500">No batches to show.</p>
+        <EmptyState icon={PackageSearch} title="No batches to show" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Location</th>
-                <th className="py-2 pr-4">Batch #</th>
-                <th className="py-2 pr-4">Expiry</th>
-                <th className="py-2 pr-4">Remaining</th>
-              </tr>
-            </thead>
-            <tbody>
-              {batches.map((b) => {
-                const isExpired = b.expiryDate < now;
-                const daysLeft = Math.ceil((b.expiryDate.getTime() - now.getTime()) / 86_400_000);
-                return (
-                  <tr key={b.id} className="border-b border-gray-100">
-                    <td className="py-2 pr-4">
-                      {b.product.name} <span className="font-mono text-xs text-gray-400">({b.product.sku})</span>
-                    </td>
-                    <td className="py-2 pr-4">
-                      {b.branch ? (
-                        b.branch.name
-                      ) : (
-                        <>
-                          {b.warehouse!.name}{" "}
-                          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-500">warehouse</span>
-                        </>
-                      )}
-                    </td>
-                    <td className="py-2 pr-4 font-mono text-xs">{b.batchNumber}</td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
-                          isExpired ? "bg-red-100 text-red-700" : daysLeft <= 3 ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {b.expiryDate.toLocaleDateString()} {isExpired ? "(expired)" : `(${daysLeft}d)`}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 font-mono">{b.quantityRemaining}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>Product</TableHeaderCell>
+            <TableHeaderCell>Location</TableHeaderCell>
+            <TableHeaderCell>Batch #</TableHeaderCell>
+            <TableHeaderCell>Expiry</TableHeaderCell>
+            <TableHeaderCell>Remaining</TableHeaderCell>
+          </TableHeader>
+          <TableBody>
+            {batches.map((b) => {
+              const isExpired = b.expiryDate < now;
+              const daysLeft = Math.ceil((b.expiryDate.getTime() - now.getTime()) / 86_400_000);
+              return (
+                <TableRow key={b.id}>
+                  <TableCell>
+                    {b.product.name} <span className="font-mono text-xs text-gray-400">({b.product.sku})</span>
+                  </TableCell>
+                  <TableCell>
+                    {b.branch ? (
+                      b.branch.name
+                    ) : (
+                      <>
+                        {b.warehouse!.name} <Badge variant="neutral">warehouse</Badge>
+                      </>
+                    )}
+                  </TableCell>
+                  <TableCell mono>{b.batchNumber}</TableCell>
+                  <TableCell>
+                    <Badge variant={isExpired ? "danger" : daysLeft <= 3 ? "warning" : "neutral"}>
+                      {b.expiryDate.toLocaleDateString()} {isExpired ? "(expired)" : `(${daysLeft}d)`}
+                    </Badge>
+                  </TableCell>
+                  <TableCell mono>{b.quantityRemaining}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

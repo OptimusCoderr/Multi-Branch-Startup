@@ -4,6 +4,20 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { deactivateWarehouse } from "@/server/actions/warehouses";
 import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
+import {
+  PageHeader,
+  LinkButton,
+  Button,
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  Badge,
+  EmptyState,
+} from "@/components/ui";
+import { Warehouse } from "lucide-react";
 
 export default async function WarehousesPage() {
   const membership = await requireMembership();
@@ -20,83 +34,59 @@ export default async function WarehousesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Warehouses</h1>
-          {maxWarehouses !== undefined && (
-            <p className={`mt-1 text-sm ${atLimit ? "font-medium text-amber-700" : "text-gray-500"}`}>
-              {activeCount} of {maxWarehouses} used on your plan
-              {atLimit && (
-                <>
-                  {" — "}
-                  <Link href="/settings/billing" className="underline">
-                    upgrade for more
-                  </Link>
-                </>
-              )}
-            </p>
-          )}
-        </div>
-        {canManage && (
-          <Link href="/warehouses/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-            New warehouse
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Warehouses"
+        description={maxWarehouses !== undefined ? `${activeCount} of ${maxWarehouses} used on your plan${atLimit ? " — upgrade for more" : ""}` : undefined}
+        actions={canManage && <LinkButton href="/warehouses/new">New warehouse</LinkButton>}
+      />
+      {atLimit && (
+        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 underline">
+          Upgrade for more warehouses
+        </Link>
+      )}
 
       {warehouses.length === 0 ? (
-        <p className="text-gray-500">
-          No warehouses yet — and that&apos;s fine. Plenty of single-branch shops never need one and
-          stock their branch directly (Transfers &rarr; Record external delivery). Add a warehouse
-          here only if you want a separate storage or distribution point that feeds multiple
-          branches.
-        </p>
+        <EmptyState
+          icon={Warehouse}
+          title="No warehouses yet"
+          description="And that's fine — plenty of single-branch shops never need one and stock their branch directly (Transfers → Record external delivery). Add a warehouse only if you want a separate storage or distribution point that feeds multiple branches."
+        />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Address</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {warehouses.map((w) => (
-                <tr key={w.id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4">{w.name}</td>
-                  <td className="py-2 pr-4 text-gray-500">{w.address ?? "—"}</td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        w.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {w.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <div className="flex justify-end gap-3">
-                      {canManage && (
-                        <>
-                          <Link href={`/warehouses/${w.id}`} className="text-[var(--brand-primary)] hover:underline">
-                            Edit
-                          </Link>
-                          <form action={deactivateWarehouse.bind(null, w.id)}>
-                            <button type="submit" className="text-red-600 hover:underline">
-                              {w.isActive ? "Deactivate" : "Reactivate"}
-                            </button>
-                          </form>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>Address</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell align="right"></TableHeaderCell>
+          </TableHeader>
+          <TableBody>
+            {warehouses.map((w) => (
+              <TableRow key={w.id}>
+                <TableCell>{w.name}</TableCell>
+                <TableCell className="text-gray-500">{w.address ?? "—"}</TableCell>
+                <TableCell>
+                  <Badge variant={w.isActive ? "success" : "neutral"}>{w.isActive ? "Active" : "Inactive"}</Badge>
+                </TableCell>
+                <TableCell align="right">
+                  <div className="flex justify-end gap-3">
+                    {canManage && (
+                      <>
+                        <LinkButton href={`/warehouses/${w.id}`} variant="link">
+                          Edit
+                        </LinkButton>
+                        <form action={deactivateWarehouse.bind(null, w.id)}>
+                          <Button type="submit" variant="danger-link">
+                            {w.isActive ? "Deactivate" : "Reactivate"}
+                          </Button>
+                        </form>
+                      </>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

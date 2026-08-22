@@ -1,15 +1,28 @@
-import Link from "next/link";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import {
+  PageHeader,
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  Badge,
+  LinkButton,
+  EmptyState,
+  type BadgeVariant,
+} from "@/components/ui";
+import { ArrowLeftRight } from "lucide-react";
 
-const STATUS_STYLES: Record<string, string> = {
-  REQUESTED: "bg-yellow-100 text-yellow-700",
-  APPROVED: "bg-blue-100 text-blue-700",
-  IN_TRANSIT: "bg-indigo-100 text-indigo-700",
-  RECEIVED: "bg-green-100 text-green-700",
-  REJECTED: "bg-red-100 text-red-700",
-  CANCELLED: "bg-gray-100 text-gray-500",
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  REQUESTED: "warning",
+  APPROVED: "brand",
+  IN_TRANSIT: "brand",
+  RECEIVED: "success",
+  REJECTED: "danger",
+  CANCELLED: "neutral",
 };
 
 export default async function TransfersPage() {
@@ -28,70 +41,59 @@ export default async function TransfersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Stock transfers</h1>
-        <div className="flex gap-2">
-          {canReceiveExternal && (
-            <Link
-              href="/transfers/new-external"
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700"
-            >
-              Record external delivery
-            </Link>
-          )}
-          {canRequest && (
-            <Link href="/transfers/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-              Request transfer
-            </Link>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Stock transfers"
+        actions={
+          <>
+            {canReceiveExternal && (
+              <LinkButton href="/transfers/new-external" variant="secondary">
+                Record external delivery
+              </LinkButton>
+            )}
+            {canRequest && <LinkButton href="/transfers/new">Request transfer</LinkButton>}
+          </>
+        }
+      />
 
       {transfers.length === 0 ? (
-        <p className="text-gray-500">No transfers yet.</p>
+        <EmptyState icon={ArrowLeftRight} title="No transfers yet" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Qty</th>
-                <th className="py-2 pr-4">From</th>
-                <th className="py-2 pr-4">To</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {transfers.map((t) => (
-                <tr key={t.id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4">{t.product.name}</td>
-                  <td className="py-2 pr-4 font-mono">{t.quantity}</td>
-                  <td className="py-2 pr-4 text-gray-500">
-                    {t.sourceType === "EXTERNAL"
-                      ? `External: ${t.externalSourceName}`
-                      : t.sourceType === "BRANCH"
-                        ? t.sourceBranch?.name
-                        : t.sourceWarehouse?.name}
-                  </td>
-                  <td className="py-2 pr-4 text-gray-500">
-                    {t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`}
-                  </td>
-                  <td className="py-2 pr-4">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_STYLES[t.status] ?? ""}`}>
-                      {t.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <Link href={`/transfers/${t.id}`} className="text-[var(--brand-primary)] hover:underline">
-                      View
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>Product</TableHeaderCell>
+            <TableHeaderCell>Qty</TableHeaderCell>
+            <TableHeaderCell>From</TableHeaderCell>
+            <TableHeaderCell>To</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell align="right"></TableHeaderCell>
+          </TableHeader>
+          <TableBody>
+            {transfers.map((t) => (
+              <TableRow key={t.id}>
+                <TableCell>{t.product.name}</TableCell>
+                <TableCell mono>{t.quantity}</TableCell>
+                <TableCell className="text-gray-500">
+                  {t.sourceType === "EXTERNAL"
+                    ? `External: ${t.externalSourceName}`
+                    : t.sourceType === "BRANCH"
+                      ? t.sourceBranch?.name
+                      : t.sourceWarehouse?.name}
+                </TableCell>
+                <TableCell className="text-gray-500">
+                  {t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_VARIANTS[t.status] ?? "neutral"}>{t.status.replace("_", " ")}</Badge>
+                </TableCell>
+                <TableCell align="right">
+                  <LinkButton href={`/transfers/${t.id}`} variant="link">
+                    View
+                  </LinkButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

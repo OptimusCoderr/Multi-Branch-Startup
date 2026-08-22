@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { adjustWarehouseStock } from "@/server/actions/stock-adjustments";
+import { Card, Field, Select, Input, FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -16,50 +17,44 @@ export function AdjustWarehouseStockForm({
   const [state, formAction, isPending] = useActionState(adjustWarehouseStock, initialState);
 
   return (
-    <form action={formAction} className="flex flex-wrap items-end gap-3 rounded-lg border border-gray-200 p-4">
-      <label className="flex flex-col gap-1 text-sm">
-        Product
-        <select name="productId" required className="rounded-md border border-gray-300 px-2 py-1.5">
-          <option value="">Select</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.sku})
-            </option>
-          ))}
-        </select>
-      </label>
+    <Card>
+      <form action={formAction} className="flex flex-wrap items-end gap-3">
+        <Field label="Product">
+          <Select name="productId" required>
+            <option value="">Select</option>
+            {products.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.sku})
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Warehouse
-        <select name="warehouseId" required className="rounded-md border border-gray-300 px-2 py-1.5">
-          <option value="">Select</option>
-          {warehouses.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        <Field label="Warehouse">
+          <Select name="warehouseId" required>
+            <option value="">Select</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Adjustment (+/-)
-        <input name="delta" type="number" step="1" required className="w-28 rounded-md border border-gray-300 px-2 py-1.5" />
-      </label>
+        <Field label="Adjustment (+/-)">
+          <Input name="delta" type="number" step="1" required className="w-28" />
+        </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Reason
-        <input name="reason" className="rounded-md border border-gray-300 px-2 py-1.5" />
-      </label>
+        <Field label="Reason">
+          <Input name="reason" />
+        </Field>
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-[var(--brand-primary)] px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Saving…" : "Apply"}
-      </button>
+        <Button type="submit" size="sm" isPending={isPending} pendingLabel="Saving…">
+          Apply
+        </Button>
 
-      {state.error && <p className="w-full text-sm text-red-600">{state.error}</p>}
-    </form>
+        <FormError error={state.error} />
+      </form>
+    </Card>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Field, Input, FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -20,45 +21,25 @@ export function LocationForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1 text-sm">
-        Name
-        <input
-          name="name"
-          defaultValue={defaultValues?.name}
-          className="rounded-md border border-gray-300 px-3 py-2"
-          required
-        />
-      </label>
+      <Field label="Name">
+        <Input name="name" defaultValue={defaultValues?.name} required />
+      </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Address
-        <input
-          name="address"
-          defaultValue={defaultValues?.address ?? ""}
-          className="rounded-md border border-gray-300 px-3 py-2"
-        />
-      </label>
+      <Field label="Address">
+        <Input name="address" defaultValue={defaultValues?.address ?? ""} />
+      </Field>
 
       {showPhone && (
-        <label className="flex flex-col gap-1 text-sm">
-          Phone
-          <input
-            name="phone"
-            defaultValue={defaultValues?.phone ?? ""}
-            className="rounded-md border border-gray-300 px-3 py-2"
-          />
-        </label>
+        <Field label="Phone">
+          <Input name="phone" defaultValue={defaultValues?.phone ?? ""} />
+        </Field>
       )}
 
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <FormError error={state.error} />
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Saving…" : submitLabel}
-      </button>
+      <Button type="submit" isPending={isPending} pendingLabel="Saving…" className="self-start">
+        {submitLabel}
+      </Button>
     </form>
   );
 }

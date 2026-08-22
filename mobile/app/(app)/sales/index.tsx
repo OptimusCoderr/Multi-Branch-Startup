@@ -1,15 +1,18 @@
-import { View, Text, FlatList, StyleSheet, Pressable, RefreshControl } from "react-native";
+import { View, Text, FlatList, StyleSheet, RefreshControl } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "expo-router";
+import { Receipt } from "lucide-react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { api, type SaleSummary } from "@/lib/api";
 import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
+import { Button, ListItem, Badge, EmptyState, SkeletonCard, type BadgeVariant } from "@/components/ui";
 
-const STATUS_COLORS: Record<string, string> = {
-  CONFIRMED: "#a16207",
-  PARTIALLY_PAID: "#1d4ed8",
-  PAID: "#15803d",
-  VOIDED: "#6b7280",
+const STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  CONFIRMED: "warning",
+  PARTIALLY_PAID: "brand",
+  PAID: "success",
+  VOIDED: "neutral",
 };
 
 export default function SalesListScreen() {
@@ -21,37 +24,40 @@ export default function SalesListScreen() {
   return (
     <View style={styles.container}>
       {canRecord && (
-        <Link href="/sales/new" asChild>
-          <Pressable style={styles.newButton}>
-            <Text style={styles.newButtonText}>+ Record sale</Text>
-          </Pressable>
-        </Link>
+        <View style={styles.newButtonWrap}>
+          <Link href="/sales/new" asChild>
+            <Button label="Record sale" />
+          </Link>
+        </View>
       )}
 
       {isLoading ? (
-        <Text style={styles.muted}>Loading…</Text>
+        <View style={{ padding: theme.spacing.lg, gap: theme.spacing.sm }}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
       ) : (
         <FlatList
           data={data?.sales ?? []}
           keyExtractor={(item) => item.id}
           refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
-          ListEmptyComponent={<Text style={styles.muted}>No sales yet.</Text>}
-          contentContainerStyle={{ padding: 16, gap: 8 }}
-          renderItem={({ item }: { item: SaleSummary }) => (
-            <Link href={`/sales/${item.id}`} asChild>
-              <Pressable style={styles.row}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.saleNumber}>{item.saleNumber}</Text>
-                  <Text style={styles.subtitle}>
-                    {item.branchName} · {item.customerName ?? "Walk-in"}
-                  </Text>
-                </View>
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.amount}>{formatMoney(item.grandTotal, currency)}</Text>
-                  <Text style={[styles.status, { color: STATUS_COLORS[item.status] ?? "#374151" }]}>{item.status.replace("_", " ")}</Text>
-                </View>
-              </Pressable>
-            </Link>
+          ListEmptyComponent={<EmptyState icon={Receipt} title="No sales yet" />}
+          contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.sm }}
+          renderItem={({ item, index }: { item: SaleSummary; index: number }) => (
+            <Animated.View entering={FadeInDown.delay(Math.min(index, 8) * 30)}>
+              <Link href={`/sales/${item.id}`} asChild>
+                <ListItem
+                  title={item.saleNumber}
+                  subtitle={`${item.branchName} · ${item.customerName ?? "Walk-in"}`}
+                  trailing={
+                    <View style={{ gap: 4, alignItems: "flex-end" }}>
+                      <Text style={styles.amount}>{formatMoney(item.grandTotal, currency)}</Text>
+                      <Badge variant={STATUS_VARIANTS[item.status] ?? "neutral"} label={item.status.replace("_", " ")} />
+                    </View>
+                  }
+                />
+              </Link>
+            </Animated.View>
           )}
         />
       )}
@@ -60,21 +66,7 @@ export default function SalesListScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  newButton: { backgroundColor: theme.primary, margin: 16, marginBottom: 0, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
-  newButtonText: { color: "#fff", fontWeight: "600" },
-  muted: { color: "#9ca3af", padding: 16 },
-  subtitle: { color: "#9ca3af" },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 12,
-  },
-  saleNumber: { fontWeight: "600", fontFamily: "monospace" },
-  amount: { fontWeight: "600" },
-  status: { fontSize: 11, fontWeight: "600", textTransform: "uppercase" },
+  container: { flex: 1, backgroundColor: theme.surface },
+  newButtonWrap: { padding: theme.spacing.lg, paddingBottom: 0 },
+  amount: { fontWeight: "600", color: theme.textPrimary },
 });

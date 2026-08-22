@@ -7,6 +7,7 @@ import { api, type StockProduct } from "@/lib/api";
 import { useHasPermission } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
+import { Button, Input } from "@/components/ui";
 
 /**
  * Physical stock count / cycle count: pick a branch, tally what's actually
@@ -122,7 +123,7 @@ export default function StockCountScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ padding: 16, gap: 16 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
       {branches.length > 1 && (
         <View>
           <Text style={styles.label}>Branch</Text>
@@ -148,17 +149,12 @@ export default function StockCountScreen() {
             </Pressable>
           </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Search by name or SKU"
-            value={search}
-            onChangeText={setSearch}
-          />
+          <Input placeholder="Search by name or SKU" value={search} onChangeText={setSearch} />
 
           {isLoading ? (
             <ActivityIndicator color={theme.primary} />
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: theme.spacing.sm }}>
               {filtered.map((p) => {
                 const countedValue = counted[p.id] ?? "";
                 const countedQty = Number(countedValue) || 0;
@@ -175,6 +171,7 @@ export default function StockCountScreen() {
                       style={styles.countInput}
                       keyboardType="number-pad"
                       placeholder="—"
+                      placeholderTextColor={theme.textFaint}
                       value={countedValue}
                       onChangeText={(v) => setCount(p.id, v.replace(/[^0-9]/g, ""))}
                     />
@@ -193,15 +190,11 @@ export default function StockCountScreen() {
           {error && <Text style={styles.error}>{error}</Text>}
 
           {canAdjust ? (
-            <Pressable style={styles.submitButton} onPress={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.submitButtonText}>
-                  Save count{changedCount > 0 ? ` (${changedCount} change${changedCount === 1 ? "" : "s"})` : ""}
-                </Text>
-              )}
-            </Pressable>
+            <Button
+              label={`Save count${changedCount > 0 ? ` (${changedCount} change${changedCount === 1 ? "" : "s"})` : ""}`}
+              onPress={handleSave}
+              isLoading={isSaving}
+            />
           ) : (
             <Text style={styles.muted}>You don&apos;t have permission to save stock adjustments — ask an Owner or Admin.</Text>
           )}
@@ -219,41 +212,39 @@ export default function StockCountScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  label: { fontSize: 12, fontWeight: "600", color: "#6b7280", marginBottom: 6, textTransform: "uppercase" },
+  container: { flex: 1, backgroundColor: theme.surface },
+  label: { fontSize: theme.font.caption, fontWeight: "600", color: theme.textMuted, marginBottom: 6, textTransform: "uppercase" },
   labelRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   scanButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: 8 },
   scanButtonText: { color: theme.primary, fontWeight: "600", fontSize: 13 },
-  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.spacing.sm },
+  chip: { borderWidth: 1, borderColor: theme.borderStrong, borderRadius: theme.radius.full, paddingHorizontal: 14, paddingVertical: 8 },
   chipSelected: { backgroundColor: theme.primary, borderColor: theme.primary },
   chipText: { color: "#374151" },
   chipTextSelected: { color: "#fff" },
-  input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   productRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 8,
+    borderColor: theme.border,
+    borderRadius: theme.radius.md,
     padding: 10,
   },
-  productName: { fontWeight: "500" },
-  muted: { color: "#9ca3af", fontSize: 12 },
+  productName: { fontWeight: "500", color: theme.textPrimary },
+  muted: { color: theme.textFaint, fontSize: theme.font.caption },
   countInput: {
     width: 64,
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
+    borderColor: theme.borderStrong,
+    borderRadius: theme.radius.sm,
     paddingHorizontal: 8,
     paddingVertical: 8,
     textAlign: "center",
+    color: theme.textPrimary,
   },
   delta: { width: 40, textAlign: "right", fontWeight: "700", fontVariant: ["tabular-nums"] },
   deltaPositive: { color: theme.success },
   deltaNegative: { color: theme.danger },
-  error: { color: "#dc2626" },
-  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 14, alignItems: "center" },
-  submitButtonText: { color: "#fff", fontWeight: "600", fontSize: 16 },
+  error: { color: theme.danger },
 });

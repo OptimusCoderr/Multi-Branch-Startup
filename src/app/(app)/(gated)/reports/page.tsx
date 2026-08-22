@@ -3,11 +3,12 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { getPeriodSummary, getOutstandingDebt, getTopProductsByRevenue, startOfCurrentMonth, type PeriodSummary } from "@/server/services/report-service";
+import { PageHeader, Card, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell } from "@/components/ui";
 
 function SummaryCard({ title, summary, currency }: { title: string; summary: PeriodSummary; currency: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 p-4">
-      <p className="text-xs font-semibold uppercase text-gray-400">{title}</p>
+    <Card>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</p>
       <div className="mt-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
           <span className="text-gray-500">Revenue ({summary.saleCount} sale{summary.saleCount === 1 ? "" : "s"})</span>
@@ -34,7 +35,7 @@ function SummaryCard({ title, summary, currency }: { title: string; summary: Per
           </span>
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -58,48 +59,48 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Reports</h1>
-        <p className="mt-1 text-sm text-gray-500">Revenue is what was sold, not necessarily collected — outstanding debt is shown separately below.</p>
-      </div>
+      <PageHeader
+        title="Reports"
+        description="Revenue is what was sold, not necessarily collected — outstanding debt is shown separately below."
+      />
 
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-        <p className="text-xs font-semibold uppercase text-amber-700">Outstanding debt (all customers, right now)</p>
+      <Card variant="warning">
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Outstanding debt (all customers, right now)</p>
         <p className="mt-1 text-2xl font-semibold text-amber-800">{formatMoney(outstanding.toString(), currency)}</p>
-      </div>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <SummaryCard title="This month" summary={thisMonth} currency={currency} />
         <SummaryCard title="All time" summary={allTime} currency={currency} />
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-4">
-        <p className="text-xs font-semibold uppercase text-gray-400">Top products by revenue (all time)</p>
+      <Card>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Top products by revenue (all time)</p>
         {topProducts.length === 0 ? (
           <p className="mt-2 text-sm text-gray-500">No sales yet.</p>
         ) : (
-          <table className="mt-3 w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">Product</th>
-                <th className="py-2 pr-4">Qty sold</th>
-                <th className="py-2 text-right">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topProducts.map((p) => (
-                <tr key={p.productId} className="border-b border-gray-100 last:border-0">
-                  <td className="py-2 pr-4">
-                    {p.name} <span className="font-mono text-xs text-gray-400">({p.sku})</span>
-                  </td>
-                  <td className="py-2 pr-4 font-mono">{p.quantitySold}</td>
-                  <td className="py-2 text-right">{formatMoney(p.revenue.toString(), currency)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="mt-3">
+            <Table>
+              <TableHeader>
+                <TableHeaderCell>Product</TableHeaderCell>
+                <TableHeaderCell>Qty sold</TableHeaderCell>
+                <TableHeaderCell align="right">Revenue</TableHeaderCell>
+              </TableHeader>
+              <TableBody>
+                {topProducts.map((p) => (
+                  <TableRow key={p.productId}>
+                    <TableCell>
+                      {p.name} <span className="font-mono text-xs text-gray-400">({p.sku})</span>
+                    </TableCell>
+                    <TableCell mono>{p.quantitySold}</TableCell>
+                    <TableCell align="right">{formatMoney(p.revenue.toString(), currency)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

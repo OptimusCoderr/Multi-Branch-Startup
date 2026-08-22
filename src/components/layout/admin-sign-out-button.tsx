@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { authClient } from "@/lib/auth/auth-client";
+import { AdminButton } from "@/components/ui-admin";
 
 export function AdminSignOutButton() {
   const router = useRouter();
@@ -13,11 +14,8 @@ export function AdminSignOutButton() {
   }
 
   return (
-    <button
-      onClick={handleSignOut}
-      className="rounded-md border border-gray-700 px-3 py-1.5 text-sm font-medium text-gray-300 hover:bg-gray-800"
-    >
+    <AdminButton type="button" variant="secondary" size="sm" onClick={handleSignOut}>
       Sign out
-    </button>
+    </AdminButton>
   );
 }

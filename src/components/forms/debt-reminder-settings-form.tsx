@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { updateDebtReminderSettings } from "@/server/actions/debt-reminder-settings";
+import { Field, Input, Checkbox, FormError, Button, Card } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -18,28 +19,30 @@ export function DebtReminderSettingsForm({
   return (
     <form action={formAction} className="flex max-w-md flex-col gap-4">
       {!smsConfigured && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          SMS is not configured in this environment yet — reminders can be enabled here, but sending will fail until a
-          real Termii API key is set.
-        </p>
+        <Card variant="warning">
+          <p className="text-sm text-amber-800">
+            SMS is not configured in this environment yet — reminders can be enabled here, but sending will fail
+            until a real Termii API key is set.
+          </p>
+        </Card>
       )}
 
-      <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="debtReminderEnabled" defaultChecked={defaultValues.debtReminderEnabled} />
-        Automatically remind customers by SMS when their balance is overdue
-      </label>
+      <Checkbox
+        name="debtReminderEnabled"
+        defaultChecked={defaultValues.debtReminderEnabled}
+        label="Automatically remind customers by SMS when their balance is overdue"
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        Remind after this many days overdue
-        <input
+      <Field label="Remind after this many days overdue">
+        <Input
           name="debtReminderDaysOverdue"
           type="number"
           min="1"
           max="365"
           defaultValue={defaultValues.debtReminderDaysOverdue}
-          className="w-32 rounded-md border border-gray-300 px-3 py-2"
+          className="w-32"
         />
-      </label>
+      </Field>
 
       <p className="text-xs text-gray-400">
         A customer is never reminded more than once every 3 days, and can opt out individually from their customer
@@ -47,15 +50,11 @@ export function DebtReminderSettingsForm({
         also send reminders on demand.
       </p>
 
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <FormError error={state.error} />
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="self-start rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Saving…" : "Save settings"}
-      </button>
+      <Button type="submit" isPending={isPending} pendingLabel="Saving…" className="self-start">
+        Save settings
+      </Button>
     </form>
   );
 }

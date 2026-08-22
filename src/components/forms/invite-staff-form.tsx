@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { inviteStaff } from "@/server/actions/staff";
+import { Field, Input, Select, FormError, Button, Card } from "@/components/ui";
 
 type FormState = { error: string; inviteUrl?: string };
 const initialState: FormState = { error: "" };
@@ -18,33 +19,27 @@ export function InviteStaffForm({ roles }: { roles: { id: string; name: string }
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4">
+    <Card className="flex flex-col gap-3">
       <form action={formAction} className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          Email
-          <input name="email" type="email" required className="rounded-md border border-gray-300 px-3 py-2" />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Role
-          <select name="roleId" required className="rounded-md border border-gray-300 px-3 py-2">
+        <Field label="Email">
+          <Input name="email" type="email" required />
+        </Field>
+        <Field label="Role">
+          <Select name="roleId" required>
             <option value="">Select a role</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
               </option>
             ))}
-          </select>
-        </label>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {isPending ? "Inviting…" : "Send invite"}
-        </button>
+          </Select>
+        </Field>
+        <Button type="submit" isPending={isPending} pendingLabel="Inviting…">
+          Send invite
+        </Button>
       </form>
 
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <FormError error={state.error} />
 
       {state.inviteUrl && (
         <div className="rounded-md bg-gray-50 p-3 text-sm">
@@ -53,12 +48,12 @@ export function InviteStaffForm({ roles }: { roles: { id: string; name: string }
           </p>
           <div className="mt-1 flex items-center gap-2">
             <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs">{state.inviteUrl}</code>
-            <button type="button" onClick={copyLink} className="text-[var(--brand-primary)] hover:underline">
+            <Button type="button" variant="link" onClick={copyLink}>
               {copied ? "Copied!" : "Copy"}
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

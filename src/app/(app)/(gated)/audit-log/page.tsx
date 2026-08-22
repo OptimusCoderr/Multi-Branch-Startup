@@ -2,6 +2,8 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveMembershipNames } from "@/lib/auth/membership-names";
+import { PageHeader, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, EmptyState } from "@/components/ui";
+import { History } from "lucide-react";
 
 export default async function AuditLogPage({ searchParams }: { searchParams: Promise<{ entityType?: string }> }) {
   const membership = await requireMembership();
@@ -27,13 +29,10 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Audit log</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Every sensitive action taken in this company — append-only, nothing here can be edited or deleted, even by
-          an Owner. Showing the most recent 200 entries.
-        </p>
-      </div>
+      <PageHeader
+        title="Audit log"
+        description="Every sensitive action taken in this company — append-only, nothing here can be edited or deleted, even by an Owner. Showing the most recent 200 entries."
+      />
 
       <div className="flex flex-wrap gap-2 text-sm">
         <a
@@ -54,38 +53,32 @@ export default async function AuditLogPage({ searchParams }: { searchParams: Pro
       </div>
 
       {entries.length === 0 ? (
-        <p className="text-gray-500">No audit log entries{entityType ? ` for "${entityType}"` : ""} yet.</p>
+        <EmptyState icon={History} title={`No audit log entries${entityType ? ` for "${entityType}"` : ""} yet`} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-gray-500">
-                <th className="px-4 py-3">When</th>
-                <th className="px-4 py-3">Actor</th>
-                <th className="px-4 py-3">Action</th>
-                <th className="px-4 py-3">Entity</th>
-                <th className="px-4 py-3">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="border-b border-gray-100 align-top last:border-0">
-                  <td className="whitespace-nowrap px-4 py-3 text-gray-500">{entry.createdAt.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    {entry.actorMembershipId ? (names.get(entry.actorMembershipId) ?? "Unknown") : "System"}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">{entry.action}</td>
-                  <td className="px-4 py-3 text-gray-500">
-                    {entry.entityType} <span className="font-mono text-xs">{entry.entityId.slice(0, 8)}</span>
-                  </td>
-                  <td className="max-w-xs truncate px-4 py-3 font-mono text-xs text-gray-500" title={JSON.stringify(entry.metadata)}>
-                    {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>When</TableHeaderCell>
+            <TableHeaderCell>Actor</TableHeaderCell>
+            <TableHeaderCell>Action</TableHeaderCell>
+            <TableHeaderCell>Entity</TableHeaderCell>
+            <TableHeaderCell>Details</TableHeaderCell>
+          </TableHeader>
+          <TableBody>
+            {entries.map((entry) => (
+              <TableRow key={entry.id} className="align-top">
+                <TableCell className="whitespace-nowrap text-gray-500">{entry.createdAt.toLocaleString()}</TableCell>
+                <TableCell>{entry.actorMembershipId ? (names.get(entry.actorMembershipId) ?? "Unknown") : "System"}</TableCell>
+                <TableCell mono>{entry.action}</TableCell>
+                <TableCell className="text-gray-500">
+                  {entry.entityType} <span className="font-mono text-xs">{entry.entityId.slice(0, 8)}</span>
+                </TableCell>
+                <TableCell className="max-w-xs truncate text-xs text-gray-500" mono title={JSON.stringify(entry.metadata)}>
+                  {entry.metadata ? JSON.stringify(entry.metadata) : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

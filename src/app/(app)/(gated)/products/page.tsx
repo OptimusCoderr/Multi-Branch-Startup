@@ -1,9 +1,22 @@
-import Link from "next/link";
+import { Package } from "lucide-react";
 import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { formatMoney } from "@/lib/format";
 import { deactivateProduct } from "@/server/actions/products";
+import {
+  PageHeader,
+  LinkButton,
+  Button,
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  Badge,
+  EmptyState,
+} from "@/components/ui";
 
 export default async function ProductsPage() {
   const membership = await requireMembership();
@@ -17,72 +30,61 @@ export default async function ProductsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Products</h1>
-        <div className="flex items-center gap-3">
-          {permissions.has(PERMISSIONS.PRODUCTS_VIEW) && (
-            <a href="/api/exports/products" className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
-              Export CSV
-            </a>
-          )}
-          {canCreate && (
-            <Link href="/products/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-              New product
-            </Link>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Products"
+        actions={
+          <>
+            {permissions.has(PERMISSIONS.PRODUCTS_VIEW) && (
+              <a href="/api/exports/products" className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
+                Export CSV
+              </a>
+            )}
+            {canCreate && <LinkButton href="/products/new">New product</LinkButton>}
+          </>
+        }
+      />
 
       {products.length === 0 ? (
-        <p className="text-gray-500">No products yet.</p>
+        <EmptyState
+          icon={Package}
+          title="No products yet"
+          description="Add your first product to start tracking stock across your locations."
+          action={canCreate ? <LinkButton href="/products/new">New product</LinkButton> : undefined}
+        />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">SKU</th>
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Price</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.id} className="border-b border-gray-100">
-                  <td className="py-2 pr-4 font-mono text-xs">{p.sku}</td>
-                  <td className="py-2 pr-4">{p.name}</td>
-                  <td className="py-2 pr-4">{formatMoney(p.unitPrice.toString(), membership.companyCurrency)}</td>
-                  <td className="py-2 pr-4">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                      }`}
-                    >
-                      {p.isActive ? "Active" : "Inactive"}
-                    </span>
-                  </td>
-                  <td className="py-2 text-right">
-                    <div className="flex justify-end gap-3">
-                      {canEdit && (
-                        <Link href={`/products/${p.id}`} className="text-[var(--brand-primary)] hover:underline">
-                          Edit
-                        </Link>
-                      )}
-                      {canDeactivate && (
-                        <form action={deactivateProduct.bind(null, p.id)}>
-                          <button type="submit" className="text-red-600 hover:underline">
-                            {p.isActive ? "Deactivate" : "Reactivate"}
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>SKU</TableHeaderCell>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>Price</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell />
+          </TableHeader>
+          <TableBody>
+            {products.map((p) => (
+              <TableRow key={p.id}>
+                <TableCell mono>{p.sku}</TableCell>
+                <TableCell>{p.name}</TableCell>
+                <TableCell>{formatMoney(p.unitPrice.toString(), membership.companyCurrency)}</TableCell>
+                <TableCell>
+                  <Badge variant={p.isActive ? "success" : "neutral"}>{p.isActive ? "Active" : "Inactive"}</Badge>
+                </TableCell>
+                <TableCell align="right">
+                  <div className="flex justify-end gap-4">
+                    {canEdit && <LinkButton href={`/products/${p.id}`} variant="link">Edit</LinkButton>}
+                    {canDeactivate && (
+                      <form action={deactivateProduct.bind(null, p.id)}>
+                        <Button type="submit" variant="danger-link">
+                          {p.isActive ? "Deactivate" : "Reactivate"}
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

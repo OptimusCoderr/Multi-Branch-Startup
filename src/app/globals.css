@@ -38,3 +38,21 @@ body {
 :root {
   --accent-gradient: linear-gradient(135deg, #6366f1, #d946ef);
 }
+
+/* Derived hover/active/subtle states for the per-company brand color,
+   scoped to whichever element already carries the inline
+   --brand-primary/--brand-secondary vars (src/app/(app)/layout.tsx) — a
+   custom property set via style="" and a rule on that same selector both
+   apply to the element and cascade to its children, so this needs no
+   per-request computation and never hardcodes a color as if it were
+   universal. Same color-mix() trick the dashboard's StatCard already uses
+   for icon tints, promoted one level up so every ui/* primitive can
+   consume it directly. */
+.brand-scope {
+  --brand-primary-hover: color-mix(in srgb, var(--brand-primary) 88%, black);
+  --brand-primary-active: color-mix(in srgb, var(--brand-primary) 76%, black);
+  --brand-primary-subtle: color-mix(in srgb, var(--brand-primary) 10%, transparent);
+  --brand-primary-subtle-hover: color-mix(in srgb, var(--brand-primary) 18%, transparent);
+  --brand-ring: color-mix(in srgb, var(--brand-primary) 45%, transparent);
+  --brand-secondary-subtle: color-mix(in srgb, var(--brand-secondary) 12%, transparent);
+}

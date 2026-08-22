@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import {
   requestBluetoothPermissions,
   scanForPrinters,
@@ -14,6 +15,7 @@ import {
 import { ReceiptBuilder } from "@/lib/escpos";
 import { signOut } from "@/lib/auth-client";
 import { theme } from "@/lib/theme";
+import { Button, Card, ListItem } from "@/components/ui";
 
 export default function PrinterSettingsScreen() {
   const [savedPrinter, setSavedPrinter] = useState<SavedPrinter | null | undefined>(undefined);
@@ -91,7 +93,7 @@ export default function PrinterSettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={{ padding: 16, gap: 16 }}>
+      <View style={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
         <View>
           <Text style={styles.title}>Receipt printer</Text>
           <Text style={styles.muted}>Pair a Bluetooth thermal receipt printer to print invoices and credit notes.</Text>
@@ -100,25 +102,19 @@ export default function PrinterSettingsScreen() {
         {savedPrinter === undefined ? (
           <ActivityIndicator />
         ) : savedPrinter ? (
-          <View style={styles.card}>
+          <Card>
             <Text style={styles.cardTitle}>Paired printer</Text>
             <Text style={styles.deviceName}>{savedPrinter.deviceName}</Text>
             <View style={styles.row}>
-              <Pressable style={styles.secondaryButton} onPress={handleTestPrint} disabled={testing}>
-                {testing ? <ActivityIndicator /> : <Text style={styles.secondaryButtonText}>Test print</Text>}
-              </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={handleForget}>
-                <Text style={styles.secondaryButtonText}>Forget</Text>
-              </Pressable>
+              <Button label="Test print" variant="secondary" size="sm" onPress={handleTestPrint} isLoading={testing} style={{ flex: 1 }} />
+              <Button label="Forget" variant="secondary" size="sm" onPress={handleForget} style={{ flex: 1 }} />
             </View>
-          </View>
+          </Card>
         ) : (
-          <View style={styles.card}>
+          <Card>
             <Text style={styles.cardTitle}>No printer paired</Text>
-            <Pressable style={styles.submitButton} onPress={startScan} disabled={scanning}>
-              {scanning ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitButtonText}>Scan for printers</Text>}
-            </Pressable>
-          </View>
+            <Button label="Scan for printers" onPress={startScan} isLoading={scanning} />
+          </Card>
         )}
 
         {error && <Text style={styles.error}>{error}</Text>}
@@ -127,13 +123,16 @@ export default function PrinterSettingsScreen() {
       <FlatList
         data={devices}
         keyExtractor={(d) => d.id}
-        contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+        contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: theme.spacing.sm }}
         ListHeaderComponent={devices.length > 0 ? <Text style={styles.cardTitle}>Nearby devices</Text> : null}
-        renderItem={({ item }) => (
-          <Pressable style={styles.deviceRow} onPress={() => handlePair(item)} disabled={pairingId === item.id}>
-            <Text style={styles.deviceName}>{item.name}</Text>
-            {pairingId === item.id ? <ActivityIndicator /> : <Text style={styles.pairLink}>Pair</Text>}
-          </Pressable>
+        renderItem={({ item, index }) => (
+          <Animated.View entering={FadeInDown.delay(index * 40)}>
+            <ListItem
+              title={item.name}
+              trailing={pairingId === item.id ? <ActivityIndicator /> : <Text style={styles.pairLink}>Pair</Text>}
+              onPress={() => handlePair(item)}
+            />
+          </Animated.View>
         )}
       />
 
@@ -145,28 +144,14 @@ export default function PrinterSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  title: { fontSize: 18, fontWeight: "700" },
-  muted: { color: "#9ca3af", marginTop: 2 },
-  card: { borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 10, padding: 14, gap: 10 },
-  cardTitle: { fontSize: 11, fontWeight: "600", color: "#9ca3af", textTransform: "uppercase" },
-  deviceName: { fontWeight: "600" },
-  row: { flexDirection: "row", gap: 8 },
-  deviceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    padding: 12,
-  },
+  container: { flex: 1, backgroundColor: theme.surface },
+  title: { fontSize: theme.font.h1, fontWeight: "700", color: theme.textPrimary },
+  muted: { color: theme.textFaint, marginTop: 2 },
+  cardTitle: { fontSize: theme.font.micro, fontWeight: "600", color: theme.textFaint, textTransform: "uppercase" },
+  deviceName: { fontWeight: "600", color: theme.textPrimary },
+  row: { flexDirection: "row", gap: theme.spacing.sm },
   pairLink: { color: theme.primary, fontWeight: "600" },
-  submitButton: { backgroundColor: theme.primary, borderRadius: 8, paddingVertical: 12, alignItems: "center" },
-  submitButtonText: { color: "#fff", fontWeight: "600" },
-  secondaryButton: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 14, flex: 1, alignItems: "center" },
-  secondaryButtonText: { color: "#374151", fontWeight: "600" },
-  error: { color: "#dc2626" },
-  signOutRow: { padding: 16, alignItems: "center" },
-  signOutText: { color: "#dc2626", fontWeight: "600" },
+  error: { color: theme.danger },
+  signOutRow: { padding: theme.spacing.lg, alignItems: "center" },
+  signOutText: { color: theme.danger, fontWeight: "600" },
 });

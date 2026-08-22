@@ -6,6 +6,21 @@ import { formatMoney } from "@/lib/format";
 import { getCustomerBalances } from "@/server/services/customer-service";
 import { archiveCustomer } from "@/server/actions/customers";
 import { SendRemindersButton } from "@/components/forms/send-reminders-button";
+import {
+  PageHeader,
+  StatCard,
+  LinkButton,
+  Button,
+  Table,
+  TableHeader,
+  TableHeaderCell,
+  TableBody,
+  TableRow,
+  TableCell,
+  Badge,
+  EmptyState,
+} from "@/components/ui";
+import { Wallet, Users, AlertTriangle, FileDown } from "lucide-react";
 
 export default async function CustomersPage() {
   const membership = await requireMembership();
@@ -32,19 +47,20 @@ export default async function CustomersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Customers</h1>
-        <div className="flex items-center gap-3">
-          <a href="/api/exports/customers" className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
-            Export CSV
-          </a>
-          {canCreate && (
-            <Link href="/customers/new" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-              New customer
-            </Link>
-          )}
-        </div>
-      </div>
+      <PageHeader
+        title="Customers"
+        actions={
+          <>
+            <a
+              href="/api/exports/customers"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--brand-primary)] hover:underline"
+            >
+              <FileDown size={14} /> Export CSV
+            </a>
+            {canCreate && <LinkButton href="/customers/new">New customer</LinkButton>}
+          </>
+        }
+      />
 
       {canCreate &&
         (company?.debtReminderEnabled ? (
@@ -60,81 +76,62 @@ export default async function CustomersPage() {
         ))}
 
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Total outstanding</p>
-          <p className="mt-1 text-xl font-semibold">{formatMoney(totalOutstanding.toString(), currency)}</p>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Debtors</p>
-          <p className="mt-1 text-xl font-semibold">{debtorCount}</p>
-        </div>
-        <div className="rounded-lg border border-gray-200 p-4">
-          <p className="text-xs font-semibold uppercase text-gray-400">Overdue</p>
-          <p className="mt-1 text-xl font-semibold text-amber-700">{overdueCount}</p>
-        </div>
+        <StatCard icon={Wallet} label="Total outstanding" value={formatMoney(totalOutstanding.toString(), currency)} tint="#d97706" />
+        <StatCard icon={Users} label="Debtors" value={String(debtorCount)} tint="var(--brand-primary)" />
+        <StatCard icon={AlertTriangle} label="Overdue" value={String(overdueCount)} tint="#dc2626" />
       </div>
 
       {customers.length === 0 ? (
-        <p className="text-gray-500">No customers yet.</p>
+        <EmptyState icon={Users} title="No customers yet" />
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 text-gray-500">
-                <th className="py-2 pr-4">Name</th>
-                <th className="py-2 pr-4">Phone</th>
-                <th className="py-2 pr-4">Outstanding</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c) => {
-                const balance = balances.get(c.id);
-                const overdue = (balance?.overdueSaleCount ?? 0) > 0;
-                return (
-                  <tr key={c.id} className="border-b border-gray-100">
-                    <td className="py-2 pr-4">{c.name}</td>
-                    <td className="py-2 pr-4 text-gray-500">{c.phone ?? "—"}</td>
-                    <td className="py-2 pr-4">
-                      {balance && balance.outstanding.gt(0) ? (
-                        <span className={overdue ? "font-medium text-red-600" : "font-medium text-amber-700"}>
-                          {formatMoney(balance.outstanding.toString(), currency)}
-                          {overdue ? " (overdue)" : ""}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
-                          c.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                        }`}
-                      >
-                        {c.isActive ? "Active" : "Archived"}
+        <Table>
+          <TableHeader>
+            <TableHeaderCell>Name</TableHeaderCell>
+            <TableHeaderCell>Phone</TableHeaderCell>
+            <TableHeaderCell>Outstanding</TableHeaderCell>
+            <TableHeaderCell>Status</TableHeaderCell>
+            <TableHeaderCell align="right"></TableHeaderCell>
+          </TableHeader>
+          <TableBody>
+            {customers.map((c) => {
+              const balance = balances.get(c.id);
+              const overdue = (balance?.overdueSaleCount ?? 0) > 0;
+              return (
+                <TableRow key={c.id}>
+                  <TableCell>{c.name}</TableCell>
+                  <TableCell className="text-gray-500">{c.phone ?? "—"}</TableCell>
+                  <TableCell>
+                    {balance && balance.outstanding.gt(0) ? (
+                      <span className={overdue ? "font-medium text-red-600" : "font-medium text-amber-700"}>
+                        {formatMoney(balance.outstanding.toString(), currency)}
+                        {overdue ? " (overdue)" : ""}
                       </span>
-                    </td>
-                    <td className="py-2 text-right">
-                      <div className="flex justify-end gap-3">
-                        <Link href={`/customers/${c.id}`} className="text-[var(--brand-primary)] hover:underline">
-                          View
-                        </Link>
-                        {canCreate && (
-                          <form action={archiveCustomer.bind(null, c.id)}>
-                            <button type="submit" className="text-red-600 hover:underline">
-                              {c.isActive ? "Archive" : "Reactivate"}
-                            </button>
-                          </form>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={c.isActive ? "success" : "neutral"}>{c.isActive ? "Active" : "Archived"}</Badge>
+                  </TableCell>
+                  <TableCell align="right">
+                    <div className="flex justify-end gap-3">
+                      <LinkButton href={`/customers/${c.id}`} variant="link">
+                        View
+                      </LinkButton>
+                      {canCreate && (
+                        <form action={archiveCustomer.bind(null, c.id)}>
+                          <Button type="submit" variant="danger-link">
+                            {c.isActive ? "Archive" : "Reactivate"}
+                          </Button>
+                        </form>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

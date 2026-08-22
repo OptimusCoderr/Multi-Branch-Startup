@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { Field, Input, Textarea, Checkbox, FormError, Button } from "@/components/ui";
 
 type ProductFormState = { error: string };
 const initialState: ProductFormState = { error: "" };
@@ -27,114 +28,52 @@ export function ProductForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1 text-sm">
-        SKU
-        <input
-          name="sku"
-          defaultValue={defaultValues?.sku}
-          className="rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
-          required
-        />
-      </label>
+      <Field label="SKU">
+        <Input name="sku" mono defaultValue={defaultValues?.sku} required />
+      </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Barcode <span className="text-gray-400">(optional)</span>
-        <input
-          name="barcode"
-          defaultValue={defaultValues?.barcode ?? ""}
-          placeholder="e.g. EAN-13 / UPC printed on the product"
-          className="rounded-md border border-gray-300 px-3 py-2 font-mono text-sm"
-        />
-        <span className="text-xs text-gray-400">Scanned in the mobile app for POS-speed sales entry and stock counts.</span>
-      </label>
+      <Field label="Barcode" optional hint="Scanned in the mobile app for POS-speed sales entry and stock counts.">
+        <Input name="barcode" mono defaultValue={defaultValues?.barcode ?? ""} placeholder="e.g. EAN-13 / UPC printed on the product" />
+      </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Name
-        <input
-          name="name"
-          defaultValue={defaultValues?.name}
-          className="rounded-md border border-gray-300 px-3 py-2"
-          required
-        />
-      </label>
+      <Field label="Name">
+        <Input name="name" defaultValue={defaultValues?.name} required />
+      </Field>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Description
-        <textarea
-          name="description"
-          defaultValue={defaultValues?.description ?? ""}
-          className="rounded-md border border-gray-300 px-3 py-2"
-          rows={3}
-        />
-      </label>
+      <Field label="Description">
+        <Textarea name="description" defaultValue={defaultValues?.description ?? ""} rows={3} />
+      </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <label className="flex flex-col gap-1 text-sm">
-          Price
-          <input
-            name="unitPrice"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={defaultValues?.unitPrice}
-            className="rounded-md border border-gray-300 px-3 py-2"
-            required
-          />
-        </label>
+        <Field label="Price">
+          <Input name="unitPrice" type="number" step="0.01" min="0" defaultValue={defaultValues?.unitPrice} required />
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm">
-          Cost price (optional)
-          <input
-            name="costPrice"
-            type="number"
-            step="0.01"
-            min="0"
-            defaultValue={defaultValues?.costPrice ?? ""}
-            className="rounded-md border border-gray-300 px-3 py-2"
-          />
-        </label>
+        <Field label="Cost price" optional>
+          <Input name="costPrice" type="number" step="0.01" min="0" defaultValue={defaultValues?.costPrice ?? ""} />
+        </Field>
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Reorder point (optional)
-        <input
-          name="reorderPoint"
-          type="number"
-          min="0"
-          step="1"
-          defaultValue={defaultValues?.reorderPoint ?? ""}
-          className="rounded-md border border-gray-300 px-3 py-2"
-        />
-        <span className="text-xs text-gray-400">
-          Get a low-stock alert once total stock across all locations falls to or below this number. Leave blank for no alert.
-        </span>
-      </label>
-
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          name="tracksBatches"
-          type="checkbox"
-          defaultChecked={defaultValues?.tracksBatches ?? false}
-          className="mt-0.5 h-4 w-4 rounded border-gray-300"
-        />
-        <span>
-          Perishable / tracked by batch
-          <span className="block text-xs text-gray-400">
-            e.g. yogurt, packaged juices. Every delivery of this product will require a batch number and expiry date, and
-            older batches are sold first.
-          </span>
-        </span>
-      </label>
-
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
-
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+      <Field
+        label="Reorder point"
+        optional
+        hint="Get a low-stock alert once total stock across all locations falls to or below this number. Leave blank for no alert."
       >
-        {isPending ? "Saving…" : submitLabel}
-      </button>
+        <Input name="reorderPoint" type="number" min="0" step="1" defaultValue={defaultValues?.reorderPoint ?? ""} />
+      </Field>
+
+      <Checkbox
+        name="tracksBatches"
+        defaultChecked={defaultValues?.tracksBatches ?? false}
+        label="Perishable / tracked by batch"
+        description="e.g. yogurt, packaged juices. Every delivery of this product will require a batch number and expiry date, and older batches are sold first."
+      />
+
+      <FormError error={state.error} />
+
+      <Button type="submit" isPending={isPending} pendingLabel="Saving…" className="self-start">
+        {submitLabel}
+      </Button>
     </form>
   );
 }

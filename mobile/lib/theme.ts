@@ -13,4 +13,22 @@ export const theme = {
   warning: "#d97706",
   danger: "#dc2626",
   gradient: ["#6366f1", "#d946ef"] as const,
-};
+
+  border: "#e5e7eb",
+  borderStrong: "#d1d5db",
+  surface: "#ffffff",
+  surfaceMuted: "#f9fafb",
+
+  textPrimary: "#111827",
+  textMuted: "#6b7280",
+  textFaint: "#9ca3af",
+
+  radius: { sm: 8, md: 10, lg: 14, xl: 20, full: 999 },
+  spacing: { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24 },
+  font: { display: 22, h1: 18, h2: 15, body: 14, caption: 12, micro: 11 },
+
+  shadow: {
+    sm: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+    md: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  },
+} as const;

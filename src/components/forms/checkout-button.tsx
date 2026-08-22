@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { startSubscriptionCheckout } from "@/server/actions/billing";
+import { FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -12,14 +13,10 @@ export function CheckoutButton({ planId, label }: { planId: string; label: strin
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="planId" value={planId} />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        {isPending ? "Redirecting…" : label}
-      </button>
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      <Button type="submit" isPending={isPending} pendingLabel="Redirecting…">
+        {label}
+      </Button>
+      <FormError error={state.error} />
     </form>
   );
 }
