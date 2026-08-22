@@ -123,7 +123,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
             {sale.payments.map((p) => (
               <li key={p.id} className="flex justify-between">
                 <span>
-                  {p.mode.replace("_", " ")} · {nameOf(p.recordedByMembershipId)} · {p.paidAt.toLocaleString()}
+                  {p.mode.replace("_", " ")} · {nameOf(p.recordedByMembershipId) ?? "Paid by customer (self-service link)"} · {p.paidAt.toLocaleString()}
                 </span>
                 <span className="font-mono">{formatMoney(p.amount.toString(), currency)}</span>
               </li>

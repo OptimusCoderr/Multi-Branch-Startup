@@ -52,6 +52,15 @@ model Company {
   debtReminderEnabled     Boolean @default(false)
   debtReminderDaysOverdue Int     @default(7)
 
+  // Consumed one-per-send in sendDebtReminders(); replenished monthly by
+  // the subscription's Plan.features.includedReminderCredits (see
+  // plan-features.ts) and top-uppable via a one-time Paystack purchase
+  // (billing-service.ts). Balance, not a ledger table — DebtReminder rows
+  // and AuditLog "billing.reminder_credits_purchased" entries already give
+  // a reconstructable history without a dedicated transactions table.
+  reminderCreditBalance      Int       @default(0)
+  reminderCreditsRefreshedAt DateTime?
+
   // Business verification (CAC). rcNumber/incorporationDate are collected
   // (optionally) at sign-up; verificationDeadline is set to createdAt + 5
   // days there too. A company with no CAC is still allowed to operate —
@@ -106,9 +115,29 @@ model Company {
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
   dailySalesReports DailySalesReport[]
+  reminderCreditPurchases ReminderCreditPurchase[]
 
   @@index([status])
   @@index([verificationStatus])
+}
+
+/**
+ * One row per completed reminder-credit top-up — doubles as the audit
+ * trail for "where did this balance come from" and the idempotency guard
+ * against double-crediting the same Paystack transaction (the redirect
+ * callback and the webhook both try to apply it; `reference` is unique so
+ * whichever arrives second just no-ops against the first's row).
+ */
+model ReminderCreditPurchase {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reference String   @unique
+  credits   Int
+  priceKobo Int
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +302,15 @@ model Membership {
   invitedByMembershipId String?
   invitedAt             DateTime?
   joinedAt              DateTime?
+
+  // Self-service, set/changed by the staff member themselves from the
+  // mobile app (never by an Owner) — a fast local re-auth gate for
+  // switching between staff already fully signed in on one shared shop
+  // phone. Scrypt-hashed ("salt:hash" hex), never the raw PIN. This is
+  // NOT a standalone credential: it only ever gates reactivating a
+  // session that a real email/password (+2FA, if applicable) login
+  // already established on that device — see mobile/lib/device-profiles.ts.
+  devicePinHash String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -484,6 +522,13 @@ model Product {
   barcode     String?
   name        String
   description String?
+  // Free-text, merchant-chosen ("carton", "bag", "dozen", "mudu", "yard")
+  // rather than a fixed enum — informal-market goods aren't sold in
+  // generic "units," and forcing a fixed list would mean missing whatever
+  // a given trade actually uses. Shown next to every quantity in the UI;
+  // purely cosmetic, never affects stock math (still tracked as a plain
+  // integer count of this unit).
+  unitLabel   String   @default("unit")
   unitPrice   Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
@@ -1176,7 +1221,11 @@ model Payment {
   reference String?
   notes     String?
 
-  recordedByMembershipId String
+  // Null means this wasn't recorded by any staff member — a debtor paying
+  // through their own self-serve payment link (see payment-link.ts) is the
+  // one case that applies to; every other payment path still always
+  // supplies a real membership.
+  recordedByMembershipId String?
   paidAt                 DateTime @default(now())
 
   @@index([companyId, saleId])

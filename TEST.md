@@ -726,6 +726,51 @@ must submit before they can record more sales at that branch that day.
 Mobile support for offline sale recording and a lightweight submit/status screen is
 covered under "Offline sale recording and daily reports" in the Mobile app section below.
 
+### 24. Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN
+
+Six smaller features aimed at everyday habit and trust, not one big feature — test them independently.
+
+**Product units** — `/products/new`, set "Unit" to something like `carton` or `bag` (defaults to
+`unit` if left blank). Confirm it shows up next to quantities on `/stock` and in the product
+picker on `/sales/new` ("3 cartons", not a bare "3") — and the same on mobile's Sales/Stock screens.
+
+**Daily summary card** — record a sale, then check `/dashboard` (web) or the Dashboard tab
+(mobile): a distinct "Today's summary" card should show sales/expenses/profit/amount owed,
+separate from the metric-tile grid below it. Click **Copy to share** (web) or **Share** (mobile)
+and confirm a clean, WhatsApp-ready text summary is produced.
+
+**Backup & trust messaging** — `/settings/backup` should show record counts (sales/expenses/
+customers) backing up the "your book is safely stored in the cloud" claim. On mobile, queue a
+sale offline and confirm the pending-sync banner (Sales tab) grows a "these have been waiting a
+while" warning once you artificially age it past ~12h (or just confirm the copy is present).
+
+**Debtor pay-links** — enable debt reminders (`/settings/debt-reminders`), record an overdue
+credit sale for a customer with a phone number, then trigger a reminder (**Send reminders now**
+on `/customers`, or wait for the daily cron). With a real Termii key configured, the SMS itself
+will contain a `/pay/<token>` link; visiting it (no sign-in required) should show the correct
+outstanding amount and company name, with a "Powered by Multi-Branch Inventory" footer. Tapping
+**Pay now** starts a real Paystack checkout (needs a configured `PAYSTACK_SECRET_KEY`); on
+success, confirm a `Payment` appears on the sale attributed to "Paid by customer (self-service
+link)" rather than any staff member, and that revisiting the same link now shows "already
+settled." Confirm an invalid/garbled token shows a generic "invalid or has expired" message
+instead of an error page.
+
+**Reminder credits** — `/settings/debt-reminders` shows a credit balance and three packs to buy
+(needs a configured Paystack key to complete a real purchase; without one, submitting shows a
+clear "billing is not configured" error rather than crashing). Set a company's
+`reminderCreditBalance` to `0` directly in `psql` and confirm **Send reminders now** stops
+immediately with an "out of reminder credits" message instead of silently failing or overspending
+— a successfully-sent reminder should decrement the balance by exactly one.
+
+**Quick-switch PIN (mobile, shared device)** — from the Settings tab, tap **Switch user**, set a
+4-6 digit PIN for the currently signed-in profile. Sign in as a second staff member on the *same*
+device (so both profiles get remembered locally), have them also set a PIN, then use **Switch
+user** to swap between the two using only their PIN — no password re-entry. Confirm the app now
+acts as whoever you switched to (their name/permissions), and that a wrong PIN is rejected. Use
+**Remove** to drop a profile from the device; confirm it now requires a full sign-in again.
+Signing all the way out (not just switching) should clear every remembered profile from that
+device.
+
 ## Mobile app
 
 ```bash

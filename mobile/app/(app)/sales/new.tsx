@@ -4,14 +4,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { ScanLine } from "lucide-react-native";
 import { api, ApiRequestError } from "@/lib/api";
-import { useMe, formatMoney } from "@/lib/use-me";
+import { useMe, formatMoney, formatQuantity } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
 import { Button, Field, Input, ListItem } from "@/components/ui";
 import { enqueueSale, generateClientRequestId } from "@/lib/offline-queue";
 import { isOnline } from "@/lib/network-status";
 
-type LineItem = { productId: string; name: string; unitPrice: number; quantity: number };
+type LineItem = { productId: string; name: string; unitPrice: number; unitLabel: string; quantity: number };
 
 export default function NewSaleScreen() {
   const router = useRouter();
@@ -83,13 +83,13 @@ export default function NewSaleScreen() {
     onError: (err: Error) => setError(err.message),
   });
 
-  function addProduct(productId: string, name: string, unitPrice: number) {
+  function addProduct(productId: string, name: string, unitPrice: number, unitLabel: string) {
     setLineItems((prev) => {
       const existing = prev.find((li) => li.productId === productId);
       if (existing) {
         return prev.map((li) => (li.productId === productId ? { ...li, quantity: li.quantity + 1 } : li));
       }
-      return [...prev, { productId, name, unitPrice, quantity: 1 }];
+      return [...prev, { productId, name, unitPrice, unitLabel, quantity: 1 }];
     });
   }
 
@@ -101,7 +101,7 @@ export default function NewSaleScreen() {
       return;
     }
     setError(null);
-    addProduct(product.id, product.name, Number(product.unitPrice));
+    addProduct(product.id, product.name, Number(product.unitPrice), product.unitLabel);
   }
 
   function changeQuantity(productId: string, delta: number) {
@@ -155,9 +155,9 @@ export default function NewSaleScreen() {
             <ListItem
               key={p.id}
               title={p.name}
-              subtitle={p.sku}
+              subtitle={`${p.sku} · per ${p.unitLabel}`}
               trailing={<Text style={styles.muted}>{formatMoney(p.unitPrice, currency)}</Text>}
-              onPress={() => addProduct(p.id, p.name, Number(p.unitPrice))}
+              onPress={() => addProduct(p.id, p.name, Number(p.unitPrice), p.unitLabel)}
             />
           ))}
         </View>
@@ -169,7 +169,10 @@ export default function NewSaleScreen() {
           <View style={{ gap: theme.spacing.sm }}>
             {lineItems.map((li) => (
               <View key={li.productId} style={styles.lineItemRow}>
-                <Text style={{ flex: 1 }}>{li.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text>{li.name}</Text>
+                  <Text style={styles.muted}>{formatQuantity(li.quantity, li.unitLabel)}</Text>
+                </View>
                 <Pressable onPress={() => changeQuantity(li.productId, -1)} style={styles.stepperButton}>
                   <Text style={styles.stepperText}>−</Text>
                 </Pressable>

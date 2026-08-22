@@ -2,6 +2,7 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { AdjustWarehouseStockForm } from "@/components/forms/adjust-warehouse-stock-form";
+import { formatQuantity } from "@/lib/format";
 import { PageHeader, Card, Badge, EmptyState } from "@/components/ui";
 import { PackageSearch } from "lucide-react";
 
@@ -62,7 +63,7 @@ export default async function StockPage() {
                   {product.name} <span className="font-mono text-xs text-gray-500 dark:text-gray-400">({product.sku})</span>
                   {isLowStock && (
                     <Badge variant="danger">
-                      Low stock ({totalStock} ≤ {product.reorderPoint})
+                      Low stock ({formatQuantity(totalStock, product.unitLabel)} ≤ {product.reorderPoint})
                     </Badge>
                   )}
                 </p>
@@ -77,7 +78,7 @@ export default async function StockPage() {
                           product.warehouseStocks.map((stock) => (
                             <li key={stock.id} className="flex justify-between">
                               <span>{stock.warehouse.name}</span>
-                              <span className="font-mono">{stock.quantity}</span>
+                              <span className="font-mono">{formatQuantity(stock.quantity, product.unitLabel)}</span>
                             </li>
                           ))
                         )}
@@ -93,7 +94,7 @@ export default async function StockPage() {
                         product.branchStocks.map((stock) => (
                           <li key={stock.id} className="flex justify-between">
                             <span>{stock.branch.name}</span>
-                            <span className="font-mono">{stock.quantity}</span>
+                            <span className="font-mono">{formatQuantity(stock.quantity, product.unitLabel)}</span>
                           </li>
                         ))
                       )}

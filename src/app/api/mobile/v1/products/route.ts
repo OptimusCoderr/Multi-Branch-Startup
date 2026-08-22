@@ -14,7 +14,7 @@ export async function GET() {
     const products = await db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, sku: true, barcode: true, name: true, description: true, unitPrice: true },
+      select: { id: true, sku: true, barcode: true, name: true, description: true, unitPrice: true, unitLabel: true },
     });
 
     return NextResponse.json({

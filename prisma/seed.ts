@@ -23,9 +23,10 @@ async function main() {
   }
 
   console.log("Seeding subscription plans...");
+  const soloFeatures = { maxBranches: 1, maxWarehouses: 0, maxStaff: 2, includedReminderCredits: 50 };
   await prisma.plan.upsert({
     where: { name: "Solo" },
-    update: {},
+    update: { features: soloFeatures },
     create: {
       name: "Solo",
       priceKobo: 500_000, // NGN 5,000/mo
@@ -33,27 +34,29 @@ async function main() {
       // maxWarehouses: 0 is a real cap, not "uncapped" — parsePlanFeatures()
       // and assertUnderWarehouseLimit() both special-case 0 correctly
       // (checked via `typeof === "number"` / `!== undefined`, not truthiness).
-      features: { maxBranches: 1, maxWarehouses: 0, maxStaff: 2 },
+      features: soloFeatures,
     },
   });
+  const starterFeatures = { maxBranches: 2, maxWarehouses: 1, maxStaff: 10, includedReminderCredits: 200 };
   await prisma.plan.upsert({
     where: { name: "Starter" },
-    update: {},
+    update: { features: starterFeatures },
     create: {
       name: "Starter",
       priceKobo: 1_500_000, // NGN 15,000/mo
       billingInterval: "MONTHLY",
-      features: { maxBranches: 2, maxWarehouses: 1, maxStaff: 10 },
+      features: starterFeatures,
     },
   });
+  const growthFeatures = { maxBranches: 10, maxWarehouses: 5, maxStaff: 50, includedReminderCredits: 1000 };
   await prisma.plan.upsert({
     where: { name: "Growth" },
-    update: {},
+    update: { features: growthFeatures },
     create: {
       name: "Growth",
       priceKobo: 4_000_000, // NGN 40,000/mo
       billingInterval: "MONTHLY",
-      features: { maxBranches: 10, maxWarehouses: 5, maxStaff: 50 },
+      features: growthFeatures,
     },
   });
 

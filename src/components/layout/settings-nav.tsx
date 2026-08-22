@@ -6,6 +6,7 @@ const LINKS = [
   { href: "/settings/debt-reminders", label: "Debt reminders" },
   { href: "/settings/verification", label: "Verification" },
   { href: "/settings/security", label: "Security" },
+  { href: "/settings/backup", label: "Data & backup" },
 ];
 
 export function SettingsNav({ current }: { current: string }) {

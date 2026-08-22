@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ActivityIndicator } from "react-native";
+import { Link } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { ShieldCheck, Users } from "lucide-react-native";
 import {
   requestBluetoothPermissions,
   scanForPrinters,
@@ -13,7 +15,7 @@ import {
   type SavedPrinter,
 } from "@/lib/bluetooth-printer";
 import { ReceiptBuilder } from "@/lib/escpos";
-import { signOut } from "@/lib/auth-client";
+import { signOutEverywhere } from "@/lib/device-profiles";
 import { theme } from "@/lib/theme";
 import { Button, Card, ListItem } from "@/components/ui";
 
@@ -118,6 +120,29 @@ export default function PrinterSettingsScreen() {
         )}
 
         {error && <Text style={styles.error}>{error}</Text>}
+
+        <Link href="/switch-user" asChild>
+          <Pressable>
+            <Card>
+              <View style={styles.backupHeader}>
+                <Users size={16} color={theme.primary} />
+                <Text style={styles.cardTitle}>Switch user</Text>
+              </View>
+              <Text style={styles.muted}>Quickly swap to another staff member already signed in on this phone.</Text>
+            </Card>
+          </Pressable>
+        </Link>
+
+        <Card>
+          <View style={styles.backupHeader}>
+            <ShieldCheck size={16} color={theme.success} />
+            <Text style={styles.cardTitle}>Your book is backed up</Text>
+          </View>
+          <Text style={styles.muted}>
+            Every synced sale, expense, and debtor is saved to the cloud — sign in from any phone and it&apos;s all
+            there. Only sales still waiting in the pending-sync banner on the Sales tab live on this phone alone.
+          </Text>
+        </Card>
       </View>
 
       <FlatList
@@ -136,7 +161,7 @@ export default function PrinterSettingsScreen() {
         )}
       />
 
-      <Pressable style={styles.signOutRow} onPress={() => signOut()}>
+      <Pressable style={styles.signOutRow} onPress={() => signOutEverywhere()}>
         <Text style={styles.signOutText}>Sign out</Text>
       </Pressable>
     </View>
@@ -148,6 +173,7 @@ const styles = StyleSheet.create({
   title: { fontSize: theme.font.h1, fontWeight: "700", color: theme.textPrimary },
   muted: { color: theme.textFaint, marginTop: 2 },
   cardTitle: { fontSize: theme.font.micro, fontWeight: "600", color: theme.textFaint, textTransform: "uppercase" },
+  backupHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 },
   deviceName: { fontWeight: "600", color: theme.textPrimary },
   row: { flexDirection: "row", gap: theme.spacing.sm },
   pairLink: { color: theme.primary, fontWeight: "600" },

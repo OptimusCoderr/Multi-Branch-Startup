@@ -19,6 +19,9 @@ export function PendingSyncBanner() {
   if (items.length === 0) return null;
 
   const failed = items.filter((p) => p.error);
+  const STALE_MS = 12 * 60 * 60 * 1000;
+  const oldestQueuedAt = Math.min(...items.map((p) => p.queuedAt));
+  const isStale = Date.now() - oldestQueuedAt > STALE_MS;
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["offline-queue"] });
@@ -44,6 +47,12 @@ export function PendingSyncBanner() {
           {items.length} sale{items.length === 1 ? "" : "s"} waiting to sync
         </Text>
       </View>
+      {isStale && (
+        <Text style={styles.staleText}>
+          These have been waiting a while — they&apos;re only safely backed up once synced. Try to get back online
+          soon, especially before switching phones.
+        </Text>
+      )}
       <Button label="Sync now" variant="secondary" size="sm" onPress={handleSyncNow} />
       {failed.map((p) => (
         <View key={p.clientRequestId} style={styles.failedRow}>
@@ -69,4 +78,5 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.xs,
   },
   failedText: { flex: 1, color: theme.danger, fontSize: theme.font.caption },
+  staleText: { color: theme.danger, fontSize: theme.font.caption },
 });

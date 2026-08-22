@@ -4,7 +4,7 @@ import { Link } from "expo-router";
 import { ScanLine, PackageSearch } from "lucide-react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { api, type StockProduct } from "@/lib/api";
-import { useHasPermission } from "@/lib/use-me";
+import { useHasPermission, formatQuantity } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { Button, Card, Badge, EmptyState, SkeletonCard } from "@/components/ui";
 
@@ -49,13 +49,13 @@ export default function StockScreen() {
                   {item.branchStocks.map((s) => (
                     <View key={s.branchId} style={styles.row}>
                       <Text style={styles.location}>{s.branchName}</Text>
-                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
+                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{formatQuantity(s.quantity, item.unitLabel)}</Text>
                     </View>
                   ))}
                   {item.warehouseStocks.map((s) => (
                     <View key={s.warehouseId} style={styles.row}>
                       <Text style={styles.location}>{s.warehouseName} (warehouse)</Text>
-                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{s.quantity}</Text>
+                      <Text style={[styles.qty, s.quantity === 0 && styles.qtyZero]}>{formatQuantity(s.quantity, item.unitLabel)}</Text>
                     </View>
                   ))}
                 </Card>

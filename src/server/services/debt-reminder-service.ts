@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { sendSms, SmsNotConfiguredError } from "@/lib/notifications/sms-client";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { createPaymentLinkToken } from "@/lib/auth/payment-link";
 
 type ScopedClient = Pick<
   ReturnType<typeof getScopedPrisma>,
@@ -20,9 +21,13 @@ export type DebtReminderRunSummary = {
   candidates: number;
   sent: number;
   failed: number;
+  // True when the run stopped early because reminderCreditBalance hit 0 —
+  // distinct from `configured: false` (no SMS provider at all), since this
+  // means sending works fine, the company just needs to top up credits.
+  outOfCredits: boolean;
 };
 
-type Candidate = { customerId: string; name: string; phone: string; outstanding: Prisma.Decimal };
+type Candidate = { customerId: string; name: string; phone: string; outstanding: Prisma.Decimal; representativeSaleId: string };
 
 async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: number): Promise<Candidate[]> {
   const now = new Date();
@@ -35,6 +40,7 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
       customerId: { not: null },
       dueDate: { lt: cutoff },
     },
+    orderBy: { dueDate: "asc" },
     select: { id: true, customerId: true, grandTotal: true, amountPaid: true },
   });
   if (overdueSales.length === 0) return [];
@@ -49,12 +55,20 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
   }
 
   const outstandingByCustomer = new Map<string, Prisma.Decimal>();
+  // The oldest still-payable sale per customer (sales are ordered by
+  // dueDate ascending above, so the first one seen per customer is it) —
+  // that's what the reminder's pay-link points at, since a customer can
+  // owe across several sales but recordPayment() only ever applies to one.
+  const representativeSaleByCustomer = new Map<string, string>();
   for (const sale of overdueSales) {
     if (!sale.customerId) continue;
     const credited = creditedBySaleId.get(sale.id) ?? new Prisma.Decimal(0);
     const outstanding = sale.grandTotal.sub(sale.amountPaid).sub(credited);
     if (outstanding.lte(0)) continue;
     outstandingByCustomer.set(sale.customerId, (outstandingByCustomer.get(sale.customerId) ?? new Prisma.Decimal(0)).add(outstanding));
+    if (!representativeSaleByCustomer.has(sale.customerId)) {
+      representativeSaleByCustomer.set(sale.customerId, sale.id);
+    }
   }
 
   if (outstandingByCustomer.size === 0) return [];
@@ -85,8 +99,9 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
     if (recentlyRemindedIds.has(customer.id)) continue;
     if (!customer.phone) continue;
     const outstanding = outstandingByCustomer.get(customer.id);
-    if (!outstanding) continue;
-    candidates.push({ customerId: customer.id, name: customer.name, phone: customer.phone, outstanding });
+    const representativeSaleId = representativeSaleByCustomer.get(customer.id);
+    if (!outstanding || !representativeSaleId) continue;
+    candidates.push({ customerId: customer.id, name: customer.name, phone: customer.phone, outstanding, representativeSaleId });
   }
 
   return candidates;
@@ -106,32 +121,47 @@ export async function sendDebtReminders(
 ): Promise<DebtReminderRunSummary> {
   const company = await db.company.findUnique({ where: { id: companyId } });
   if (!company || !company.debtReminderEnabled) {
-    return { configured: true, candidates: 0, sent: 0, failed: 0 };
+    return { configured: true, candidates: 0, sent: 0, failed: 0, outOfCredits: false };
   }
 
   const candidates = await findCandidates(db, companyId, company.debtReminderDaysOverdue);
   if (candidates.length === 0) {
-    return { configured: true, candidates: 0, sent: 0, failed: 0 };
+    return { configured: true, candidates: 0, sent: 0, failed: 0, outOfCredits: false };
   }
 
   let sent = 0;
   let failed = 0;
+  let creditBalance = company.reminderCreditBalance;
 
   for (const candidate of candidates) {
-    const message = `Hi ${candidate.name}, this is a reminder from ${company.name} that you have an outstanding balance of ${company.currency} ${candidate.outstanding.toFixed(2)}. Please arrange payment at your earliest convenience. Thank you.`;
+    // Checked per-candidate (not once up front) since the balance only
+    // ever decreases within this loop — stop the moment it actually runs
+    // out rather than either overspending or refusing a run that had
+    // enough credits for at least some of today's candidates.
+    if (creditBalance <= 0) {
+      return { configured: true, candidates: candidates.length, sent, failed, outOfCredits: true };
+    }
+
+    const baseUrl = process.env.BETTER_AUTH_URL ?? "";
+    const payLink = baseUrl ? `${baseUrl}/pay/${createPaymentLinkToken(candidate.representativeSaleId)}` : null;
+    const message = `Hi ${candidate.name}, this is a reminder from ${company.name} that you have an outstanding balance of ${company.currency} ${candidate.outstanding.toFixed(2)}.${payLink ? ` Pay now: ${payLink}` : ""} Thank you for your business with ${company.name}.`;
 
     let result: { success: boolean; providerResponse?: unknown; error?: string };
     try {
       result = await sendSms(candidate.phone, message);
     } catch (err) {
       if (err instanceof SmsNotConfiguredError) {
-        return { configured: false, candidates: candidates.length, sent, failed };
+        return { configured: false, candidates: candidates.length, sent, failed, outOfCredits: false };
       }
       result = { success: false, error: err instanceof Error ? err.message : "Unknown error sending SMS." };
     }
 
-    if (result.success) sent += 1;
-    else failed += 1;
+    if (result.success) {
+      sent += 1;
+      creditBalance -= 1;
+    } else {
+      failed += 1;
+    }
 
     await db.$transaction(async (tx) => {
       await tx.debtReminder.create({
@@ -148,6 +178,13 @@ export async function sendDebtReminders(
         },
       });
 
+      // Only a successfully SENT message consumes a credit — a provider-side
+      // failure (bad number, transient error) shouldn't cost the company
+      // anything.
+      if (result.success) {
+        await tx.company.update({ where: { id: companyId }, data: { reminderCreditBalance: { decrement: 1 } } });
+      }
+
       await writeAuditLog(tx, {
         companyId,
         actorMembershipId: triggeredByMembershipId,
@@ -159,5 +196,5 @@ export async function sendDebtReminders(
     });
   }
 
-  return { configured: true, candidates: candidates.length, sent, failed };
+  return { configured: true, candidates: candidates.length, sent, failed, outOfCredits: false };
 }

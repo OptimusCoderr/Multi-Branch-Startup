@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Pressable } from "react-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard, ShoppingCart, Boxes, Users, Settings } from "lucide-react-native";
 import { api } from "@/lib/api";
-import { signOut } from "@/lib/auth-client";
+import { signOutEverywhere } from "@/lib/device-profiles";
 import { theme } from "@/lib/theme";
 import { TabBar } from "@/components/ui/TabBar";
 import { useAutoSyncOfflineQueue } from "@/lib/network-status";
@@ -28,7 +28,7 @@ export default function AppLayout() {
           <Text style={styles.bannerText}>
             {me.companyName}&apos;s subscription needs attention. Manage billing on the web app.
           </Text>
-          <Pressable onPress={() => signOut()}>
+          <Pressable onPress={() => signOutEverywhere()}>
             <Text style={styles.signOut}>Sign out</Text>
           </Pressable>
         </View>

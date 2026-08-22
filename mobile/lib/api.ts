@@ -1,4 +1,5 @@
 import { authClient, apiBaseUrl } from "./auth-client";
+import { getActiveOverrideCookie } from "./device-profiles";
 
 export class ApiRequestError extends Error {
   status: number;
@@ -9,7 +10,11 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const cookie = await authClient.getCookie();
+  // getActiveOverrideCookie() is set only after a quick-switch profile PIN
+  // verifies (see device-profiles.ts) — every /api/mobile/v1/* call then
+  // acts as that profile until switched again, while sign-in state itself
+  // (useSession/authClient) is untouched.
+  const cookie = getActiveOverrideCookie() ?? (await authClient.getCookie());
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
@@ -31,6 +36,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export type Me = {
   membershipId: string;
+  displayName: string;
   companyId: string;
   companyName: string;
   companyCurrency: string;
@@ -45,18 +51,21 @@ export type DashboardSummary = {
   companyCurrency: string;
   todaysSalesCount: number;
   todaysSalesTotal: string;
+  todaysExpensesTotal: string;
+  todaysProfit: string;
   totalOutstandingDebt: string;
   debtorCount: number;
 };
 
 export type Branch = { id: string; name: string; address: string | null; phone: string | null };
-export type Product = { id: string; sku: string; barcode: string | null; name: string; description: string | null; unitPrice: string };
+export type Product = { id: string; sku: string; barcode: string | null; name: string; description: string | null; unitPrice: string; unitLabel: string };
 
 export type StockProduct = {
   id: string;
   sku: string;
   barcode: string | null;
   name: string;
+  unitLabel: string;
   warehouseStocks: { warehouseId: string; warehouseName: string; quantity: number }[];
   branchStocks: { branchId: string; branchName: string; quantity: number }[];
 };
@@ -194,4 +203,8 @@ export const api = {
 
   adjustStock: (input: { productId: string; branchId: string; delta: number; reason?: string }) =>
     request<{ ok: true }>("/api/mobile/v1/stock/adjust", { method: "POST", body: JSON.stringify(input) }),
+
+  setDevicePin: (pin: string) => request<{ ok: true }>("/api/mobile/v1/device-pin", { method: "POST", body: JSON.stringify({ pin }) }),
+  verifyDevicePin: (membershipId: string, pin: string) =>
+    request<{ verified: boolean }>("/api/mobile/v1/device-pin/verify", { method: "POST", body: JSON.stringify({ membershipId, pin }) }),
 };

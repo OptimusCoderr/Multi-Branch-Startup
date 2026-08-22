@@ -211,7 +211,9 @@ export async function createSale(
 export async function recordPayment(
   tx: ScopedTx,
   companyId: string,
-  membershipId: string,
+  // Null only for a debtor's own self-serve payment link (no staff
+  // member involved) — see payment-link.ts.
+  membershipId: string | null,
   input: { saleId: string; amount: Prisma.Decimal; mode: string; reference?: string; notes?: string },
 ) {
   const sale = await getSaleOrThrow(tx, input.saleId);

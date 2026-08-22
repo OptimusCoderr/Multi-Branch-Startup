@@ -18,7 +18,7 @@ export default async function NewSalePage() {
     db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true, unitPrice: true },
+      select: { id: true, name: true, sku: true, unitPrice: true, unitLabel: true },
     }),
     db.customer.findMany({
       where: { isActive: true },

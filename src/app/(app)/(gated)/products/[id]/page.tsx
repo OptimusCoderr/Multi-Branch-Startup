@@ -40,6 +40,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           barcode: product.barcode,
           name: product.name,
           description: product.description,
+          unitLabel: product.unitLabel,
           unitPrice: product.unitPrice.toString(),
           costPrice: product.costPrice?.toString() ?? null,
           reorderPoint: product.reorderPoint?.toString() ?? null,

@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/prisma";
 import * as paystack from "@/lib/paystack/client";
+import { confirmCreditPurchaseFromTransaction, replenishMonthlyCreditsIfDue } from "@/server/services/reminder-credits-service";
+import { confirmDebtorPayment } from "@/server/services/debtor-payment-service";
 
 export class BillingError extends Error {
   constructor(message: string) {
@@ -81,6 +83,7 @@ export async function activateSubscriptionFromTransaction(
       cancelAtPeriodEnd: false,
     },
   });
+  await replenishMonthlyCreditsIfDue(companyId, planId);
 
   return { companyId };
 }
@@ -99,6 +102,26 @@ export async function applyWebhookEvent(eventType: string, data: Record<string, 
       const companyId = metadata?.companyId as string | undefined;
       if (!companyId) return;
 
+      // Two very different things share this one Paystack event type — a
+      // subscription renewal and a reminder-credit top-up — discriminated
+      // by the metadata this app itself set when starting the checkout
+      // (see startCheckout() and reminder-credits-service.ts's
+      // startCreditPurchase()). Without this check a credit purchase would
+      // be misread as a renewal and wrongly reset the billing period.
+      if (metadata?.purpose === "reminder_credits") {
+        const reference = data.reference as string | undefined;
+        if (reference) await confirmCreditPurchaseFromTransaction(reference, companyId);
+        return;
+      }
+
+      if (metadata?.purpose === "debtor_payment") {
+        const reference = data.reference as string | undefined;
+        const saleId = metadata.saleId as string | undefined;
+        if (reference && saleId) await confirmDebtorPayment(reference, saleId);
+        return;
+      }
+
+      const planId = metadata?.planId as string | undefined;
       const now = new Date();
       await prisma.subscription.updateMany({
         where: { companyId },
@@ -109,6 +132,7 @@ export async function applyWebhookEvent(eventType: string, data: Record<string, 
           cancelAtPeriodEnd: false,
         },
       });
+      if (planId) await replenishMonthlyCreditsIfDue(companyId, planId);
       return;
     }
 
