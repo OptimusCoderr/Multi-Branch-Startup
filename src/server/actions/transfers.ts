@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
@@ -14,10 +13,13 @@ import {
   receiveExternalSchema,
 } from "@/lib/validation/transfer.schema";
 import * as transferService from "@/server/services/transfer-service";
+import { guardWaybillReceive } from "@/server/services/waybill-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
+import { resolveMembershipNames } from "@/lib/auth/membership-names";
 
-type ActionResult = { error: string } | never;
+type ActionResult = { error: string; success?: boolean };
 
 async function requestMeta() {
   const h = await headers();
@@ -36,7 +38,7 @@ function friendlyError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function requestTransfer(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function requestTransfer(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.TRANSFERS_REQUEST);
 
@@ -52,7 +54,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
-  let transferId = "";
 
   try {
     await db.$transaction(async (tx) => {
@@ -62,7 +63,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
         destinationBranchId: parsed.data.destinationBranchId,
         notes: parsed.data.notes,
       });
-      transferId = transfer.id;
 
       await writeAuditLog(tx, {
         companyId: membership.companyId,
@@ -79,13 +79,13 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
     return { error: friendlyError(err, "Could not create the transfer request.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function approveTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -139,13 +139,13 @@ export async function approveTransfer(
     return { error: friendlyError(err, "Could not approve the transfer.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function rejectTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -177,8 +177,8 @@ export async function rejectTransfer(
     return { error: friendlyError(err, "Could not reject the transfer.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function cancelTransfer(transferId: string): Promise<void> {
@@ -209,8 +209,7 @@ export async function cancelTransfer(transferId: string): Promise<void> {
     });
   });
 
-  revalidatePath(`/transfers/${transferId}`);
-  revalidatePath("/transfers");
+  revalidatePath("/branch-stock");
 }
 
 export async function dispatchTransfer(transferId: string): Promise<void> {
@@ -234,13 +233,12 @@ export async function dispatchTransfer(transferId: string): Promise<void> {
     });
   });
 
-  revalidatePath(`/transfers/${transferId}`);
-  revalidatePath("/transfers");
+  revalidatePath("/branch-stock");
 }
 
 export async function receiveTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -264,6 +262,57 @@ export async function receiveTransfer(
     parsed.data.batchNumber && parsed.data.expiryDate
       ? { batchNumber: parsed.data.batchNumber, expiryDate: parsed.data.expiryDate, manufactureDate: parsed.data.manufactureDate }
       : undefined;
+
+  // Waybill match/mismatch has to be its own, already-committed
+  // transaction, separate from the receive itself below — a mismatch (or
+  // the lock it can trigger) must permanently record the attempt even
+  // though the receive must NOT proceed, and one Prisma transaction can't
+  // partially commit. See guardWaybillReceive()'s doc comment.
+  let guard: Awaited<ReturnType<typeof guardWaybillReceive>>;
+  try {
+    guard = await db.$transaction(async (tx) => {
+      const transfer = await tx.stockTransfer.findUnique({ where: { id: transferId }, select: { quantity: true } });
+      if (!transfer) throw new transferService.TransferNotFoundError();
+      return guardWaybillReceive(tx, transferId, parsed.data.receivedQuantity, transfer.quantity);
+    });
+  } catch (err) {
+    return { error: friendlyError(err, "Could not record the receipt.") };
+  }
+
+  if (guard.outcome === "already_locked") {
+    return { error: "This transfer's waybill is locked pending admin review — it can't be received until then." };
+  }
+  if (guard.outcome === "mismatch") {
+    // A mismatch is still a real, permanent write (see guardWaybillReceive)
+    // — the Waybills tab's attempt count needs to reflect it immediately,
+    // not just the local form error.
+    revalidatePath("/branch-stock");
+    return {
+      error: `That count doesn't match the waybill. ${guard.attemptsRemaining} attempt(s) remaining before this transfer locks for admin review.`,
+    };
+  }
+  if (guard.outcome === "locked_now") {
+    await db.$transaction(async (tx) => {
+      const [product, names, recipientIds] = await Promise.all([
+        tx.stockTransfer.findUnique({ where: { id: transferId }, select: { productId: true } }).then((t) =>
+          t ? tx.product.findUnique({ where: { id: t.productId }, select: { name: true } }) : null,
+        ),
+        resolveMembershipNames(tx, [membership.membershipId]),
+        getOwnerAndAdminMembershipIds(tx),
+      ]);
+      if (recipientIds.length > 0) {
+        await createNotifications(tx, membership.companyId, recipientIds, {
+          type: "WAYBILL_LOCKED",
+          title: `Waybill locked: ${product?.name ?? "a transfer"}`,
+          body: `${names.get(membership.membershipId) ?? "A staff member"} declared a count that didn't match this waybill twice — it's now locked and needs an Owner or Admin to review it.`,
+          entityType: "StockTransfer",
+          entityId: transferId,
+        });
+      }
+    });
+    revalidatePath("/branch-stock");
+    return { error: "That count didn't match twice — this transfer is now locked. An admin has been notified to review it." };
+  }
 
   try {
     await db.$transaction(async (tx) => {
@@ -299,17 +348,35 @@ export async function receiveTransfer(
           ipAddress,
           userAgent,
         });
+
+        // Push, not pull — a discrepancy used to only reach the passive
+        // audit log, so nobody was actually alerted unless they happened
+        // to go look. Owner + Admin get notified the moment it happens.
+        const [product, names, recipientIds] = await Promise.all([
+          tx.product.findUnique({ where: { id: transfer.productId }, select: { name: true } }),
+          resolveMembershipNames(tx, [membership.membershipId]),
+          getOwnerAndAdminMembershipIds(tx),
+        ]);
+        if (recipientIds.length > 0) {
+          await createNotifications(tx, membership.companyId, recipientIds, {
+            type: "TRANSFER_DISCREPANCY",
+            title: `Transfer discrepancy: ${product?.name ?? "a product"}`,
+            body: `${names.get(membership.membershipId) ?? "A staff member"} received ${parsed.data.receivedQuantity} unit(s) of ${product?.name ?? "this product"}, but ${transfer.quantity} were requested.`,
+            entityType: "StockTransfer",
+            entityId: transfer.id,
+          });
+        }
       }
     });
   } catch (err) {
     return { error: friendlyError(err, "Could not record the receipt.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
-export async function receiveExternalStock(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function receiveExternalStock(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL);
 
@@ -331,7 +398,6 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
-  let transferId = "";
 
   const batch =
     parsed.data.batchNumber && parsed.data.expiryDate
@@ -357,7 +423,6 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
         batch,
         ...destination,
       });
-      transferId = transfer.id;
 
       await writeAuditLog(tx, {
         companyId: membership.companyId,
@@ -374,6 +439,7 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
     return { error: friendlyError(err, "Could not record the delivery.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  revalidatePath("/warehouses");
+  return { error: "", success: true };
 }

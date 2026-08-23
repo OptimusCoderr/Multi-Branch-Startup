@@ -22,6 +22,7 @@ type ScopedTx = Pick<
   | "creditNote"
   | "membership"
   | "dailySalesReport"
+  | "notification"
 >;
 
 export class SaleValidationError extends Error {
@@ -253,7 +254,7 @@ export async function createSale(
     // recorded on it in one write — voidSale() reverses precisely this.
     const consumedBatches: ConsumedBatch[] = li.isService
       ? []
-      : await decrementBranchStock(tx, li.productId as string, input.branchId, li.quantity);
+      : await decrementBranchStock(tx, companyId, li.productId as string, input.branchId, li.quantity);
 
     await tx.saleLineItem.create({
       data: {

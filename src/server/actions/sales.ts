@@ -13,6 +13,8 @@ import { InsufficientStockError } from "@/server/services/inventory-service";
 import { SalesReportStateError } from "@/server/services/sales-report-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
+import { resolveMembershipNames } from "@/lib/auth/membership-names";
 
 type ActionResult = { error: string } | never;
 
@@ -221,6 +223,21 @@ export async function voidSale(saleId: string, _prev: { error: string }, formDat
         ipAddress,
         userAgent,
       });
+
+      // Push, not pull — voiding used to only reach the passive audit log.
+      // Notify every other Owner/Admin (excluding the actor themselves, so
+      // an Owner voiding their own sale doesn't get pinged about it).
+      const recipientIds = (await getOwnerAndAdminMembershipIds(tx)).filter((id) => id !== membership.membershipId);
+      if (recipientIds.length > 0) {
+        const names = await resolveMembershipNames(tx, [membership.membershipId]);
+        await createNotifications(tx, membership.companyId, recipientIds, {
+          type: "SALE_VOIDED",
+          title: `Sale ${sale.saleNumber} was voided`,
+          body: `${names.get(membership.membershipId) ?? "A staff member"} voided this sale: "${parsed.data.reason}"`,
+          entityType: "Sale",
+          entityId: sale.id,
+        });
+      }
     });
   } catch (err) {
     return { error: friendlyError(err, "Could not void the sale.") };

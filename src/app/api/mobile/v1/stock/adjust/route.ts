@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       if (delta > 0) {
         await incrementBranchStock(tx, productId, branchId, delta);
       } else {
-        await decrementBranchStock(tx, productId, branchId, -delta);
+        await decrementBranchStock(tx, membership.companyId, productId, branchId, -delta);
       }
 
       await recordStockMovement(tx, {

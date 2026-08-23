@@ -1,20 +1,30 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { requestTransfer } from "@/server/actions/transfers";
 import { Field, Input, Select, FormError, Button } from "@/components/ui";
 
-type FormState = { error: string };
+type FormState = { error: string; success?: boolean };
 const initialState: FormState = { error: "" };
 
 export function RequestTransferForm({
   products,
   branches,
+  fixedDestinationBranchId,
+  onSuccess,
 }: {
   products: { id: string; name: string; sku: string }[];
   branches: { id: string; name: string }[];
+  /** Pre-locks the destination — used on Branch Stock, where the request is already scoped to the branch being viewed. */
+  fixedDestinationBranchId?: string;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, isPending] = useActionState(requestTransfer, initialState);
+
+  useEffect(() => {
+    if (state.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when the action reports a fresh success
+  }, [state.success]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -29,16 +39,20 @@ export function RequestTransferForm({
         </Select>
       </Field>
 
-      <Field label="Destination branch">
-        <Select name="destinationBranchId" required>
-          <option value="">Select a branch</option>
-          {branches.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {fixedDestinationBranchId ? (
+        <input type="hidden" name="destinationBranchId" value={fixedDestinationBranchId} />
+      ) : (
+        <Field label="Destination branch">
+          <Select name="destinationBranchId" required>
+            <option value="">Select a branch</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <Field label="Quantity">
         <Input name="quantity" type="number" min="1" step="1" required />

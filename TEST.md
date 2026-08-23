@@ -1153,6 +1153,348 @@ SPP — iOS can't talk to that at all from a third-party app) and that
 `mobile/lib/bluetooth-printer.ts`'s "first writable characteristic" heuristic actually
 found the right one for your printer's chipset.
 
+### 30. Blind transfer receiving and push notifications (discrepancy + low stock)
+
+Web-only. Closes two "found it while reviewing a competitor codebase" gaps: receiving a
+stock transfer used to be a rubber stamp (the quantity field was pre-filled with what was
+requested, so a receiver could confirm without counting anything), and a discrepancy only
+ever reached the passive audit log — nobody was actually alerted. Also adds a push
+notification the moment a product's total stock (across every warehouse and branch) crosses
+its configured reorder point, instead of that only being a dashboard/`/stock` page you have
+to go check.
+
+1. As an Owner, set a low `reorderPoint` on a product (e.g. 5) and bring a warehouse's stock
+   of it up above that (e.g. 10).
+2. Request a transfer of some of it to a branch. As a *different* staff member with approval
+   rights (Branch Manager or Admin — approving your own request is still blocked), approve
+   it, resolving the source as that warehouse.
+3. Open the receive form. Confirm the "Quantity received" field is **empty**, not pre-filled
+   with the requested amount — you have to actually type what you counted.
+4. Enter a quantity different from what was requested (e.g. request 8, receive 5) and
+   confirm. As the Owner, check `/notifications` (or the bell) for a `TRANSFER_DISCREPANCY`
+   notification naming the product, the receiver, and both quantities.
+5. Back on `/stock`, adjust the same product's warehouse quantity down so total stock
+   crosses at-or-below its reorder point. Confirm a `LOW_STOCK` notification appears. Adjust
+   it down again (still low) — confirm a **second** low-stock notification does **not**
+   appear; it only fires on the crossing, not on every subsequent decrement.
+6. If a staff member holds `transfers.receive` but *not* `transfers.approve`/`transfers.dispatch`
+   (a custom per-staff permission grant, not any default role), confirm the requested
+   quantity is also hidden from the transfer detail page itself before they receive it — not
+   just the form. Anyone who also holds approve/dispatch rights (every default role that can
+   receive) still sees it, since they already know it from that other step.
+
+### 31. DB-level line-item CHECK constraint, void-sale peer notification, per-account login lockout, and location-scoped stock views
+
+Web-only. Four more picks from the same competitor-codebase review: a DB backstop for an
+invariant only enforced in application code, a peer notification on voiding a sale (the
+same push-not-pull pattern as #30's discrepancy/low-stock notifications, extended), a
+per-account lockout on top of Better Auth's existing IP rate limit, and giving each
+warehouse/branch its own stock view (they only had a rename/deactivate form before).
+
+1. **XOR CHECK constraint.** Nothing to click — this is a DB-level backstop, not app
+   behavior. Confirm normal sales (catalog items and ad-hoc services) still record fine
+   through the UI; if you want to see the constraint itself reject something, attempt a
+   direct SQL insert into `SaleLineItem` with both `productId` and `adHocDescription` set
+   (or neither) — Postgres rejects it regardless of what the application layer would have
+   allowed.
+2. **Void-sale notification.** As a non-Owner Admin (or Branch Manager, if granted
+   `sales.void`), record a sale as a pure credit sale (**Part payment**, leave "Amount
+   paying now" at 0 — a sale with any payment already recorded can't be voided at all, by
+   existing design) and void it with a reason. Confirm the Owner gets a notification naming
+   the sale number, who voided it, and the reason. As the Owner, void a sale yourself —
+   confirm no self-notification (the actor is always excluded from the recipient list).
+3. **Login lockout.** Sign in with a wrong password 5 times for one account — the 5th
+   attempt locks it for 15 minutes. Confirm: every wrong attempt (before and after locking)
+   shows the identical generic "Invalid email or password," never a distinct "account
+   locked" message; a *correct* password during the lockout window still gets rejected with
+   that same generic message rather than succeeding; after the window passes (or, in dev,
+   clearing `User.lockedUntil` directly), a correct password succeeds and resets
+   `failedLoginAttempts` to 0. Note: Better Auth's own separate IP-based rate limit (20
+   requests/60s) is a hard ceiling on top of this — heavy rapid-fire scripted testing from
+   one IP will hit *that* wall independently of the lockout logic; space out live attempts
+   or pre-seed `failedLoginAttempts` directly in dev if you need to drive many attempts.
+4. **Location-scoped stock views.** Open a warehouse's detail page (`/warehouses/[id]`) —
+   confirm a "Stock at ..." table now appears below the rename form, listing every active
+   product with its quantity, unit price, and computed value there, flagging any that are
+   low company-wide. Use the "Add / update stock" form on that same page (pre-scoped to
+   this one warehouse) to adjust it, and confirm the table updates. Repeat for a branch's
+   detail page (`/branches/[id]`) — this is also the *first* place branch stock can be
+   adjusted from the web at all (previously only the mobile app could). Confirm a branch
+   adjustment that pushes a product's total stock at-or-below its reorder point fires the
+   same `LOW_STOCK` notification a sale would.
+
+### 32. ALLMAAJ-pattern UI redesign — Phase 1: shared `Modal`/`Confirm` foundation
+
+Web-only, no user-visible surface yet — this is the first of a multi-phase rollout adopting
+ALLMAAJ-SUPERBASE's UI/UX patterns app-wide (modal-based create/edit, stat-card rows,
+tiered stock-level coloring, a consolidated Branch Stock page replacing `/stock` and
+`/transfers`). Phase 1 only adds the shared primitives later phases build on:
+
+- `src/components/ui/modal.tsx` — a generic overlay dialog shell (Escape/backdrop-click to
+  close, `sm|md|lg|xl` sizes).
+- `src/components/ui/confirm.tsx` — a promise-based `useConfirm()` for destructive actions,
+  mounted once via `ConfirmProvider` in `app-shell.tsx`.
+- `Badge` gains an `info` (blue) variant for the "Moderate" tier of the coming 5-tier
+  stock-level scale.
+- `src/lib/format.ts` gains `warehouseStockLevel()` (5-tier) and `branchStockLevel()`
+  (3-tier) — pure display-tier helpers, unrelated to `Product.reorderPoint`/the
+  `LOW_STOCK` notification, which stay the actual business-logic threshold.
+
+To verify: sign in, confirm the app still renders and behaves exactly as before (nothing
+consumes these yet) — no visual or functional change should be visible. Later phases will
+add real usages (products/branches/warehouses modals, the Branch Stock page's delete/reject
+confirmations) that exercise `Modal`/`useConfirm()` directly.
+
+### 33. ALLMAAJ-pattern UI redesign — Phase 2: dashboard stat cards + Reset Data + Backup Download
+
+Rebuilt `src/app/(app)/dashboard/page.tsx` around a 5-card stat row (Today's sales, Cash
+sales, POS sales, Today's expenses, Net income), a two-column panel (7-day sales-report
+status breakdown, debtor overview), and Low stock alerts / Expiring soon cards — plus two
+new Owner-only admin tools:
+
+- **Reset Data** (`src/components/forms/reset-sales-day-form.tsx`, `src/server/actions/dashboard-admin.ts`,
+  `src/server/services/sale-reset-service.ts`) — a danger button opens a `Modal` with a date
+  picker (capped at today) and a "type RESET to confirm" text field; submit stays disabled
+  until the text matches exactly. The server action re-checks the Owner role and the date
+  server-side, then voids every non-voided sale for that business day inside one
+  transaction. Deliberately reuses `voidSale()`'s existing guard rather than bypassing it:
+  an already-paid sale is left untouched (counted as `skippedPaidCount`) instead of being
+  force-voided, so collected cash never silently vanishes from reports — correct those
+  individually via a credit note. Writes an audit-log row (`company.sales_reset`) and
+  notifies other Owner/Admin peers.
+- **Backup Download** (`src/server/services/backup-service.ts`,
+  `src/app/api/exports/backup/route.ts`) — an Owner-only `GET` route that streams a
+  company-scoped JSON export (products, branches, warehouses, stock, customers, sales with
+  line items/payments/credit notes, expenses) as a file download. Company-scoped rather than
+  a raw DB dump, since this is a multi-tenant schema. Writes an audit-log row
+  (`company.backup_downloaded`) and notifies other Owner/Admin peers via a new
+  `BACKUP_DOWNLOADED` notification type (`SALES_RESET` was added alongside it for the reset
+  tool above).
+
+To verify: sign up as a new Owner, land on `/dashboard` and confirm the 5 stat cards, the
+report-status/debtors panels, and (once Owner-only) the "Backup" link + "Reset data" button
+render. Click "Reset data" — confirm the submit button stays disabled until "RESET" is typed
+exactly, then submit and confirm a result summary appears (voided/skipped counts) with no
+console errors. Click "Backup" — confirm it triggers a file download named
+`backup-<company-slug>-<date>.json`. Both were exercised end-to-end via a scripted Playwright
+run (fresh Owner sign-up → dashboard → Reset Data modal open/type-gate/submit/result →
+Backup download) with zero console/page errors captured.
+
+### 34. ALLMAAJ-pattern UI redesign — Phase 3: Products (modal CRUD, category chips, assign-stock)
+
+Rebuilt `/products` around a stat-card row (Total/Active/Categories/Avg. price), a search +
+status-pill + category-chip filter bar, and a table/grid view toggle
+(`src/components/products/products-page-client.tsx`, client-side filtering over the
+already-fetched list — no new queries). "New product"/"Edit product" are now `Modal`
+instances of the existing `ProductForm`; `/products/new` and `/products/[id]` are removed.
+
+- **`Product.category`** (schema + migration `20260823223417_add_product_category`) — a new
+  optional free-text field, same "merchant-chosen, not a fixed enum" philosophy as
+  `unitLabel`, backing the category chips. A product without one shows under "All
+  categories" only. The product form offers a datalist of categories already in use so
+  entries stay consistent instead of drifting into near-duplicates.
+- **Modal-close-on-success pattern** — `createProduct`/`updateProduct` no longer call
+  `redirect("/products")` on success (that only worked when the form lived on its own route);
+  they now `revalidatePath` and return `{ error: "", success: true }`, and `ProductForm`
+  watches `state.success` to call an `onSuccess` callback that closes its modal. This is the
+  template later phases (Branches, Warehouses, Staff) reuse for their own modal CRUD.
+- **Assign Branch Stock** (`src/components/forms/assign-product-stock-form.tsx`) — an admin
+  quick-assign modal scoped to one product, reusing `adjustBranchStock` as-is (the same
+  direct "admin already has authority" escape hatch the `/stock` page's
+  `AdjustBranchStockForm` exposes) rather than a new backend path. `adjustBranchStock` now
+  also returns a `success` flag so this modal can close itself the same way.
+
+To verify: sign up as a new Owner (2FA bypassed for the test via a direct DB flag flip — not
+a UI path), go to `/products`, create two products in different categories, confirm the stat
+cards update, the category chips filter the list, the grid/table toggle both render the
+products, edit a product's price via the modal and confirm it lands, deactivate a product and
+confirm the badge flips, and open the "Assign stock" modal. Exercised end-to-end via a
+scripted Playwright run with zero console/page errors captured.
+
+### 35. ALLMAAJ-pattern UI redesign — Phase 4: Branches (modal CRUD, no stock)
+
+Rebuilt `/branches` around a stat-card row (Total/Active/Inactive/Plan limit) and a search
+bar; New/Edit branch are now `Modal` instances of the existing `LocationForm`, reusing the
+modal-close-on-success pattern from Phase 3 (`createBranch`/`updateBranch` now return
+`{ error: "", success: true }` instead of redirecting). `/branches/new` and `/branches/[id]`
+are removed — the latter had a stock table + `AdjustBranchStockForm` added earlier this
+session, both of which move to the new consolidated Branch Stock page in Phase 6; the
+now-unused `adjust-branch-stock-form.tsx` component is deleted rather than left orphaned
+(its only caller was the removed page — Products' Phase 3 "Assign stock" modal reuses the
+underlying `adjustBranchStock` action directly, not this form component).
+
+Dropped ALLMAAJ's "Staffed" stat card — our `Membership` model has no per-branch scoping
+(staff aren't tied to a specific branch the way ALLMAAJ's are), so there's no real data to
+back it; a "Plan limit" card (active/max branches, linking to billing when at cap) replaces
+it since we do have that data and it was previously only shown as page-header subtext.
+
+To verify: sign up as a new Owner, go to `/branches`, create two branches, confirm the stat
+cards update, the search bar filters by name/address, edit a branch's address via the modal
+and confirm it lands, and deactivate a branch and confirm the badge flips. Exercised
+end-to-end via a scripted Playwright run with zero console/page errors captured (one
+one-off dev-server hydration warning on an earlier run did not reproduce on a clean re-run
+or in isolated repro attempts, and the production build is clean — treated as test-harness
+noise, not a regression).
+
+### 36. ALLMAAJ-pattern UI redesign — Phase 5: Warehouses (modal CRUD, inline expandable stock)
+
+Rebuilt `/warehouses` around a stat-card row (Warehouses/Stock lines/Stock value/Low-critical,
+computed from one `warehouseStock.findMany` fetched once server-side and grouped by warehouse)
+and a search bar. New/Edit warehouse are `Modal` instances of `LocationForm`. `/warehouses/new`
+and `/warehouses/[id]` are removed — instead, each warehouse in the list is a card that
+**expands inline** (no separate detail route) to show its stock table with the 5-tier colored
+`Level` pill from Phase 1's `warehouseStockLevel()` (Out of Stock/Critical/Low/Moderate/Good),
+its own Edit/Deactivate actions, and an inline "Add/update stock" form.
+
+- `AdjustWarehouseStockForm` gained a `fixedWarehouseId` prop — when set, it renders a hidden
+  input instead of the warehouse `<Select>` since the warehouse is already implied by which
+  card is expanded (only the product still needs picking). The top-level, any-warehouse form
+  still used by `/stock` (unaffected this phase) works unchanged since the prop is optional.
+- `adjustWarehouseStock` now also returns a `success` flag (matching `adjustBranchStock` from
+  Phase 3) so the inline form doesn't need special handling to know when to clear/refresh.
+
+To verify: sign up as a new Owner, create a product, go to `/warehouses`, create a warehouse,
+confirm the 4 stat cards render, expand the warehouse card, add stock to the product inline
+and confirm the stock table shows the correct 5-tier level badge, then edit the warehouse's
+address via the modal and confirm it lands. Exercised end-to-end via a scripted Playwright
+run with zero console/page errors captured.
+
+### 37. ALLMAAJ-pattern UI redesign — Phase 6: Branch Stock (retires `/transfers` and `/stock`)
+
+The highest-risk phase: a new consolidated `/branch-stock` page — branch-selector-driven,
+tabbed (Stock | Pending Requests | Approval History | My Requests) — replaces the standalone
+`/transfers` module (list, `[id]`, `new`, `new-external`, all deleted) and the product-first
+`/stock` page (deleted; Warehouses' Phase 5 expandable cards plus this page together cover
+everything it showed). The `transfer-service.ts` backend is completely unchanged — only the
+UI surface moved, from full pages into tabs and per-row modals on one page.
+
+- **Stock tab** — the selected branch's stock table (search, category chips, low-stock-only
+  toggle, 3-tier `branchStockLevel()` pill), an "Add stock" modal (admin direct correction via
+  the existing `adjustBranchStock`, with an "External delivery" sub-mode for a batch-tracked
+  supplier delivery via `receiveExternalStock`), and a "Request stock" modal
+  (`RequestTransferForm`, destination pre-locked to the branch being viewed).
+- **Pending Requests tab** — every REQUESTED/APPROVED/IN_TRANSIT transfer destined to the
+  selected branch. Each row shows one action for the viewer's role at that status: **Review**
+  (REQUESTED, opens a modal with `ApproveTransferForm` + `RejectTransferForm` — blocked
+  entirely, no button at all, when the viewer is the requester, matching the existing
+  self-approval guard), **Dispatch** (APPROVED, a direct `dispatchTransfer()` call gated by
+  `useConfirm()` — Phase 1's confirm primitive's first real usage), **Receive**
+  (APPROVED/IN_TRANSIT, opens a modal with `ReceiveTransferForm`, preserving the existing
+  blind-receiving behavior — the requested quantity stays hidden from a receive-only viewer
+  until they submit their count), and **Cancel** (REQUESTED/APPROVED, another direct
+  `cancelTransfer()` call behind `useConfirm()`).
+- **Approval History / My Requests tabs** — read-only lists (terminal-status transfers
+  destined to the branch; the current user's own requests across every branch).
+- **Modal-close-on-success extended to transfers** — `requestTransfer`, `approveTransfer`,
+  `rejectTransfer`, `receiveTransfer`, and `receiveExternalStock` no longer `redirect()` to a
+  now-deleted `/transfers/[id]`; they `revalidatePath("/branch-stock")` and return
+  `{ error: "", success: true }` like every other modal-CRUD action this redesign introduced.
+- **Preserved, not dropped: batch-tracked warehouse deliveries.** Removing `/transfers/new-external`
+  would have deleted the only way to record a batch-tracked external delivery straight to a
+  warehouse (built earlier this session) — Warehouses' expandable card gained a "Record an
+  external delivery (with batch tracking)" button reusing the same `ReceiveExternalForm`,
+  scoped to that one warehouse.
+- Nav: "Stock" and "Transfers" are replaced by a single "Branch Stock" entry.
+  `proxy.ts`'s protected-route list, the transfer/stock-adjustment actions' `revalidatePath`
+  targets, and the marketing page's `TransferMockup()` copy were all updated to match.
+
+To verify: exercised end-to-end via two scripted Playwright runs. Single-Owner run — create
+two branches + a product, add stock via the Stock tab's Adjust-stock modal, confirm the
+5-tier badge and the low-stock-only filter, switch branches via the selector, request a
+transfer (destination locked to the viewed branch), confirm the Pending Requests tab shows
+"Awaiting reviewer" with no Review button for a self-requested transfer, cancel it via the new
+`useConfirm()` flow, and confirm it lands correctly in Approval History and My Requests — zero
+console/page errors. Two-person run — Owner + a second membership approved as Admin via the
+company-code self-signup flow, Owner requests a transfer, the Admin (a different membership)
+sees a Review button, approves it from an external source through the modal, and the transfer
+correctly auto-completes to RECEIVED and appears in Approval History — zero console/page
+errors.
+
+### 38. ALLMAAJ-pattern UI redesign — Phase 7: Waybills (blind-verification receiving)
+
+A new backend feature layered on top of the existing `StockTransfer` flow, not a parallel
+multi-item model — ALLMAAJ's `WaybillItem` table exists because their transfers are
+multi-item batches; this app's transfers are already one-product-per-row, so a `Waybill` here
+is 1:1 with a warehouse-sourced transfer.
+
+- **`Waybill` model** — `reference` (sequential per company, `WB-2026-000001`, generated the
+  same retry-on-collision way `generateProductSku()` already does — not a real Postgres
+  sequence, since that would mean creating one per tenant), `status`
+  (PENDING/MATCHED/LOCKED), `mismatchAttempts`, `lastDeclaredQuantity`, `lockedAt`,
+  `resolvedByMembershipId`/`resolvedAt`. Created automatically inside `dispatchTransfer()` the
+  moment a warehouse-sourced transfer's stock actually leaves the warehouse — never for a
+  branch- or external-sourced transfer, which keep the existing forgiving accept-and-notify
+  receiving behavior from earlier this session.
+- **`guardWaybillReceive()`** (`waybill-service.ts`) checks a declared receive quantity
+  against the transfer's real quantity: exact match → MATCHED, proceeds to a normal receive;
+  mismatch → records the attempt, and on the second mismatch → LOCKED, blocking receiving
+  entirely and notifying every Owner/Admin (`WAYBILL_LOCKED` notification type). The guard
+  **always runs as its own committed transaction**, separate from the receive itself — a
+  mismatch has to permanently record the attempt even though the receive must not proceed,
+  and a single Prisma transaction can't partially commit (recording the attempt inside the
+  same transaction that then aborts the receive would roll the recording back too). The
+  `receiveTransfer` action calls the guard first and only calls
+  `transferService.receiveTransfer` if it resolves to "matched" or "no waybill" (a
+  branch/external-sourced transfer, unaffected).
+- **`resolveLockedWaybill()`** (Owner/Admin only) — the only way past a LOCKED waybill: either
+  accept the last declared count (lands it exactly like a normal receive would have) or reject
+  and reverse the dispatch (gives the stock back to the source warehouse via a new
+  `TRANSFER_REVERSED` stock-movement reason, and cancels the transfer).
+- **UI**: a new Waybills tab on Branch Stock lists this branch's waybills with their
+  reference, status, and mismatch count; a LOCKED, unresolved one gets a "Resolve" button
+  (Owner/Admin only) opening a modal with the two resolution choices. The receive modal
+  surfaces the guard's messages as a normal form error — "N attempt(s) remaining" on a
+  mismatch, "this transfer is now locked" once it locks.
+
+To verify: exercised end-to-end via a scripted two-person Playwright run — Owner stocks a
+warehouse, requests a transfer to a branch, an Admin (company-code self-signup, approved by
+the Owner) approves it from the warehouse source, dispatches it (confirmed the Waybill's
+reference appears on the Waybills tab as PENDING), declares a wrong count twice (confirmed
+the "attempt(s) remaining" message on the first mismatch and the "now locked" message plus
+LOCKED status with a 2-mismatch count on the second), then resolves it by accepting the last
+declared count (confirmed the resolve modal shows that count, the waybill shows "Resolved"
+after, and the transfer lands as RECEIVED in Approval History) — zero console/page errors
+throughout.
+
+### 39. ALLMAAJ-pattern UI redesign — Phase 8: remaining pages restyle pass
+
+The final phase of the 8-phase redesign — a survey-then-fix pass over every page not yet
+touched (Sales, Customers, Expenses, Purchase Orders, Reports, Staff, Audit Log,
+Notifications, Settings), applying the stat-card-row/Card/Badge/Table/EmptyState
+conventions established in Phases 2–6 wherever a page was still missing them.
+
+Survey findings (read each page in full before touching anything):
+
+- **Customers, Expenses, Reports, Audit Log, Notifications, Settings** — already meet the
+  bar from earlier design-system work this project's history (Phases 15–17): stat-card
+  rows, `Card` containers, `Badge` pills, `EmptyState`, `Table` primitives, filter chips
+  where relevant. **No changes made** — forcing a uniform template onto pages that already
+  match the pattern would be pure churn.
+- **Sales** — had search/export/table already on the new primitives, but no stat-card row.
+  Added one: Sales (count), Revenue, Collected, Outstanding — all computed from the
+  already-fetched `sales` array via `Prisma.Decimal` arithmetic (excluding VOIDED sales),
+  no new queries.
+- **Purchase Orders** — same gap. Added: Total, Draft, Ordered (ORDERED +
+  PARTIALLY_RECEIVED), Received — counted from the already-fetched `purchaseOrders` array.
+- **Staff** — had the seat-usage line in the page description but no stat-card row. Added:
+  Total, Active, Invited, Join requests — counted from the already-fetched `members`/
+  `invitations`/`pendingRequests` arrays.
+
+Deliberately *not* done: forcing the multi-line-item Sale/Purchase Order creation forms
+into modals. Those are complex, multi-step forms (line items, quantities, discounts,
+customer/supplier selection) — cramming them into a modal would be a disproportionate risk
+for a phase the plan itself framed as "smaller, mostly-visual"; they stay on their own
+`/new` route.
+
+To verify: scripted Playwright run — signed up a fresh Owner, completed company onboarding,
+confirmed the Staff/Purchase Orders/Sales stat-card rows all render their labels correctly
+in the zero-data state, then seeded one `Sale` directly (`grandTotal` 2000, `amountPaid`
+1200) and reloaded `/sales` to confirm the stat cards showed the correct computed values —
+1 sale, ₦2,000.00 revenue, ₦1,200.00 collected, ₦800.00 outstanding — proving the
+`Prisma.Decimal` subtraction renders correctly, not just that the labels are present. Zero
+console/page errors throughout. `npx tsc --noEmit`, `npm run lint`, and `npm run build` all
+clean.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

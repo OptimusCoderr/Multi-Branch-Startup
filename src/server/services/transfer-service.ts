@@ -10,6 +10,7 @@ import {
   createProductBatch,
   type ConsumedBatch,
 } from "@/server/services/inventory-service";
+import { createWaybillForTransfer } from "@/server/services/waybill-service";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
@@ -21,6 +22,9 @@ type ScopedTx = Pick<
   | "warehouse"
   | "branch"
   | "productBatch"
+  | "notification"
+  | "membership"
+  | "waybill"
 >;
 
 export class TransferNotFoundError extends Error {
@@ -226,7 +230,10 @@ export async function cancelTransfer(tx: ScopedTx, membershipId: string, transfe
  * Dispatch decrements the source (warehouse OR branch — see
  * requestTransfer) immediately — stock leaves custody the moment it's on
  * its way, mirroring physical reality, rather than waiting until it's
- * confirmed received.
+ * confirmed received. A warehouse-sourced dispatch also seals a Waybill
+ * at this exact moment (see waybill-service.ts) — a branch-sourced one
+ * doesn't, since waybills are the opt-in-by-source-being-a-warehouse
+ * stricter receiving mode.
  */
 export async function dispatchTransfer(tx: ScopedTx, companyId: string, membershipId: string, transferId: string) {
   const transfer = await getTransferOrThrow(tx, transferId);
@@ -243,7 +250,7 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
     // Captured here (not re-derived at receipt) for the same reason as the
     // branch case below — FEFO order can shift between dispatch and
     // receipt.
-    dispatchedBatches = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+    dispatchedBatches = await decrementWarehouseStock(tx, companyId, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -256,11 +263,12 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
       stockTransferId: transfer.id,
       performedByMembershipId: membershipId,
     });
+    await createWaybillForTransfer(tx, companyId, transfer.id);
   } else {
     // Captured here (not re-derived at receipt) because FEFO order can
     // shift between dispatch and receipt — a later delivery or another
     // sale could add/consume batches at this branch in the meantime.
-    dispatchedBatches = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+    dispatchedBatches = await decrementBranchStock(tx, companyId, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -332,6 +340,33 @@ export async function receiveTransfer(
   if (transfer.status !== "APPROVED" && transfer.status !== "IN_TRANSIT") {
     throw new TransferStateError("This transfer is not ready to be received.");
   }
+
+  // A warehouse-sourced transfer's waybill match/mismatch is checked and
+  // recorded by the action layer BEFORE this ever gets called — see
+  // guardWaybillReceive() in waybill-service.ts and its caller in
+  // transfers.ts's receiveTransfer action. It has to be a separate,
+  // already-committed transaction: a mismatch needs to permanently record
+  // the attempt (and possibly LOCK) even though the receive itself must
+  // NOT proceed, and a single Prisma transaction can't partially commit —
+  // recording the attempt inside this transaction would roll back the
+  // instant this function threw to block the receive.
+  return landReceipt(tx, companyId, membershipId, transfer, receivedQuantity, notes, manualBatch);
+}
+
+/**
+ * The actual stock-landing logic, shared by receiveTransfer() above (once
+ * the action layer's waybill guard — if any — has already passed) and
+ * resolveLockedWaybill()'s "accept the last count" path below.
+ */
+async function landReceipt(
+  tx: ScopedTx,
+  companyId: string,
+  membershipId: string,
+  transfer: Awaited<ReturnType<typeof getTransferOrThrow>>,
+  receivedQuantity: number,
+  notes?: string,
+  manualBatch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date },
+) {
   // The internal request/approve/dispatch/receive flow this function
   // handles always targets a branch — only an EXTERNAL delivery
   // (receiveExternalStock, a separate single-step function) can target a
@@ -356,7 +391,7 @@ export async function receiveTransfer(
       throw new TransferStateError("This transfer has no source location to receive from.");
     }
     if (transfer.sourceWarehouseId) {
-      batchesToLand = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+      batchesToLand = await decrementWarehouseStock(tx, companyId, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
@@ -370,7 +405,7 @@ export async function receiveTransfer(
         performedByMembershipId: membershipId,
       });
     } else {
-      batchesToLand = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+      batchesToLand = await decrementBranchStock(tx, companyId, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
@@ -427,7 +462,7 @@ export async function receiveTransfer(
   }
 
   const updated = await tx.stockTransfer.update({
-    where: { id: transferId },
+    where: { id: transfer.id },
     data: {
       status: "RECEIVED",
       receivedByMembershipId: membershipId,
@@ -544,4 +579,80 @@ export async function receiveExternalStock(
   }
 
   return transfer;
+}
+
+export class WaybillResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WaybillResolutionError";
+  }
+}
+
+/**
+ * The only way past a LOCKED waybill — an Owner/Admin either accepts the
+ * receiver's last declared count (landing it exactly like a normal
+ * receive would have, had it matched) or rejects the transfer outright,
+ * which reverses the dispatch: the stock that left the warehouse at
+ * dispatch time is given back, and the transfer becomes CANCELLED. Either
+ * way the waybill is marked resolved so it drops off the "needs review"
+ * list.
+ */
+export async function resolveLockedWaybill(
+  tx: ScopedTx,
+  companyId: string,
+  membershipId: string,
+  waybillId: string,
+  resolution: "ACCEPT_LAST_COUNT" | "REJECT_AND_REVERSE",
+) {
+  const waybill = await tx.waybill.findUnique({ where: { id: waybillId } });
+  if (!waybill) throw new WaybillResolutionError("Waybill not found.");
+  if (waybill.status !== "LOCKED" || waybill.resolvedAt) {
+    throw new WaybillResolutionError("This waybill isn't awaiting resolution.");
+  }
+  const transfer = await getTransferOrThrow(tx, waybill.stockTransferId);
+
+  if (resolution === "ACCEPT_LAST_COUNT") {
+    if (waybill.lastDeclaredQuantity === null) {
+      throw new WaybillResolutionError("No declared count to accept.");
+    }
+    const result = await landReceipt(
+      tx,
+      companyId,
+      membershipId,
+      transfer,
+      waybill.lastDeclaredQuantity,
+      "Resolved from a locked waybill: accepted the last declared count.",
+    );
+    await tx.waybill.update({
+      where: { id: waybillId },
+      data: { status: "MATCHED", resolvedByMembershipId: membershipId, resolvedAt: new Date() },
+    });
+    return result;
+  }
+
+  // REJECT_AND_REVERSE — a LOCKED waybill only ever exists on a
+  // warehouse-sourced, already-dispatched transfer (see
+  // createWaybillForTransfer), so sourceWarehouseId is always set here.
+  await incrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId!, transfer.quantity);
+  await recordStockMovement(tx, {
+    companyId,
+    productId: transfer.productId,
+    locationType: "WAREHOUSE",
+    warehouseId: transfer.sourceWarehouseId!,
+    quantityDelta: transfer.quantity,
+    reason: "TRANSFER_REVERSED",
+    referenceType: "StockTransfer",
+    referenceId: transfer.id,
+    stockTransferId: transfer.id,
+    performedByMembershipId: membershipId,
+  });
+  const updated = await tx.stockTransfer.update({
+    where: { id: transfer.id },
+    data: { status: "CANCELLED", cancelledByMembershipId: membershipId, cancelledAt: new Date() },
+  });
+  await tx.waybill.update({
+    where: { id: waybillId },
+    data: { resolvedByMembershipId: membershipId, resolvedAt: new Date() },
+  });
+  return { transfer: updated, hasDiscrepancy: false };
 }

@@ -135,6 +135,7 @@ model Company {
   reminderCreditPurchases ReminderCreditPurchase[]
   saleFlags         SaleFlag[]
   notifications     Notification[]
+  waybills          Waybill[]
 
   @@index([status])
   @@index([verificationStatus])
@@ -193,6 +194,16 @@ model User {
   // requireMembershipWithTwoFactor()/requirePlatformStaffWithTwoFactor()
   // in src/lib/auth/session.ts for where that's enforced.
   twoFactorEnabled Boolean @default(false)
+
+  // Per-account lockout, layered on top of Better Auth's IP-based
+  // rateLimit (better-auth.ts) — an IP limit alone doesn't stop repeated
+  // guesses against ONE account spread across many IPs (a credential-
+  // stuffing botnet). Incremented atomically (UPDATE ... SET x = x + 1,
+  // not read-then-write) by the sign-in hooks in better-auth.ts, so
+  // concurrent failed attempts can't race past the threshold. Reset to
+  // 0/null on a successful sign-in.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
 
   // Null = no personal override — falls back to the signed-in company's
   // BrandingSettings.defaultTheme (see src/lib/theme.ts's resolveTheme),
@@ -548,6 +559,12 @@ model Product {
   barcode     String?
   name        String
   description String?
+  // Free-text, merchant-chosen ("Beverages", "Snacks", "Electronics") —
+  // same reasoning as unitLabel below: an informal-market merchant's
+  // categories don't fit a fixed enum. Purely a filtering/grouping aid in
+  // the UI (category chips on the products list); never affects stock or
+  // sale logic. Null = uncategorized, shown under "All" only.
+  category    String?
   // Free-text, merchant-chosen ("carton", "bag", "dozen", "mudu", "yard")
   // rather than a fixed enum — informal-market goods aren't sold in
   // generic "units," and forcing a fixed list would mean missing whatever
@@ -766,12 +783,57 @@ model StockTransfer {
   updatedAt DateTime @updatedAt
 
   movements StockMovement[]
+  waybill   Waybill?
 
   @@index([companyId, status])
   @@index([companyId, productId])
   @@index([companyId, destinationBranchId])
   @@index([companyId, sourceWarehouseId])
   @@index([companyId, sourceBranchId])
+}
+
+enum WaybillStatus {
+  PENDING
+  MATCHED
+  LOCKED
+}
+
+// Blind-verification seal for a warehouse-sourced transfer — created the
+// moment dispatchTransfer() decrements the source warehouse (see
+// waybill-service.ts's createWaybillForTransfer), never for a
+// branch-to-branch or external transfer, which keep the existing
+// forgiving accept-and-notify receiving behavior. A receiver gets up to
+// two tries to declare a count matching the transfer's real quantity
+// before stock moves; two mismatches LOCKs the waybill and blocks
+// receiving entirely until an Owner/Admin resolves it (see
+// resolveLockedWaybill) — either accepting the last declared count or
+// reversing the dispatch and cancelling the transfer.
+model Waybill {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  stockTransferId String        @unique
+  stockTransfer   StockTransfer @relation(fields: [stockTransferId], references: [id], onDelete: Cascade)
+
+  // Human-readable, sequential per company (e.g. WB-2026-000001) — not a
+  // real Postgres sequence (no other model in this schema uses one, and a
+  // per-company sequence would mean creating one per tenant); generated
+  // the same retry-on-collision way generateProductSku() already does.
+  reference String
+
+  status              WaybillStatus @default(PENDING)
+  mismatchAttempts    Int           @default(0)
+  lastDeclaredQuantity Int?
+  lockedAt            DateTime?
+
+  resolvedByMembershipId String?
+  resolvedAt              DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, reference])
+  @@index([companyId, status])
 }
 
 enum StockMovementLocationType {
@@ -788,6 +850,9 @@ enum StockMovementReason {
   ADJUSTMENT
   INITIAL_STOCK
   PURCHASE_RECEIPT
+  // A locked waybill resolved by rejecting the transfer — the stock
+  // already left the warehouse at dispatch, so this gives it back.
+  TRANSFER_REVERSED
 }
 
 // Immutable, append-only ledger of every stock quantity change, ever. This
@@ -1300,6 +1365,12 @@ enum NotificationType {
   SALE_FLAGGED
   SALE_FLAG_ESCALATED
   SALE_FLAG_RESOLVED
+  TRANSFER_DISCREPANCY
+  LOW_STOCK
+  SALE_VOIDED
+  BACKUP_DOWNLOADED
+  SALES_RESET
+  WAYBILL_LOCKED
 }
 
 // In-app notification delivery — no email/SMS/push, just a bell + list in
