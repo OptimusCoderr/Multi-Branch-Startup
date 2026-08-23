@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { createSale } from "@/server/actions/sales";
 import { formatMoney, formatQuantity } from "@/lib/format";
-import { Field, Input, Select, Checkbox, FormError, Button, Badge } from "@/components/ui";
+import { Field, Input, Select, FormError, Button, Badge } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
@@ -14,6 +14,17 @@ type Customer = { id: string; name: string; phone: string | null };
 type Row =
   | { kind: "product"; productId: string; quantity: number }
   | { kind: "service"; description: string; unitPrice: string; quantity: number };
+
+type PaymentType = "POS" | "CASH" | "POS_CASH" | "PART_PAYMENT";
+
+const PAYMENT_TYPE_LABELS: Record<PaymentType, string> = {
+  POS: "POS",
+  CASH: "Cash",
+  POS_CASH: "POS + Cash",
+  PART_PAYMENT: "Part payment",
+};
+
+const PART_PAYMENT_MODES = ["CASH", "POS", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"] as const;
 
 const emptyProductRow: Row = { kind: "product", productId: "", quantity: 1 };
 const emptyServiceRow: Row = { kind: "service", description: "", unitPrice: "", quantity: 1 };
@@ -48,11 +59,17 @@ export function CreateSaleForm({
   const [state, formAction, isPending] = useActionState(createSale, initialState);
   const [rows, setRows] = useState<Row[]>([emptyProductRow]);
   const [customerId, setCustomerId] = useState("");
-  const [isCredit, setIsCredit] = useState(false);
+  const [paymentType, setPaymentType] = useState<PaymentType | "">("");
+  const [posAmount, setPosAmount] = useState("");
+  const [cashAmount, setCashAmount] = useState("");
+  const [partAmountPaid, setPartAmountPaid] = useState("");
+  const [partPaymentMode, setPartPaymentMode] = useState<string>("CASH");
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
   const total = rows.reduce((sum, row) => sum + rowTotal(row, productById), 0);
+  const posCashTotal = Number(posAmount || 0) + Number(cashAmount || 0);
+  const posCashMismatch = paymentType === "POS_CASH" && Math.abs(posCashTotal - total) > 0.009;
 
   function updateRow(index: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((row, i) => (i === index ? ({ ...row, ...patch } as Row) : row)));
@@ -77,9 +94,13 @@ export function CreateSaleForm({
       : { description: row.description.trim(), unitPrice: Number(row.unitPrice), quantity: row.quantity },
   );
 
+  const nameAndPhoneRequired = paymentType === "PART_PAYMENT" && !customerId;
+  const canSubmit = validRows.length > 0 && Boolean(paymentType) && !posCashMismatch;
+
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="lineItems" value={JSON.stringify(lineItemsPayload)} />
+      <input type="hidden" name="paymentType" value={paymentType} />
 
       <Field label="Branch">
         <Select name="branchId" required>
@@ -105,29 +126,77 @@ export function CreateSaleForm({
 
       {!customerId && (
         <div className="grid grid-cols-3 gap-4">
-          <Field label="Customer name">
-            <Input name="customerName" />
+          <Field label="Customer name" optional={!nameAndPhoneRequired}>
+            <Input
+              name="customerName"
+              required={nameAndPhoneRequired}
+              placeholder={nameAndPhoneRequired ? undefined : "Leave blank to auto-generate"}
+            />
           </Field>
-          <Field label="Phone">
-            <Input name="customerPhone" />
+          <Field label="Phone" optional={!nameAndPhoneRequired}>
+            <Input name="customerPhone" required={nameAndPhoneRequired} />
           </Field>
-          <Field label="Email">
+          <Field label="Email" optional>
             <Input name="customerEmail" type="email" />
           </Field>
         </div>
       )}
 
-      <Checkbox
-        checked={isCredit}
-        onChange={(e) => setIsCredit(e.target.checked)}
-        label="This is a credit sale (set a payment due date)"
-      />
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Payment type</p>
+        <div className="flex flex-wrap gap-2">
+          {(Object.keys(PAYMENT_TYPE_LABELS) as PaymentType[]).map((pt) => (
+            <Button key={pt} type="button" variant={paymentType === pt ? "primary" : "secondary"} onClick={() => setPaymentType(pt)}>
+              {PAYMENT_TYPE_LABELS[pt]}
+            </Button>
+          ))}
+        </div>
 
-      {isCredit && (
-        <Field label="Payment due date">
-          <Input name="dueDate" type="date" className="w-48" />
-        </Field>
-      )}
+        {paymentType === "POS_CASH" && (
+          <div className="mt-1 flex flex-col gap-1">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="POS amount">
+                <Input type="number" min="0" step="0.01" name="posAmount" value={posAmount} onChange={(e) => setPosAmount(e.target.value)} />
+              </Field>
+              <Field label="Cash amount">
+                <Input type="number" min="0" step="0.01" name="cashAmount" value={cashAmount} onChange={(e) => setCashAmount(e.target.value)} />
+              </Field>
+            </div>
+            <p className={`text-xs ${posCashMismatch ? "text-red-600 dark:text-red-400" : "text-gray-500 dark:text-gray-400"}`}>
+              POS + Cash must add up to {formatMoney(total, currency)} (currently {formatMoney(posCashTotal, currency)}).
+            </p>
+          </div>
+        )}
+
+        {paymentType === "PART_PAYMENT" && (
+          <div className="mt-1 flex flex-col gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Amount paying now" optional hint="Leave at 0 for a pure credit sale">
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  name="partAmountPaid"
+                  value={partAmountPaid}
+                  onChange={(e) => setPartAmountPaid(e.target.value)}
+                />
+              </Field>
+              <Field label="Payment mode">
+                <Select name="partPaymentMode" value={partPaymentMode} onChange={(e) => setPartPaymentMode(e.target.value)}>
+                  {PART_PAYMENT_MODES.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode.replace("_", " ")}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+            <Field label="Payment due date">
+              <Input name="dueDate" type="date" className="w-48" />
+            </Field>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-2">
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Line items</p>
@@ -218,7 +287,7 @@ export function CreateSaleForm({
 
       <FormError error={state.error} />
 
-      <Button type="submit" isPending={isPending} pendingLabel="Recording…" disabled={validRows.length === 0}>
+      <Button type="submit" isPending={isPending} pendingLabel="Recording…" disabled={!canSubmit}>
         Record sale
       </Button>
     </form>

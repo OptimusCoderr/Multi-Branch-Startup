@@ -44,6 +44,15 @@ async function getSaleOrThrow(tx: ScopedTx, saleId: string) {
   return sale;
 }
 
+/** "Walk-in Customer #001", "#002", ... — same atomic-counter pattern as saleNumber below. */
+async function generateWalkInCustomerName(tx: ScopedTx, companyId: string): Promise<string> {
+  const company = await tx.company.update({
+    where: { id: companyId },
+    data: { walkInCounter: { increment: 1 } },
+  });
+  return `Walk-in Customer #${String(company.walkInCounter).padStart(3, "0")}`;
+}
+
 /**
  * Creates a Sale with server-computed totals (never trust a client-sent
  * total), snapshotting each line item's price so a later edit to
@@ -73,6 +82,14 @@ export async function createSale(
     isReportExempt?: boolean;
     /** Set only by the mobile app's offline sync queue, for idempotent retries — see Sale.clientRequestId's schema comment. */
     clientRequestId?: string;
+    /**
+     * Web-only for now — the payment-type buttons on the sale form. Drives
+     * the customer-name/phone defaulting rules above; the actual Payment
+     * row(s) are created by the caller (see actions/sales.ts) via the
+     * existing recordPayment(), once the grandTotal this function computes
+     * is known.
+     */
+    paymentType?: "POS" | "CASH" | "POS_CASH" | "PART_PAYMENT";
   },
 ) {
   if (input.lineItems.length === 0) {
@@ -102,6 +119,8 @@ export async function createSale(
   let customerPhone = input.customerPhone;
   let customerEmail = input.customerEmail;
 
+  const isPartPayment = input.paymentType === "PART_PAYMENT";
+
   if (input.customerId) {
     const customer = await tx.customer.findUnique({ where: { id: input.customerId } });
     if (!customer || !customer.isActive) {
@@ -110,12 +129,30 @@ export async function createSale(
     customerName = customer.name;
     customerPhone = customer.phone ?? undefined;
     customerEmail = customer.email ?? undefined;
+  } else if (isPartPayment) {
+    // A part payment leaves a balance to chase later — the web form
+    // requires a name and phone up front rather than falling back to
+    // anything auto-generated, same rationale as the debt-reminder
+    // phone-required rule elsewhere in this app.
+    if (!customerName?.trim()) {
+      throw new SaleValidationError("Customer name is required for a part payment.");
+    }
+    if (!customerPhone?.trim()) {
+      throw new SaleValidationError("Customer phone is required for a part payment.");
+    }
   } else if (!customerName?.trim()) {
-    // No customer selected and no name given — default to the staff member
-    // recording the sale, so a sale is never left with no one attached to
-    // it (point 3: an unnamed walk-in is still accountable to someone).
-    const recorder = await tx.membership.findUnique({ where: { id: membershipId }, include: { user: true } });
-    customerName = recorder?.displayName ?? recorder?.user.name ?? undefined;
+    if (input.paymentType) {
+      // A fully-paid walk-in (POS/CASH/POS+CASH) with no name given — auto
+      // -number it rather than attributing it to the staff member, so the
+      // invoice reads the way a POS receipt actually would.
+      customerName = await generateWalkInCustomerName(tx, companyId);
+    } else {
+      // No payment type at all (e.g. the mobile app, which doesn't collect
+      // one) — default to the staff member recording the sale instead, so
+      // a sale is never left with no one attached to it.
+      const recorder = await tx.membership.findUnique({ where: { id: membershipId }, include: { user: true } });
+      customerName = recorder?.displayName ?? recorder?.user.name ?? undefined;
+    }
   }
 
   const productIds = [...new Set(input.lineItems.filter((li) => li.productId).map((li) => li.productId as string))];

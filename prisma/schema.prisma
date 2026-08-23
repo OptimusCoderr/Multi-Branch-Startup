@@ -45,6 +45,7 @@ model Company {
   saleCounter       Int           @default(0)
   creditNoteCounter Int           @default(0)
   poCounter         Int           @default(0)
+  walkInCounter     Int           @default(0)
 
   // What kind of business this is, gathered at Owner sign-up (a curated
   // list in the UI, but stored as free text so a custom "Other" entry
@@ -1280,6 +1281,7 @@ enum PaymentMode {
   CARD
   BANK_TRANSFER
   MOBILE_MONEY
+  POS
   OTHER
 }
 

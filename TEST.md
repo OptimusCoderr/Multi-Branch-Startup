@@ -233,14 +233,32 @@ Manager is not a reviewer by default, only a dispatcher).
 
 ### 5. Sales and payments
 
-1. `/sales/new` — pick a branch, add a walk-in customer name, add one or more line items,
-   submit. Confirm the total is server-computed (matches what the form showed) and stock
-   decremented by exactly the quantities sold.
+1. `/sales/new` — pick a branch, add one or more line items, and pick a **payment type**
+   button (web-only for now — the mobile app still records a sale unpaid and takes payment
+   separately, unchanged):
+   - **POS**, **Cash**: full payment. Leave the customer name blank and confirm it's
+     auto-numbered "Walk-in Customer #001" (then "#002" on the next one, company-wide, not
+     per-branch) — phone stays optional. The sale is immediately `PAID`, with one Payment
+     row in the matching mode.
+   - **POS + Cash**: enter both a POS amount and a Cash amount. Confirm they must add up to
+     exactly the line-items total — a mismatched split disables "Record sale"; matching it
+     re-enables the button. On submit, confirm **two** Payment rows appear (one POS, one
+     Cash) and the sale is `PAID`.
+   - **Part payment**: confirm the customer name and phone fields become required (native
+     browser validation blocks submitting without them) — this is the one payment type that
+     does *not* auto-generate a walk-in name, since there's a balance to chase later. Enter
+     an amount less than the total (or 0, for a pure credit sale) plus a due date; confirm
+     the sale lands on `CONFIRMED` (0 paid) or `PARTIALLY_PAID` (partial) with the
+     outstanding balance shown, and a Payment row only when the amount was greater than 0.
+   Confirm the total itself is always server-computed (matches what the form showed) and
+   stock decremented by exactly the quantities sold, regardless of payment type.
 2. Try to oversell (quantity greater than available stock) — should be rejected, not
    allowed to go negative.
-3. On the sale detail page, record a **partial** payment, then another partial payment
-   that completes it. Confirm the status transitions `CONFIRMED` → `PARTIALLY_PAID` →
-   `PAID`, and that an overpayment attempt (more than the remaining balance) is rejected.
+3. On the sale detail page, record a further **partial** payment against a sale that isn't
+   fully paid yet (e.g. a part-payment sale from step 1), then another that completes it.
+   Confirm the status transitions toward `PAID`, and that an overpayment attempt (more than
+   the remaining balance) is rejected. The mode picker here now includes **POS** alongside
+   the existing Cash/Card/Bank transfer/Mobile money/Other.
 4. Void a sale (as a role with `sales.void`) and confirm stock is restored via a
    compensating movement — the original sale record stays, just marked `VOIDED`, never
    deleted.
