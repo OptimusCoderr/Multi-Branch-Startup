@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
@@ -12,14 +11,14 @@ import { provisionStockForNewBranch } from "@/server/services/inventory-service"
 import { writeAuditLog } from "@/server/services/audit-service";
 import { assertUnderBranchLimit, PlanLimitError } from "@/server/services/plan-limit-service";
 
-type ActionResult = { error: string } | never;
+type ActionResult = { error: string; success?: boolean };
 
 async function requestMeta() {
   const h = await headers();
   return { ipAddress: h.get("x-forwarded-for"), userAgent: h.get("user-agent") };
 }
 
-export async function createBranch(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function createBranch(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.BRANCHES_MANAGE);
 
@@ -78,12 +77,12 @@ export async function createBranch(_prev: { error: string }, formData: FormData)
   }
 
   revalidatePath("/branches");
-  redirect("/branches");
+  return { error: "", success: true };
 }
 
 export async function updateBranch(
   branchId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -132,7 +131,7 @@ export async function updateBranch(
   });
 
   revalidatePath("/branches");
-  redirect("/branches");
+  return { error: "", success: true };
 }
 
 export async function deactivateBranch(branchId: string): Promise<void> {

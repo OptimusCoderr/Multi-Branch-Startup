@@ -1311,6 +1311,31 @@ products, edit a product's price via the modal and confirm it lands, deactivate 
 confirm the badge flips, and open the "Assign stock" modal. Exercised end-to-end via a
 scripted Playwright run with zero console/page errors captured.
 
+### 35. ALLMAAJ-pattern UI redesign — Phase 4: Branches (modal CRUD, no stock)
+
+Rebuilt `/branches` around a stat-card row (Total/Active/Inactive/Plan limit) and a search
+bar; New/Edit branch are now `Modal` instances of the existing `LocationForm`, reusing the
+modal-close-on-success pattern from Phase 3 (`createBranch`/`updateBranch` now return
+`{ error: "", success: true }` instead of redirecting). `/branches/new` and `/branches/[id]`
+are removed — the latter had a stock table + `AdjustBranchStockForm` added earlier this
+session, both of which move to the new consolidated Branch Stock page in Phase 6; the
+now-unused `adjust-branch-stock-form.tsx` component is deleted rather than left orphaned
+(its only caller was the removed page — Products' Phase 3 "Assign stock" modal reuses the
+underlying `adjustBranchStock` action directly, not this form component).
+
+Dropped ALLMAAJ's "Staffed" stat card — our `Membership` model has no per-branch scoping
+(staff aren't tied to a specific branch the way ALLMAAJ's are), so there's no real data to
+back it; a "Plan limit" card (active/max branches, linking to billing when at cap) replaces
+it since we do have that data and it was previously only shown as page-header subtext.
+
+To verify: sign up as a new Owner, go to `/branches`, create two branches, confirm the stat
+cards update, the search bar filters by name/address, edit a branch's address via the modal
+and confirm it lands, and deactivate a branch and confirm the badge flips. Exercised
+end-to-end via a scripted Playwright run with zero console/page errors captured (one
+one-off dev-server hydration warning on an earlier run did not reproduce on a clean re-run
+or in isolated repro attempts, and the production build is clean — treated as test-harness
+noise, not a regression).
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

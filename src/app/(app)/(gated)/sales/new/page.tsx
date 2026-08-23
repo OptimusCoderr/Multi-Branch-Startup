@@ -28,17 +28,18 @@ export default async function NewSalePage() {
   ]);
 
   // A sale always belongs to a branch — with none yet (a brand-new company
-  // before its first /branches/new visit), the form's required branchId
-  // select would just be an empty dropdown, silently blocked by native
-  // validation with no indication of what to do. Same fix as
-  // /transfers/new got for the zero-warehouse case.
+  // before its first branch), the form's required branchId select would
+  // just be an empty dropdown, silently blocked by native validation with
+  // no indication of what to do. Same fix as /transfers/new got for the
+  // zero-warehouse case. Branch creation is a modal on /branches now (no
+  // dedicated /branches/new route), so this just links to the list.
   if (branches.length === 0) {
     return (
       <div className="flex max-w-lg flex-col gap-4">
         <h1 className="text-2xl font-semibold">Record a sale</h1>
         <p className="text-gray-500 dark:text-gray-400">
           You don&apos;t have a branch yet — every sale belongs to one.{" "}
-          <Link href="/branches/new" className="text-[var(--brand-primary)] hover:underline">
+          <Link href="/branches" className="text-[var(--brand-primary)] hover:underline">
             Create your first branch
           </Link>{" "}
           to get started.

@@ -178,7 +178,7 @@ export async function adjustBranchStock(_prev: { error: string }, formData: Form
   }
 
   revalidatePath("/stock");
-  revalidatePath(`/branches/${branchId}`);
+  revalidatePath("/branches");
   revalidatePath("/products");
   return { error: "", success: true };
 }
