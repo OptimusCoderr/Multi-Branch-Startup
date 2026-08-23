@@ -33,6 +33,9 @@ export const PERMISSIONS = {
   // covers the general /reports page): a Branch Manager can see reports
   // but shouldn't be able to export the raw sales ledger.
   SALES_EXPORT: "sales.export",
+  // Flag/reject a specific sale after the fact — an exception path, not a
+  // review gate on every sale. See sale-flag-service.ts.
+  SALES_FLAG: "sales.flag",
   PAYMENTS_RECORD: "payments.record",
   CREDIT_NOTES_ISSUE: "credit_notes.issue",
   CREDIT_NOTES_VOID: "credit_notes.void",
@@ -99,6 +102,7 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.SALES_OVERRIDE_PRICE, category: "sales", description: "Override a product's price on a sale" },
   { key: PERMISSIONS.SALES_DATE_SEARCH, category: "sales", description: "Search the sales list by a custom date range" },
   { key: PERMISSIONS.SALES_EXPORT, category: "sales", description: "Export the sales list to CSV" },
+  { key: PERMISSIONS.SALES_FLAG, category: "sales", description: "Flag/reject a specific sale after the fact, with a reason" },
   { key: PERMISSIONS.PAYMENTS_RECORD, category: "sales", description: "Record a payment against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_ISSUE, category: "sales", description: "Issue a credit note against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_VOID, category: "sales", description: "Void a previously issued credit note" },
@@ -165,6 +169,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.TRANSFERS_RECEIVE,
     PERMISSIONS.SALES_RECORD,
     PERMISSIONS.SALES_DATE_SEARCH,
+    PERMISSIONS.SALES_FLAG,
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,
     PERMISSIONS.CUSTOMERS_MANAGE,

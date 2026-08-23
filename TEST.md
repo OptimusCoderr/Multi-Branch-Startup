@@ -938,6 +938,48 @@ itself succeeds).
    still works exactly as before — the phone-required rule is a web-form-only decision, not
    baked into the shared validation the mobile API route also uses.
 
+### 28. Sale rejection (flag/resolve) and in-app notifications
+
+Web-only. An exception path, not a review gate on every sale — most sales are never
+touched by any of this. A reviewer (Owner/Admin/Branch Manager, `sales.flag`) can flag a
+*specific* sale after the fact; the submitter has until midnight (`Company.timezone`) to
+correct and resubmit it. "Correct" is deliberately narrow — only the customer
+name/phone/email/due date, never line items, quantities, or prices (a mistake there is
+still what void + a fresh sale is for).
+
+1. As a Cashier, record a sale. As a Branch Manager (a different person — flagging is
+   blocked if the reviewer and the submitter are the same membership), open that sale and
+   flag it with a reason. Confirm:
+   - The sale detail page now shows a red "Flagged by ..." banner with the reason, visible
+     to both of you.
+   - The Cashier gets an in-app notification (bell/"Notifications" link in the sidebar,
+     with an unread-count badge) — `/notifications` shows it, marked "New".
+2. As the Cashier (the original submitter, before the deadline), open the flagged sale —
+   confirm a "Correct and resubmit" form appears (only customer name/phone/email/due date,
+   plus a required note explaining the correction). Submit it. Confirm:
+   - The sale now shows the corrected customer info, and the red banner is replaced by a
+     quiet "previously flagged... corrected" notice — the resolve form is gone.
+   - The Branch Manager who flagged it gets a "sale was corrected" notification.
+3. Confirm eligibility is enforced, not just hidden: as the Branch Manager (not the
+   submitter, before the deadline) on a *newly* flagged sale, confirm the resolve form does
+   **not** appear — only the original submitter (or an Owner/Admin, who can act anytime)
+   may resolve before the deadline.
+4. **Escalation.** The deadline is midnight in `Company.timezone`, checked by
+   `/api/cron/sale-flag-deadlines` (Vercel Cron, hourly — see `vercel.json`; requires the
+   `Authorization: Bearer $CRON_SECRET` header, same pattern as the existing
+   `/api/cron/debt-reminders`). To test without waiting for real midnight, backdate a
+   flag's deadline directly (`UPDATE "SaleFlag" SET deadline = NOW() - INTERVAL '1 hour'
+   WHERE id = '...';`) and hit the cron endpoint with the secret. Confirm:
+   - The flag's status becomes `ESCALATED` and the sale detail shows "Flag escalated —
+     deadline missed" instead of the original banner.
+   - The Branch Manager who flagged it (not just the original submitter) can now resolve
+     it — edit rights widen to Cashier/Branch Manager/Admin once escalated.
+   - The Owner gets a notification that the flag missed its deadline (escalation notifies
+     Branch Manager + Owner specifically — a different audience than the widened resolver
+     set).
+5. Confirm a voided sale cannot be flagged, and a sale already carrying an open flag can't
+   be flagged a second time — both are rejected with a clear error, not a silent no-op.
+
 ## Mobile app
 
 ```bash

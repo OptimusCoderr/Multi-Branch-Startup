@@ -33,6 +33,8 @@ export const TENANT_SCOPED_MODELS = [
   "DailySalesReport",
   "ReminderCreditPurchase",
   "DebtReminderTemplate",
+  "SaleFlag",
+  "Notification",
 ] as const;
 
 type TenantScopedModel = (typeof TENANT_SCOPED_MODELS)[number];

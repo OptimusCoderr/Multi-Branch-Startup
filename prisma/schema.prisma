@@ -133,6 +133,8 @@ model Company {
   purchaseOrders    PurchaseOrder[]
   dailySalesReports DailySalesReport[]
   reminderCreditPurchases ReminderCreditPurchase[]
+  saleFlags         SaleFlag[]
+  notifications     Notification[]
 
   @@index([status])
   @@index([verificationStatus])
@@ -1230,12 +1232,95 @@ model Sale {
   lineItems   SaleLineItem[]
   payments    Payment[]
   creditNotes CreditNote[]
+  flags       SaleFlag[]
 
   @@unique([companyId, saleNumber])
   @@unique([companyId, clientRequestId])
   @@index([companyId, branchId])
   @@index([companyId, status])
   @@index([companyId, customerId])
+}
+
+enum SaleFlagStatus {
+  FLAGGED
+  RESOLVED
+  ESCALATED
+}
+
+// A reviewer's after-the-fact rejection of a specific sale — the exception
+// path, not a review gate every sale goes through. Deliberately a separate
+// model rather than fields on Sale itself: a Sale's own lifecycle
+// (SaleStatus) tracks payment progress and must stay untouched by this: a
+// PAID sale can still get flagged (e.g. wrong customer info), and this
+// records that fact + its resolution without disturbing the payment
+// ledger.
+//
+// "Edit and resubmit" here is intentionally narrow — only the
+// customer-identifying fields (name/phone/email/due date) on the Sale are
+// corrected in place (see resolveSaleFlag in sale-flag-service.ts). Line
+// items, quantities, and prices are never touched after the fact anywhere
+// else in this app (they're immutable snapshots — see SaleLineItem's own
+// comment), and correcting a wrong quantity/price/product is still what
+// void + a fresh sale is for. This model only fixes the "who is this sale
+// actually for" class of mistake a reviewer would flag.
+model SaleFlag {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  saleId    String
+  sale      Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  status    SaleFlagStatus @default(FLAGGED)
+
+  // Plain strings, no relation — same pattern as Sale.soldByMembershipId:
+  // removing a Membership must never cascade into rewriting this history.
+  flaggedByMembershipId String
+  reason                String
+
+  // Midnight (Company.timezone) of the day the flag was raised — the
+  // resubmission deadline. Past this instant with status still FLAGGED,
+  // the deadline-check cron (see /api/cron/sale-flag-deadlines) escalates
+  // it: notifies Branch Manager + Owner, and opens resolve rights beyond
+  // just the original submitter.
+  deadline DateTime
+
+  resolvedByMembershipId String?
+  resolvedAt              DateTime?
+  resolutionNote          String?
+
+  escalatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, saleId])
+}
+
+enum NotificationType {
+  SALE_FLAGGED
+  SALE_FLAG_ESCALATED
+  SALE_FLAG_RESOLVED
+}
+
+// In-app notification delivery — no email/SMS/push, just a bell + list in
+// the web app. membershipId is a plain string (no relation), same
+// removing-a-Membership-shouldn't-cascade reasoning as everywhere else a
+// membership is merely referenced rather than owned.
+model Notification {
+  id           String           @id @default(cuid())
+  companyId    String
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  membershipId String
+  type         NotificationType
+  title        String
+  body         String
+  entityType   String?
+  entityId     String?
+  readAt       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, membershipId, readAt])
 }
 
 // Line items are never edited after creation and a Sale is never deleted —

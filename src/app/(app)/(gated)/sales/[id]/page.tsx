@@ -9,6 +9,8 @@ import { RecordPaymentForm } from "@/components/forms/record-payment-form";
 import { VoidSaleForm } from "@/components/forms/void-sale-form";
 import { IssueCreditNoteForm } from "@/components/forms/issue-credit-note-form";
 import { VoidCreditNoteForm } from "@/components/forms/void-credit-note-form";
+import { FlagSaleForm } from "@/components/forms/flag-sale-form";
+import { ResolveSaleFlagForm } from "@/components/forms/resolve-sale-flag-form";
 import { Card, Badge, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, type BadgeVariant } from "@/components/ui";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
@@ -32,6 +34,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       lineItems: { include: { product: true } },
       payments: { orderBy: { paidAt: "asc" } },
       creditNotes: { orderBy: { createdAt: "asc" } },
+      flags: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!sale) notFound();
@@ -41,6 +44,7 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
     sale.voidedByMembershipId,
     ...sale.payments.map((p) => p.recordedByMembershipId),
     ...sale.creditNotes.flatMap((cn) => [cn.issuedByMembershipId, cn.voidedByMembershipId]),
+    ...sale.flags.flatMap((f) => [f.flaggedByMembershipId, f.resolvedByMembershipId]),
   ]);
   const nameOf = (mid: string | null) => (mid ? (names.get(mid) ?? "Unknown") : null);
 
@@ -48,6 +52,21 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
   const canVoid = permissions.has(PERMISSIONS.SALES_VOID);
   const canIssueCreditNote = permissions.has(PERMISSIONS.CREDIT_NOTES_ISSUE);
   const canVoidCreditNote = permissions.has(PERMISSIONS.CREDIT_NOTES_VOID);
+  const canFlag = permissions.has(PERMISSIONS.SALES_FLAG);
+
+  const activeFlag = sale.flags.find((f) => f.status !== "RESOLVED") ?? null;
+  const canFlagThisSale = canFlag && !activeFlag && sale.status !== "VOIDED" && sale.soldByMembershipId !== membership.membershipId;
+
+  // Mirrors the eligibility rule in sale-flag-service.ts's resolveSaleFlag
+  // — the server is authoritative; this only decides whether to show the
+  // form at all.
+  const roleName = membership.roleName;
+  const isOwnerOrAdminRole = membership.roleIsSystem && (roleName === "Owner" || roleName === "Admin");
+  const isSubmitter = sale.soldByMembershipId === membership.membershipId;
+  const isPastFlagDeadline = activeFlag ? activeFlag.status === "ESCALATED" || activeFlag.deadline <= new Date() : false;
+  const isWidenedResolverRole = membership.roleIsSystem && (roleName === "Cashier" || roleName === "Branch Manager" || roleName === "Admin");
+  const canResolveFlag =
+    Boolean(activeFlag) && (isOwnerOrAdminRole || isSubmitter || (isPastFlagDeadline && isWidenedResolverRole));
 
   const creditedTotal = sale.creditNotes
     .filter((cn) => cn.status === "ISSUED")
@@ -79,6 +98,24 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
         {sale.status === "VOIDED" && (
           <p className="mt-2 rounded-lg bg-gray-50 dark:bg-gray-900 px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
             Voided by {nameOf(sale.voidedByMembershipId)} on {sale.voidedAt?.toLocaleString()} — {sale.voidReason}
+          </p>
+        )}
+        {activeFlag && (
+          <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-800 dark:text-red-300">
+            <p className="font-medium">
+              {activeFlag.status === "ESCALATED" ? "Flag escalated — deadline missed" : "Flagged"} by{" "}
+              {nameOf(activeFlag.flaggedByMembershipId)}: {activeFlag.reason}
+            </p>
+            <p className="mt-1 text-xs text-red-700 dark:text-red-400">
+              {activeFlag.status === "ESCALATED"
+                ? "Any Cashier, Branch Manager, or Admin can now correct and resubmit this sale."
+                : `Must be corrected and resubmitted by ${activeFlag.deadline.toLocaleString()}, or a Branch Manager and Owner will be notified.`}
+            </p>
+          </div>
+        )}
+        {sale.flags.some((f) => f.status === "RESOLVED") && !activeFlag && (
+          <p className="mt-2 rounded-lg bg-green-50 dark:bg-green-950/20 px-3 py-2 text-sm text-green-800 dark:text-green-400">
+            This sale was previously flagged and has since been corrected.
           </p>
         )}
       </div>
@@ -142,6 +179,19 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
       )}
 
       {canVoid && sale.status !== "VOIDED" && <VoidSaleForm saleId={sale.id} />}
+
+      {canFlagThisSale && <FlagSaleForm saleId={sale.id} />}
+
+      {activeFlag && canResolveFlag && (
+        <ResolveSaleFlagForm
+          flagId={activeFlag.id}
+          saleId={sale.id}
+          currentName={sale.customerName}
+          currentPhone={sale.customerPhone}
+          currentEmail={sale.customerEmail}
+          currentDueDate={sale.dueDate ? sale.dueDate.toISOString().slice(0, 10) : null}
+        />
+      )}
 
       {sale.creditNotes.length > 0 && (
         <Card>
