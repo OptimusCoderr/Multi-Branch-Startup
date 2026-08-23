@@ -10,7 +10,13 @@ const initialState: FormState = { error: "" };
 export function BrandingForm({
   defaultValues,
 }: {
-  defaultValues: { primaryColor: string; secondaryColor: string | null; logoUrl: string | null; layoutPreset: string };
+  defaultValues: {
+    primaryColor: string;
+    secondaryColor: string | null;
+    logoUrl: string | null;
+    layoutPreset: string;
+    defaultTheme: string;
+  };
 }) {
   const [state, formAction, isPending] = useActionState(updateBranding, initialState);
   const [primaryColor, setPrimaryColor] = useState(defaultValues.primaryColor);
@@ -26,7 +32,7 @@ export function BrandingForm({
               name="primaryColor"
               value={primaryColor}
               onChange={(e) => setPrimaryColor(e.target.value)}
-              className="h-9 w-12 rounded border border-gray-300"
+              className="h-9 w-12 rounded border border-gray-300 dark:border-gray-700"
             />
             <Input
               value={primaryColor}
@@ -41,7 +47,7 @@ export function BrandingForm({
             type="color"
             name="secondaryColor"
             defaultValue={defaultValues.secondaryColor ?? primaryColor}
-            className="h-9 w-12 rounded border border-gray-300"
+            className="h-9 w-12 rounded border border-gray-300 dark:border-gray-700"
           />
         </Field>
 
@@ -53,6 +59,13 @@ export function BrandingForm({
           <Select name="layoutPreset" defaultValue={defaultValues.layoutPreset}>
             <option value="DEFAULT">Default</option>
             <option value="COMPACT">Compact</option>
+          </Select>
+        </Field>
+
+        <Field label="Default theme" hint="What new and unopinionated staff see until they pick their own in the theme toggle.">
+          <Select name="defaultTheme" defaultValue={defaultValues.defaultTheme}>
+            <option value="DARK">Dark</option>
+            <option value="LIGHT">Light</option>
           </Select>
         </Field>
 
@@ -68,14 +81,14 @@ export function BrandingForm({
         </button>
       </form>
 
-      <div className="flex-1 rounded-2xl border border-gray-200 p-5">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Preview</p>
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex-1 rounded-2xl border border-gray-200 p-5 dark:border-gray-800">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Preview</p>
+        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
           {logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element -- arbitrary user-provided URL, live preview only
             <img src={logoUrl} alt="Logo preview" className="h-7 w-7 rounded-md object-cover" />
           )}
-          <span className="text-sm font-semibold">Your Company</span>
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">Your Company</span>
         </div>
         <button type="button" className="mt-3 rounded-xl px-4 py-2 text-sm font-medium text-white" style={{ backgroundColor: primaryColor }}>
           Primary action

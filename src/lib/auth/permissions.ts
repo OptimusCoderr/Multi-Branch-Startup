@@ -33,6 +33,16 @@ export const PERMISSIONS = {
   CUSTOMERS_VIEW: "customers.view",
   CUSTOMERS_MANAGE: "customers.manage",
 
+  // Purchase orders & suppliers
+  PURCHASE_ORDERS_VIEW: "purchase_orders.view",
+  PURCHASE_ORDERS_MANAGE: "purchase_orders.manage",
+  PURCHASE_ORDERS_RECEIVE: "purchase_orders.receive",
+
+  // End-of-day sales reports
+  SALES_REPORTS_SUBMIT: "sales_reports.submit",
+  SALES_REPORTS_VIEW: "sales_reports.view",
+  SALES_REPORTS_APPROVE: "sales_reports.approve",
+
   // Expenses
   EXPENSES_VIEW: "expenses.view",
   EXPENSES_MANAGE: "expenses.manage",
@@ -86,6 +96,26 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.CUSTOMERS_VIEW, category: "customers", description: "View customers and their outstanding balances" },
   { key: PERMISSIONS.CUSTOMERS_MANAGE, category: "customers", description: "Create and edit customer records" },
 
+  { key: PERMISSIONS.PURCHASE_ORDERS_VIEW, category: "purchase_orders", description: "View purchase orders and suppliers" },
+  {
+    key: PERMISSIONS.PURCHASE_ORDERS_MANAGE,
+    category: "purchase_orders",
+    description: "Create and cancel purchase orders, manage suppliers",
+  },
+  { key: PERMISSIONS.PURCHASE_ORDERS_RECEIVE, category: "purchase_orders", description: "Receive purchase order line items" },
+
+  { key: PERMISSIONS.SALES_REPORTS_SUBMIT, category: "sales_reports", description: "Submit your own end-of-day sales report" },
+  {
+    key: PERMISSIONS.SALES_REPORTS_VIEW,
+    category: "sales_reports",
+    description: "View other staff's submitted sales reports (everyone can always see their own)",
+  },
+  {
+    key: PERMISSIONS.SALES_REPORTS_APPROVE,
+    category: "sales_reports",
+    description: "Approve, send back, or reject a submitted sales report",
+  },
+
   { key: PERMISSIONS.EXPENSES_VIEW, category: "expenses", description: "View recorded business expenses" },
   { key: PERMISSIONS.EXPENSES_MANAGE, category: "expenses", description: "Record, categorize, and void expenses" },
 
@@ -122,6 +152,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.EXPENSES_VIEW,
     PERMISSIONS.EXPENSES_MANAGE,
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.PURCHASE_ORDERS_VIEW,
+    PERMISSIONS.PURCHASE_ORDERS_MANAGE,
+    PERMISSIONS.PURCHASE_ORDERS_RECEIVE,
+    PERMISSIONS.SALES_REPORTS_SUBMIT,
   ],
   "Warehouse Manager": [
     PERMISSIONS.PRODUCTS_VIEW,
@@ -129,6 +163,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.TRANSFERS_APPROVE,
     PERMISSIONS.TRANSFERS_DISPATCH,
     PERMISSIONS.REPORTS_VIEW,
+    PERMISSIONS.PURCHASE_ORDERS_VIEW,
+    PERMISSIONS.PURCHASE_ORDERS_RECEIVE,
   ],
   Cashier: [
     PERMISSIONS.PRODUCTS_VIEW,
@@ -137,6 +173,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,
     PERMISSIONS.CUSTOMERS_MANAGE,
+    PERMISSIONS.SALES_REPORTS_SUBMIT,
   ],
 };
 

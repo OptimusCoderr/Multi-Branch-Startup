@@ -35,6 +35,8 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   18. [Two-factor authentication (2FA) for Owners and platform staff](#18-two-factor-authentication-2fa-for-owners-and-platform-staff)
   19. [CSV data export (products, customers, sales)](#19-csv-data-export-products-customers-sales)
   20. [Warehouse-level batch tracking](#20-warehouse-level-batch-tracking)
+  21. [Purchase orders and suppliers](#21-purchase-orders-and-suppliers)
+  22. [Dark mode](#22-dark-mode)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -596,6 +598,179 @@ walkthrough, which this extends.
    confirm the database rejects it (a CHECK constraint backs the app-level logic here, the
    same defense-in-depth pattern used elsewhere in this schema).
 
+### 21. Purchase orders and suppliers
+
+Formalizes buying from a supplier as a real commitment record, checked against actual
+receipt — the natural next link in this app's stock-accountability chain alongside stock
+transfers. Today, `receiveExternalStock` (§15/§20) records a delivery *after the fact*;
+a purchase order lets you say "I ordered 50 units at ₦2,000 each" up front, then
+reconcile what actually arrives against it, one line item at a time.
+
+1. Go to **Purchase orders** in the left nav → **Manage suppliers** → **New supplier**.
+   Create a supplier (name required; phone/email/address/notes optional). Confirm it
+   appears in the `/suppliers` list, and that a role without `purchase_orders.manage`
+   (e.g. Cashier) can't see "New supplier" and gets a permission message if they visit
+   `/suppliers/new` directly.
+2. From `/purchase-orders`, click **New purchase order**. Pick the supplier, a
+   destination (a warehouse or a branch — the picker only appears when you have both;
+   otherwise it defaults to whichever exists), and add two line items: one ordinary
+   product and one **batch-tracked** product ("Perishable / tracked by batch"), each
+   with a quantity and a unit cost. Confirm the running total updates as you edit rows,
+   and that submitting creates the PO in **DRAFT** status with a sequential `PO-000001`-
+   style number, then lands you on its detail page.
+3. On the detail page, confirm **DRAFT** POs have no receive forms — only **"Mark as
+   ordered"** and **"Cancel purchase order"** (cancel is available from DRAFT or
+   ORDERED, as long as nothing's been received yet). Click **Cancel**, confirm it moves
+   to **CANCELLED** and both actions disappear. Create a second PO the same way to
+   continue.
+4. Click **"Mark as ordered"** — status moves to **ORDERED**, and a per-line **Receive**
+   form now appears for each line item still outstanding.
+5. Receive the ordinary product's line **in full**. Confirm: the line shows "Fully
+   received" and its Receive form disappears; the PO status becomes
+   **PARTIALLY_RECEIVED** (the batch-tracked line is still outstanding);
+   `/stock` shows the destination's quantity incremented by the received amount.
+6. Receive the batch-tracked product's line **partially** (less than ordered). Confirm
+   the Receive form requires a batch number and expiry date (same as an external
+   delivery), that the PO stays **PARTIALLY_RECEIVED**, and that `/batches?tab=all`
+   shows the new batch at the destination with the received quantity.
+7. Try to receive **more than the remaining quantity** on that same line — confirm it's
+   rejected (not silently capped) with a clear "Cannot receive more than N unit(s) still
+   outstanding" error.
+8. Receive the rest of the batch-tracked line, with a **different batch number**
+   (e.g. a second delivery). Confirm: the PO status becomes **RECEIVED**; `/batches`
+   now shows **two distinct batch rows** for that product at the destination (not one
+   row overwritten); the line's Receive form is gone since nothing's outstanding.
+9. Confirm a role with only `purchase_orders.view` + `purchase_orders.receive`
+   (Warehouse Manager's default) can open a PO and receive against it, but sees no
+   "New purchase order", "Mark as ordered", or "Cancel" controls — those require
+   `purchase_orders.manage` (Branch Manager gets all three by default, mirroring its
+   existing `transfers.receive_external` asymmetry with Warehouse Manager). Confirm a
+   Cashier (no purchase-order permissions at all) is blocked from `/purchase-orders`,
+   `/purchase-orders/[id]`, and `/suppliers` entirely.
+10. Confirm every step above wrote an audit-log entry (`purchase_order.created`,
+    `.ordered`, `.cancelled`, `.line_item_received`, `supplier.created`) visible at
+    `/audit-log`, and that the underlying `StockMovement` rows use reason
+    `PURCHASE_RECEIPT` with `referenceType: "PurchaseOrder"`.
+
+### 22. Dark mode
+
+Dark is the default everywhere (marketing site, auth pages, and the authenticated app) and
+switchable via a sun/moon toggle. The choice is remembered per-browser (a `theme` cookie,
+read server-side so there's no flash of the wrong theme) and, once signed in, per-account
+(`User.theme`, synced to the cookie at sign-in so it follows you to a new device). A
+company's Owner can also set the default their staff see (`/settings/branding`) until each
+person picks their own. The always-dark `/admin` platform surface is unrelated to this
+toggle and doesn't change.
+
+1. Visit the homepage in a private/incognito window (no cookie yet) — confirm it renders
+   dark by default. Click the toggle (top-right) — confirm it flips to light immediately,
+   and stays light after a reload (cookie persisted).
+2. Go to `/sign-up` and `/sign-in` — confirm both are dark by default too, and that the
+   toggle there is independent of being signed in.
+3. Sign up a new company. Confirm the dashboard (and every other page — products, sales,
+   purchase orders, transfers, reports, settings, etc.) renders dark by default, with
+   readable text/borders/cards throughout, not just a dark page background with
+   unreadable light-mode components.
+4. Toggle to light while signed in. Confirm it flips immediately everywhere (sidebar,
+   tables, forms, badges). Sign out, then sign back in from a **different browser/private
+   window** (a "new device," no existing cookie) — confirm the very first authenticated
+   page you land on already reflects your light preference, not the company default —
+   your choice followed you, with no visible flash of the wrong theme first.
+5. As the Owner, go to `/settings/branding` and change **Default theme** to Light. Confirm
+   it saves. Invite a new staff member (who hasn't set a personal preference) and confirm
+   their first sign-in reflects the company's new default rather than the global dark
+   default.
+6. Confirm `/admin` (platform staff) still renders its own fixed dark theme regardless of
+   what the `theme` cookie says, and that toggling the marketing-site/app theme has no
+   effect on it.
+7. Spot-check a two-factor QR code enrollment (`/settings/security`) in dark mode — the QR
+   code's own background should stay white (for scannability) even though the surrounding
+   panel is dark.
+
+### 23. End-of-day sales reports, approval, and cash reconciliation
+
+Per staff member, per branch, per business day (bucketed by `Company.timezone`, default
+`Africa/Lagos`). Owner/Admin are exempt — they approve, they don't submit. Everyone else
+must submit before they can record more sales at that branch that day.
+
+1. As a Cashier, record a sale **without** typing a customer name (leave "Customer name"
+   blank, no existing customer picked). Confirm the sale's customer shows as *your own
+   name* — every sale always has someone attached, even a nameless walk-in.
+2. Record a `CASH` payment on a sale. Go to **Sales → Daily reports → Submit today's
+   report**. Confirm the preview card shows today's live sales count/gross total/payments
+   collected/cash collected for the branch you pick, computed server-side (not trusted from
+   the client).
+3. Enter a "cash counted" amount that deliberately **doesn't** match the system's cash
+   total, add a note, submit. Confirm the report detail page shows `SUBMITTED` and calls
+   out the discrepancy in an amber card.
+4. Try to record another sale at that same branch as the same Cashier — confirm it's
+   blocked with a message pointing at the open report. Recording at a *different* branch,
+   or as a different staff member at the same branch, is unaffected.
+5. As Owner (or a role granted `sales_reports.approve`), open the report and **send it
+   back** with a note. Confirm status flips to `SENT BACK` and the Cashier's block lifts
+   immediately — they can record more sales and resubmit. A resubmission recomputes totals
+   fresh (it doesn't trust the first submission's numbers) and returns the report to
+   `SUBMITTED`.
+6. Approve a `SUBMITTED` report — confirm it becomes `APPROVED` (terminal; no further
+   action available) and records who approved it and when.
+7. **Reject** a report instead — confirm it becomes `REJECTED` (terminal) with the owner's
+   note visible; a rejected report does **not** re-open the sales block (the Owner is
+   expected to handle it directly, e.g. voiding sales), unlike a send-back.
+8. Confirm a Cashier without `sales_reports.view` only ever sees their own reports on
+   `/sales/reports`; a Branch Manager (or anyone) granted that permission sees everyone's,
+   with a staff-name column.
+9. Full history of a report across send-back/resubmit cycles is reconstructable from
+   `/audit-log` (`sales_report.submitted`/`.approved`/`.sent_back`/`.rejected` entries) —
+   there's no separate revision table, the audit log is the ledger.
+
+Mobile support for offline sale recording and a lightweight submit/status screen is
+covered under "Offline sale recording and daily reports" in the Mobile app section below.
+
+### 24. Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN
+
+Six smaller features aimed at everyday habit and trust, not one big feature — test them independently.
+
+**Product units** — `/products/new`, set "Unit" to something like `carton` or `bag` (defaults to
+`unit` if left blank). Confirm it shows up next to quantities on `/stock` and in the product
+picker on `/sales/new` ("3 cartons", not a bare "3") — and the same on mobile's Sales/Stock screens.
+
+**Daily summary card** — record a sale, then check `/dashboard` (web) or the Dashboard tab
+(mobile): a distinct "Today's summary" card should show sales/expenses/profit/amount owed,
+separate from the metric-tile grid below it. Click **Copy to share** (web) or **Share** (mobile)
+and confirm a clean, WhatsApp-ready text summary is produced.
+
+**Backup & trust messaging** — `/settings/backup` should show record counts (sales/expenses/
+customers) backing up the "your book is safely stored in the cloud" claim. On mobile, queue a
+sale offline and confirm the pending-sync banner (Sales tab) grows a "these have been waiting a
+while" warning once you artificially age it past ~12h (or just confirm the copy is present).
+
+**Debtor pay-links** — enable debt reminders (`/settings/debt-reminders`), record an overdue
+credit sale for a customer with a phone number, then trigger a reminder (**Send reminders now**
+on `/customers`, or wait for the daily cron). With a real Termii key configured, the SMS itself
+will contain a `/pay/<token>` link; visiting it (no sign-in required) should show the correct
+outstanding amount and company name, with a "Powered by Multi-Branch Inventory" footer. Tapping
+**Pay now** starts a real Paystack checkout (needs a configured `PAYSTACK_SECRET_KEY`); on
+success, confirm a `Payment` appears on the sale attributed to "Paid by customer (self-service
+link)" rather than any staff member, and that revisiting the same link now shows "already
+settled." Confirm an invalid/garbled token shows a generic "invalid or has expired" message
+instead of an error page.
+
+**Reminder credits** — `/settings/debt-reminders` shows a credit balance and three packs to buy
+(needs a configured Paystack key to complete a real purchase; without one, submitting shows a
+clear "billing is not configured" error rather than crashing). Set a company's
+`reminderCreditBalance` to `0` directly in `psql` and confirm **Send reminders now** stops
+immediately with an "out of reminder credits" message instead of silently failing or overspending
+— a successfully-sent reminder should decrement the balance by exactly one.
+
+**Quick-switch PIN (mobile, shared device)** — from the Settings tab, tap **Switch user**, set a
+4-6 digit PIN for the currently signed-in profile. Sign in as a second staff member on the *same*
+device (so both profiles get remembered locally), have them also set a PIN, then use **Switch
+user** to swap between the two using only their PIN — no password re-entry. Confirm the app now
+acts as whoever you switched to (their name/permissions), and that a wrong PIN is rejected. Use
+**Remove** to drop a profile from the device; confirm it now requires a full sign-in again.
+Signing all the way out (not just switching) should clear every remembered profile from that
+device.
+
 ## Mobile app
 
 ```bash
@@ -629,6 +804,48 @@ app's own `two-factor` screen instead of the dashboard — confirm entering the 
 (or a backup code, via "Use a backup code instead") completes sign-in, and a wrong code
 shows an error without navigating away.
 
+### Offline sale recording and daily reports
+
+Offline support is scoped to *recording a sale* — everything else (the daily report
+itself, approvals, everything on web) still needs connectivity. Uses
+`@react-native-async-storage/async-storage` for the local queue (`mobile/lib/offline-queue.ts`)
+and `expo-network` for connectivity detection (`mobile/lib/network-status.ts`).
+
+1. With the device/simulator online, go to **Sales → Record sale**, add a product, submit.
+   Confirm it behaves exactly as before (no change to the online path) and lands on the new
+   sale's detail page.
+2. Turn on airplane mode (or otherwise cut network — a simulator's network toggle works
+   too), then record another sale. Confirm it does **not** error: you see "Saved offline —
+   this sale will sync automatically once you're back online" and land back on the Sales
+   list, which now shows a **"N sale(s) waiting to sync"** banner with a manual **Sync now**
+   button.
+3. Kill and relaunch the app while still offline. Confirm the pending-sync banner still
+   shows the queued sale — it's backed by AsyncStorage, not in-memory state, so it survives
+   a restart.
+4. Turn network back on. Within a few seconds (or foreground the app if it was backgrounded)
+   confirm the banner clears and the sale appears in the Sales list with a real sale number
+   — check it on the web app too, same company, to confirm it actually reached the server.
+5. Force a **duplicate-sync scenario**: this is what actually protects stock from being
+   double-decremented if a sync response gets lost — verify it directly instead by POSTing
+   `/api/mobile/v1/sales` twice with the same `clientRequestId` (see the curl section below)
+   and confirming both calls return the same `saleId`, not two different sales.
+6. Force a **rejected sync**: queue a sale offline for more of a product than is actually in
+   stock (adjust stock down on web first, or queue several sales against a low-stock item),
+   then reconnect. Confirm the failing item stays in the pending list with its rejection
+   reason shown inline (not retried forever), and a **Discard** button to remove it; sales
+   queued after it that don't have the same problem still sync normally — one bad item
+   doesn't block the rest of the queue.
+7. Go to **Sales → Daily report**. Confirm it shows today's live totals per branch
+   (sales count, gross total, payments collected, system cash collected), matches what
+   `/sales/reports/new` shows on web for the same account. Enter a cash count that doesn't
+   match, submit, confirm it flips to a submitted/read-only state showing the status badge.
+8. Confirm recording a further sale at that branch is blocked — same rule as web, enforced
+   server-side regardless of which client asks. Have an Owner send the report back on web;
+   confirm the mobile report screen reflects `SENT BACK` and allows resubmission.
+9. Scroll down on the report screen — confirm **Recent reports** lists your own past
+   reports with status badges and any cash discrepancy called out, view-only (approval is
+   web-only, by design — there's no Approve/Reject here).
+
 ### Testing the mobile API directly with curl
 
 Useful for isolating "is this a backend bug or a UI bug" without touching the app at all:
@@ -649,6 +866,30 @@ curl http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN"
 `/me` and `/dashboard` should stay reachable (`200`) even with an inactive subscription;
 every other `/api/mobile/v1/*` route should `402` in that case — confirm this by
 temporarily setting `Subscription.status = 'CANCELLED'` for the test company in `psql`.
+
+Idempotent offline sync, directly — POST the same `clientRequestId` twice and confirm both
+responses carry the same `saleId` (this is what makes a retried sync after a lost response
+safe, instead of double-creating the sale and double-decrementing stock):
+
+```bash
+BRANCH_ID="..."
+PRODUCT_ID="..."
+CRID="test-$(date +%s)"
+
+curl -s -X POST http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"branchId\":\"$BRANCH_ID\",\"lineItems\":[{\"productId\":\"$PRODUCT_ID\",\"quantity\":1}],\"clientRequestId\":\"$CRID\"}"
+
+# Same clientRequestId again — should return the identical saleId, not a new sale.
+curl -s -X POST http://localhost:3000/api/mobile/v1/sales -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"branchId\":\"$BRANCH_ID\",\"lineItems\":[{\"productId\":\"$PRODUCT_ID\",\"quantity\":1}],\"clientRequestId\":\"$CRID\"}"
+
+curl http://localhost:3000/api/mobile/v1/sales/report -H "Authorization: Bearer $TOKEN"
+curl -X POST http://localhost:3000/api/mobile/v1/sales/report -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d "{\"branchId\":\"$BRANCH_ID\",\"declaredCash\":100}"
+curl http://localhost:3000/api/mobile/v1/sales/reports -H "Authorization: Bearer $TOKEN"
+```
 
 ### Bluetooth printer testing — needs real hardware
 

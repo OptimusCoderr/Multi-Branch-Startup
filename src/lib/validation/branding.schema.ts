@@ -11,5 +11,6 @@ export const brandingSchema = z.object({
   secondaryColor: z.preprocess(emptyToUndefined, hexColor.optional()),
   logoUrl: z.preprocess(emptyToUndefined, z.string().trim().url("Enter a valid URL").optional()),
   layoutPreset: z.enum(["DEFAULT", "COMPACT"]),
+  defaultTheme: z.enum(["LIGHT", "DARK"]),
 });
 export type BrandingInput = z.infer<typeof brandingSchema>;

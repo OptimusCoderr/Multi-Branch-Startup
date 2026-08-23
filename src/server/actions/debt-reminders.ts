@@ -35,5 +35,9 @@ export async function sendDebtRemindersNow(_prev: SendResult, _formData: FormDat
     return { error: "", summary: "No overdue customers were due a reminder right now." };
   }
 
-  return { error: "", summary: `Reminded ${result.sent} of ${result.candidates} overdue customer(s)${result.failed > 0 ? ` (${result.failed} failed)` : ""}.` };
+  const sentSummary = `Reminded ${result.sent} of ${result.candidates} overdue customer(s)${result.failed > 0 ? ` (${result.failed} failed)` : ""}.`;
+  return {
+    error: "",
+    summary: result.outOfCredits ? `${sentSummary} Ran out of reminder credits — buy more to reach the rest.` : sentSummary,
+  };
 }

@@ -5,11 +5,12 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { requireMembershipOrThrow, requirePermission } from "@/lib/auth/session";
+import { requireMembershipOrThrow, requirePermission, isOwnerOrAdminMembership } from "@/lib/auth/session";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { createSaleSchema, recordPaymentSchema, voidSaleSchema } from "@/lib/validation/sale.schema";
 import * as saleService from "@/server/services/sale-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
+import { SalesReportStateError } from "@/server/services/sales-report-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { checkRateLimit, RateLimitError } from "@/lib/rate-limit";
 
@@ -25,6 +26,7 @@ function friendlyError(err: unknown, fallback: string): string {
     err instanceof saleService.SaleValidationError ||
     err instanceof saleService.SaleNotFoundError ||
     err instanceof InsufficientStockError ||
+    err instanceof SalesReportStateError ||
     err instanceof RateLimitError
   ) {
     return err.message;
@@ -73,7 +75,10 @@ export async function createSale(_prev: { error: string }, formData: FormData): 
 
   try {
     await db.$transaction(async (tx) => {
-      const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, parsed.data);
+      const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, {
+        ...parsed.data,
+        isReportExempt: isOwnerOrAdminMembership(membership),
+      });
       saleId = sale.id;
 
       await writeAuditLog(tx, {

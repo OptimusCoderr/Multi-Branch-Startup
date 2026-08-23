@@ -10,15 +10,15 @@ type Variant = "light" | "dark";
 
 const STYLES: Record<Variant, Record<string, string>> = {
   light: {
-    card: "rounded-lg border border-gray-200 bg-white p-5",
-    heading: "text-gray-900",
-    muted: "text-gray-500",
-    input: "rounded-md border border-gray-300 px-3 py-2 text-gray-900",
+    card: "rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-5",
+    heading: "text-gray-900 dark:text-gray-100",
+    muted: "text-gray-500 dark:text-gray-400",
+    input: "rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-gray-900 dark:text-gray-100",
     primaryButton: "rounded-md bg-[var(--brand-primary,#7c3aed)] px-4 py-2 text-sm font-medium text-white disabled:opacity-50",
-    secondaryButton: "rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 disabled:opacity-50",
-    dangerButton: "rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 disabled:opacity-50",
-    codeBox: "rounded-md bg-gray-50 border border-gray-200 p-3 font-mono text-sm text-gray-800",
-    error: "text-sm text-red-600",
+    secondaryButton: "rounded-md border border-gray-300 dark:border-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 disabled:opacity-50",
+    dangerButton: "rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 dark:text-red-400 disabled:opacity-50",
+    codeBox: "rounded-md bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-3 font-mono text-sm text-gray-800 dark:text-gray-200",
+    error: "text-sm text-red-600 dark:text-red-400",
   },
   dark: {
     card: "rounded-lg border border-gray-800 bg-gray-900 p-5",
@@ -287,6 +287,9 @@ export function TwoFactorSecurityPanel({
         <div className="flex flex-col gap-4">
           <div>
             <p className={`mb-2 text-sm font-medium ${s.heading}`}>1. Scan this with your authenticator app</p>
+            {/* Deliberately always white, regardless of theme — a QR code needs
+                reliable contrast against its own black modules to stay
+                scannable, so this shouldn't follow the app's dark mode. */}
             <div className="w-fit rounded-md bg-white p-3">
               <QRCodeSVG value={totpURI} size={176} marginSize={2} />
             </div>

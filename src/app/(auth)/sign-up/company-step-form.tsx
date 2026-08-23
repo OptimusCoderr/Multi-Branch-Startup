@@ -15,14 +15,14 @@ export function CompanyStepForm({ email }: { email: string }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         You&apos;re signed in as {email}. Name your company to finish setting up your account.
       </p>
 
       <CompanyNameField />
       <CompanyVerificationFields />
 
-      {state.error && <p className="text-sm text-red-600">{state.error}</p>}
+      {state.error && <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>}
 
       <button
         type="submit"

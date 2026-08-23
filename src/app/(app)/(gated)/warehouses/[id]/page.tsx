@@ -15,7 +15,7 @@ export default async function EditWarehousePage({ params }: { params: Promise<{ 
   if (!warehouse) notFound();
 
   if (!permissions.has(PERMISSIONS.WAREHOUSES_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to edit warehouses.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to edit warehouses.</p>;
   }
 
   return (
@@ -23,7 +23,7 @@ export default async function EditWarehousePage({ params }: { params: Promise<{ 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Edit warehouse</h1>
         <form action={deactivateWarehouse.bind(null, warehouse.id)}>
-          <button type="submit" className="text-sm text-red-600 hover:underline">
+          <button type="submit" className="text-sm text-red-600 dark:text-red-400 hover:underline">
             {warehouse.isActive ? "Deactivate" : "Reactivate"}
           </button>
         </form>

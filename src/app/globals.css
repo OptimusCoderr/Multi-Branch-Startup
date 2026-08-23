@@ -1,8 +1,21 @@
 @import "tailwindcss";
 
+/* Tailwind v4 defaults `dark:` to `prefers-color-scheme` — this repoints it
+   at a `.dark` class instead (placed on <html> by the root layout, read
+   from the `theme` cookie server-side so there's no flash), which is what
+   lets a user's explicit light/dark choice override their OS setting. See
+   src/server/actions/theme.ts / src/lib/theme.ts for how the class gets
+   there. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #0f0f14;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -13,13 +26,6 @@
   /* Distinctive display face for headings/nav/buttons, paired with the
      neutral Geist body face — consumed via Tailwind's `font-display`. */
   --font-display: var(--font-space-grotesk);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {

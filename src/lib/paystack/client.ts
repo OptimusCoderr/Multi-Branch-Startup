@@ -64,6 +64,7 @@ type VerifyTransactionResult = {
   reference: string;
   amountKobo: number;
   customerEmail: string;
+  channel: string | undefined;
   metadata: Record<string, unknown>;
 };
 
@@ -84,6 +85,7 @@ export async function verifyTransaction(reference: string): Promise<VerifyTransa
     reference: json.data.reference,
     amountKobo: json.data.amount,
     customerEmail: json.data.customer?.email,
+    channel: json.data.channel,
     metadata: json.data.metadata ?? {},
   };
 }

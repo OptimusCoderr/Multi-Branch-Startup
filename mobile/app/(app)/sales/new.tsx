@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, Pressable, StyleSheet, ScrollView } from "react-native";
+import { View, Text, Pressable, StyleSheet, ScrollView, Alert } from "react-native";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
 import { ScanLine } from "lucide-react-native";
-import { api } from "@/lib/api";
-import { useMe, formatMoney } from "@/lib/use-me";
+import { api, ApiRequestError } from "@/lib/api";
+import { useMe, formatMoney, formatQuantity } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { BarcodeScannerModal } from "@/components/BarcodeScannerModal";
 import { Button, Field, Input, ListItem } from "@/components/ui";
+import { enqueueSale, generateClientRequestId } from "@/lib/offline-queue";
+import { isOnline } from "@/lib/network-status";
 
-type LineItem = { productId: string; name: string; unitPrice: number; quantity: number };
+type LineItem = { productId: string; name: string; unitPrice: number; unitLabel: string; quantity: number };
 
 export default function NewSaleScreen() {
   const router = useRouter();
@@ -36,27 +38,58 @@ export default function NewSaleScreen() {
   const total = useMemo(() => lineItems.reduce((sum, li) => sum + li.unitPrice * li.quantity, 0), [lineItems]);
 
   const createSale = useMutation({
-    mutationFn: () =>
-      api.createSale({
+    mutationFn: async () => {
+      const input = {
         branchId: branchId!,
         customerName: customerName || undefined,
         lineItems: lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
-      }),
-    onSuccess: ({ saleId }) => {
+      };
+      const clientRequestId = generateClientRequestId();
+
+      // Check connectivity up front rather than always attempting the POST
+      // first — on a device that's clearly offline, that would just mean
+      // waiting out a request that's guaranteed to fail before falling back.
+      if (!(await isOnline())) {
+        await enqueueSale(input, clientRequestId);
+        return { queued: true as const, saleId: null };
+      }
+
+      try {
+        const { saleId } = await api.createSale({ ...input, clientRequestId });
+        return { queued: false as const, saleId };
+      } catch (err) {
+        // A validation failure (out of stock, report already submitted,
+        // etc.) is a real rejection — surface it. Anything else here is a
+        // network-level failure, so the connectivity check above was wrong
+        // or the connection dropped mid-request; queue it instead. The
+        // clientRequestId carries over, so if this attempt actually reached
+        // the server and only the response was lost, a later sync retry is
+        // a safe idempotent replay rather than a duplicate sale.
+        if (err instanceof ApiRequestError) throw err;
+        await enqueueSale(input, clientRequestId);
+        return { queued: true as const, saleId: null };
+      }
+    },
+    onSuccess: ({ queued, saleId }) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      router.replace(`/sales/${saleId}`);
+      if (queued) {
+        Alert.alert("Saved offline", "This sale will sync automatically once you're back online.");
+        router.replace("/sales");
+      } else {
+        router.replace(`/sales/${saleId}`);
+      }
     },
     onError: (err: Error) => setError(err.message),
   });
 
-  function addProduct(productId: string, name: string, unitPrice: number) {
+  function addProduct(productId: string, name: string, unitPrice: number, unitLabel: string) {
     setLineItems((prev) => {
       const existing = prev.find((li) => li.productId === productId);
       if (existing) {
         return prev.map((li) => (li.productId === productId ? { ...li, quantity: li.quantity + 1 } : li));
       }
-      return [...prev, { productId, name, unitPrice, quantity: 1 }];
+      return [...prev, { productId, name, unitPrice, unitLabel, quantity: 1 }];
     });
   }
 
@@ -68,7 +101,7 @@ export default function NewSaleScreen() {
       return;
     }
     setError(null);
-    addProduct(product.id, product.name, Number(product.unitPrice));
+    addProduct(product.id, product.name, Number(product.unitPrice), product.unitLabel);
   }
 
   function changeQuantity(productId: string, delta: number) {
@@ -122,9 +155,9 @@ export default function NewSaleScreen() {
             <ListItem
               key={p.id}
               title={p.name}
-              subtitle={p.sku}
+              subtitle={`${p.sku} · per ${p.unitLabel}`}
               trailing={<Text style={styles.muted}>{formatMoney(p.unitPrice, currency)}</Text>}
-              onPress={() => addProduct(p.id, p.name, Number(p.unitPrice))}
+              onPress={() => addProduct(p.id, p.name, Number(p.unitPrice), p.unitLabel)}
             />
           ))}
         </View>
@@ -136,7 +169,10 @@ export default function NewSaleScreen() {
           <View style={{ gap: theme.spacing.sm }}>
             {lineItems.map((li) => (
               <View key={li.productId} style={styles.lineItemRow}>
-                <Text style={{ flex: 1 }}>{li.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text>{li.name}</Text>
+                  <Text style={styles.muted}>{formatQuantity(li.quantity, li.unitLabel)}</Text>
+                </View>
                 <Pressable onPress={() => changeQuantity(li.productId, -1)} style={styles.stepperButton}>
                   <Text style={styles.stepperText}>−</Text>
                 </Pressable>

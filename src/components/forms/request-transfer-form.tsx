@@ -40,7 +40,7 @@ export function RequestTransferForm({
 
       {showSourceTypePicker && (
         <fieldset className="flex flex-col gap-1.5 text-sm">
-          <legend className="mb-0.5 text-gray-500">Source</legend>
+          <legend className="mb-0.5 text-gray-500 dark:text-gray-400">Source</legend>
           <div className="flex gap-4">
             <label className="flex items-center gap-1.5">
               <input

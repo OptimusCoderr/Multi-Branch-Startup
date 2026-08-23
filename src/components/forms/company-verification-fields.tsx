@@ -15,27 +15,27 @@ export function CompanyVerificationFields() {
   return (
     <>
       <label className="flex flex-col gap-1 text-sm">
-        CAC RC number <span className="text-gray-400">(optional)</span>
+        CAC RC number <span className="text-gray-400 dark:text-gray-500">(optional)</span>
         <input
           name="rcNumber"
           placeholder="e.g. RC1234567"
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+          className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
           style={{ "--tw-ring-color": accent } as React.CSSProperties}
         />
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        Company incorporation date <span className="text-gray-400">(optional)</span>
+        Company incorporation date <span className="text-gray-400 dark:text-gray-500">(optional)</span>
         <input
           name="incorporationDate"
           type="date"
           max={new Date().toISOString().slice(0, 10)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+          className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
           style={{ "--tw-ring-color": accent } as React.CSSProperties}
         />
       </label>
 
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-gray-400 dark:text-gray-500">
         Don&apos;t have these yet? Leave them blank — you can submit your CAC certificate for verification later
         from Settings.
       </p>

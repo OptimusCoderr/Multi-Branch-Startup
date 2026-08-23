@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
 import { AuthThemeShell, useAuthTheme } from "@/components/auth/auth-theme";
+import { syncThemeAfterSignIn } from "@/server/actions/theme";
 
 function TwoFactorForm() {
   const router = useRouter();
@@ -30,6 +31,7 @@ function TwoFactorForm() {
       return;
     }
 
+    await syncThemeAfterSignIn();
     router.push("/dashboard");
     router.refresh();
   }
@@ -38,7 +40,7 @@ function TwoFactorForm() {
     <>
       <div>
         <h1 className="font-display text-2xl font-semibold">Verify it&apos;s you</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           {useBackupCode
             ? "Enter one of your backup codes."
             : "Enter the 6-digit code from your authenticator app."}
@@ -54,7 +56,7 @@ function TwoFactorForm() {
             autoComplete="one-time-code"
             autoFocus
             maxLength={useBackupCode ? 16 : 6}
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={code}
             onChange={(e) => setCode(useBackupCode ? e.target.value : e.target.value.replace(/\D/g, ""))}
@@ -62,12 +64,12 @@ function TwoFactorForm() {
           />
         </label>
 
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
           <input type="checkbox" checked={trustDevice} onChange={(e) => setTrustDevice(e.target.checked)} />
           Trust this device for 30 days
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="submit"
@@ -92,7 +94,7 @@ function TwoFactorForm() {
         {useBackupCode ? "Use your authenticator app instead" : "Use a backup code instead"}
       </button>
 
-      <p className="mt-4 text-center text-sm text-gray-500">
+      <p className="mt-4 text-center text-sm text-gray-500 dark:text-gray-400">
         <Link href="/sign-in" className="underline">
           Back to sign in
         </Link>

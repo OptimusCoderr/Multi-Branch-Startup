@@ -25,6 +25,7 @@ export async function GET() {
         sku: p.sku,
         barcode: p.barcode,
         name: p.name,
+        unitLabel: p.unitLabel,
         warehouseStocks: p.warehouseStocks.map((s) => ({ warehouseId: s.warehouseId, warehouseName: s.warehouse.name, quantity: s.quantity })),
         branchStocks: p.branchStocks.map((s) => ({ branchId: s.branchId, branchName: s.branch.name, quantity: s.quantity })),
       })),

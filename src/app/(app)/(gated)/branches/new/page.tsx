@@ -8,7 +8,7 @@ export default async function NewBranchPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.BRANCHES_MANAGE)) {
-    return <p className="text-gray-500">You don&apos;t have permission to create branches.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to create branches.</p>;
   }
 
   return (

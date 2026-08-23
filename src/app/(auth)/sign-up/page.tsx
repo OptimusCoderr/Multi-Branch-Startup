@@ -31,14 +31,14 @@ function SignUpFormStep({
     <>
       <div>
         <h1 className="font-display text-2xl font-semibold">Create your account</h1>
-        <p className="mt-1 text-sm text-gray-500">Start a 14-day trial — no card required.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Start a 14-day trial — no card required.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1 text-sm">
           Your name
           <input
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -51,7 +51,7 @@ function SignUpFormStep({
           Work email
           <input
             type="email"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -63,7 +63,7 @@ function SignUpFormStep({
           Password
           <input
             type="password"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -72,7 +72,7 @@ function SignUpFormStep({
           />
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="submit"
@@ -84,7 +84,7 @@ function SignUpFormStep({
         </button>
       </form>
 
-      <p className="text-center text-sm text-gray-500">
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
         Already have an account?{" "}
         <Link href="/sign-in" className="font-semibold underline" style={{ color: accent }}>
           Sign in
@@ -120,7 +120,7 @@ export default function SignUpPage() {
         <div className="flex flex-col gap-6">
           <div>
             <h1 className="font-display text-2xl font-semibold">Create your company</h1>
-            <p className="mt-1 text-sm text-gray-500">One more step — no card required for your 14-day trial.</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">One more step — no card required for your 14-day trial.</p>
           </div>
           <CompanyStepForm email={email} />
         </div>

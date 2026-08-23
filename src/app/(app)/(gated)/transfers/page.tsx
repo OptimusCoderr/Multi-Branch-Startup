@@ -72,14 +72,14 @@ export default async function TransfersPage() {
               <TableRow key={t.id}>
                 <TableCell>{t.product.name}</TableCell>
                 <TableCell mono>{t.quantity}</TableCell>
-                <TableCell className="text-gray-500">
+                <TableCell className="text-gray-500 dark:text-gray-400">
                   {t.sourceType === "EXTERNAL"
                     ? `External: ${t.externalSourceName}`
                     : t.sourceType === "BRANCH"
                       ? t.sourceBranch?.name
                       : t.sourceWarehouse?.name}
                 </TableCell>
-                <TableCell className="text-gray-500">
+                <TableCell className="text-gray-500 dark:text-gray-400">
                   {t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`}
                 </TableCell>
                 <TableCell>

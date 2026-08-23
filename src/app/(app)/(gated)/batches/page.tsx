@@ -20,7 +20,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.STOCK_LEVELS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view batches.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view batches.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -49,7 +49,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
     <div className="flex flex-col gap-6">
       <PageHeader title="Batches" description="Perishable and batch-tracked stock, by expiry date." />
 
-      <div className="flex gap-1 border-b border-gray-200 text-sm">
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-800 text-sm">
         {TABS.map((t) => (
           <Link
             key={t.key}
@@ -57,7 +57,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
             className={`-mb-px border-b-2 px-3 py-2 font-medium ${
               tab === t.key
                 ? "border-[var(--brand-primary)] text-[var(--brand-primary)]"
-                : "border-transparent text-gray-500 hover:text-gray-900"
+                : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
             }`}
           >
             {t.label}
@@ -83,7 +83,7 @@ export default async function BatchesPage({ searchParams }: { searchParams: Prom
               return (
                 <TableRow key={b.id}>
                   <TableCell>
-                    {b.product.name} <span className="font-mono text-xs text-gray-400">({b.product.sku})</span>
+                    {b.product.name} <span className="font-mono text-xs text-gray-400 dark:text-gray-500">({b.product.sku})</span>
                   </TableCell>
                   <TableCell>
                     {b.branch ? (

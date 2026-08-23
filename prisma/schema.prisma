@@ -44,12 +44,22 @@ model Company {
   timezone          String        @default("Africa/Lagos")
   saleCounter       Int           @default(0)
   creditNoteCounter Int           @default(0)
+  poCounter         Int           @default(0)
 
   // Off by default — sending automated messages to a company's customers
   // is a consent-adjacent action that shouldn't silently turn on for an
   // existing company just because this feature shipped.
   debtReminderEnabled     Boolean @default(false)
   debtReminderDaysOverdue Int     @default(7)
+
+  // Consumed one-per-send in sendDebtReminders(); replenished monthly by
+  // the subscription's Plan.features.includedReminderCredits (see
+  // plan-features.ts) and top-uppable via a one-time Paystack purchase
+  // (billing-service.ts). Balance, not a ledger table — DebtReminder rows
+  // and AuditLog "billing.reminder_credits_purchased" entries already give
+  // a reconstructable history without a dedicated transactions table.
+  reminderCreditBalance      Int       @default(0)
+  reminderCreditsRefreshedAt DateTime?
 
   // Business verification (CAC). rcNumber/incorporationDate are collected
   // (optionally) at sign-up; verificationDeadline is set to createdAt + 5
@@ -102,9 +112,32 @@ model Company {
   debtReminders     DebtReminder[]
   creditNotes       CreditNote[]
   productBatches    ProductBatch[]
+  suppliers         Supplier[]
+  purchaseOrders    PurchaseOrder[]
+  dailySalesReports DailySalesReport[]
+  reminderCreditPurchases ReminderCreditPurchase[]
 
   @@index([status])
   @@index([verificationStatus])
+}
+
+/**
+ * One row per completed reminder-credit top-up — doubles as the audit
+ * trail for "where did this balance come from" and the idempotency guard
+ * against double-crediting the same Paystack transaction (the redirect
+ * callback and the webhook both try to apply it; `reference` is unique so
+ * whichever arrives second just no-ops against the first's row).
+ */
+model ReminderCreditPurchase {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reference String   @unique
+  credits   Int
+  priceKobo Int
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
 }
 
 // ---------------------------------------------------------------------------
@@ -142,12 +175,26 @@ model User {
   // in src/lib/auth/session.ts for where that's enforced.
   twoFactorEnabled Boolean @default(false)
 
+  // Null = no personal override — falls back to the signed-in company's
+  // BrandingSettings.defaultTheme (see src/lib/theme.ts's resolveTheme),
+  // then to DARK globally. Set the moment someone flips the ThemeToggle
+  // while signed in, so their choice follows them across devices; an
+  // anonymous visitor's toggle only ever touches the `theme` cookie.
+  theme Theme?
+
   sessions    Session[]
   accounts    Account[]
   memberships Membership[]
   twoFactors  TwoFactor[]
 
   @@map("user")
+}
+
+// Shared by User.theme (personal override) and BrandingSettings.defaultTheme
+// (company-wide default) — see src/lib/theme.ts for the resolution order.
+enum Theme {
+  LIGHT
+  DARK
 }
 
 model TwoFactor {
@@ -255,6 +302,15 @@ model Membership {
   invitedByMembershipId String?
   invitedAt             DateTime?
   joinedAt              DateTime?
+
+  // Self-service, set/changed by the staff member themselves from the
+  // mobile app (never by an Owner) — a fast local re-auth gate for
+  // switching between staff already fully signed in on one shared shop
+  // phone. Scrypt-hashed ("salt:hash" hex), never the raw PIN. This is
+  // NOT a standalone credential: it only ever gates reactivating a
+  // session that a real email/password (+2FA, if applicable) login
+  // already established on that device — see mobile/lib/device-profiles.ts.
+  devicePinHash String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -466,6 +522,13 @@ model Product {
   barcode     String?
   name        String
   description String?
+  // Free-text, merchant-chosen ("carton", "bag", "dozen", "mudu", "yard")
+  // rather than a fixed enum — informal-market goods aren't sold in
+  // generic "units," and forcing a fixed list would mean missing whatever
+  // a given trade actually uses. Shown next to every quantity in the UI;
+  // purely cosmetic, never affects stock math (still tracked as a plain
+  // integer count of this unit).
+  unitLabel   String   @default("unit")
   unitPrice   Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
@@ -495,6 +558,7 @@ model Product {
   stockMovements  StockMovement[]
   saleLineItems   SaleLineItem[]
   batches         ProductBatch[]
+  purchaseOrderLineItems PurchaseOrderLineItem[]
 
   @@unique([companyId, sku])
   @@unique([companyId, barcode])
@@ -517,6 +581,7 @@ model Warehouse {
   incomingExternalTransfers StockTransfer[]  @relation("StockTransferDestinationWarehouse")
   stockMovements            StockMovement[]
   productBatches            ProductBatch[]
+  purchaseOrders            PurchaseOrder[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -541,6 +606,8 @@ model Branch {
   sales             Sale[]
   expenses          Expense[]
   productBatches    ProductBatch[]
+  purchaseOrders    PurchaseOrder[]
+  dailySalesReports DailySalesReport[]
 
   @@unique([companyId, name])
   @@index([companyId, isActive])
@@ -691,6 +758,7 @@ enum StockMovementReason {
   SALE_VOID_RESTOCK
   ADJUSTMENT
   INITIAL_STOCK
+  PURCHASE_RECEIPT
 }
 
 // Immutable, append-only ledger of every stock quantity change, ever. This
@@ -790,6 +858,107 @@ model ProductBatch {
   @@index([companyId, expiryDate])
   @@index([companyId, branchId])
   @@index([companyId, warehouseId])
+}
+
+// ---------------------------------------------------------------------------
+// Purchase orders — the accountability chain for ordering stock from a
+// supplier, mirroring StockTransfer's request/approve-esque discipline:
+// a PO is a commitment record (DRAFT) that becomes a real order (ORDERED),
+// then gets reconciled against what was actually delivered one line item at
+// a time (PARTIALLY_RECEIVED/RECEIVED). Line items are fixed once ORDERED —
+// same "no editing, only state transitions" design as StockTransfer.
+// ---------------------------------------------------------------------------
+
+model Supplier {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id         String   @id @default(cuid())
+  companyId  String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  // Human-friendly sequential number (PO-000123), assigned from
+  // Company.poCounter incremented atomically in the same transaction as
+  // the PurchaseOrder insert — same collision-safety pattern as
+  // Sale.saleNumber/CreditNote.creditNoteNumber.
+  poNumber   String
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  // Exactly one of these is set (enforced by a CHECK constraint added
+  // directly in the migration, same pattern as StockTransfer's own
+  // destination pair) — a PO's delivery lands at a branch or a warehouse,
+  // never both, never neither.
+  destinationBranchId    String?
+  destinationBranch      Branch?    @relation(fields: [destinationBranchId], references: [id])
+  destinationWarehouseId String?
+  destinationWarehouse   Warehouse? @relation(fields: [destinationWarehouseId], references: [id])
+
+  status       PurchaseOrderStatus @default(DRAFT)
+  expectedDate DateTime?
+  notes        String?
+
+  createdByMembershipId String
+
+  orderedByMembershipId String?
+  orderedAt             DateTime?
+
+  cancelledByMembershipId String?
+  cancelledAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lineItems PurchaseOrderLineItem[]
+
+  @@unique([companyId, poNumber])
+  @@index([companyId, status])
+  @@index([companyId, supplierId])
+  @@index([companyId, destinationBranchId])
+  @@index([companyId, destinationWarehouseId])
+}
+
+// Line items are fixed once the parent PO leaves DRAFT — no editing after
+// ordering, same discipline as SaleLineItem's post-sale immutability.
+model PurchaseOrderLineItem {
+  id              String        @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id])
+
+  quantityOrdered  Int
+  unitCost         Decimal @db.Decimal(12, 2)
+  quantityReceived Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseOrderId])
+  @@index([productId])
 }
 
 // ---------------------------------------------------------------------------
@@ -982,6 +1151,14 @@ model Sale {
   voidedAt             DateTime?
   voidReason           String?
 
+  // Idempotency key set only by the mobile app's offline sync queue — a
+  // sale created on web/normal online flows never sets this. Lets a retried
+  // sync request (the server already created the Sale but the phone never
+  // saw the response) return the existing Sale instead of creating a
+  // duplicate and double-decrementing stock. Nullable + unique: Postgres
+  // treats multiple NULLs as distinct, so ordinary sales never collide here.
+  clientRequestId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -990,6 +1167,7 @@ model Sale {
   creditNotes CreditNote[]
 
   @@unique([companyId, saleNumber])
+  @@unique([companyId, clientRequestId])
   @@index([companyId, branchId])
   @@index([companyId, status])
   @@index([companyId, customerId])
@@ -1043,7 +1221,11 @@ model Payment {
   reference String?
   notes     String?
 
-  recordedByMembershipId String
+  // Null means this wasn't recorded by any staff member — a debtor paying
+  // through their own self-serve payment link (see payment-link.ts) is the
+  // one case that applies to; every other payment path still always
+  // supplies a real membership.
+  recordedByMembershipId String?
   paidAt                 DateTime @default(now())
 
   @@index([companyId, saleId])
@@ -1099,6 +1281,65 @@ model CreditNote {
 }
 
 // ---------------------------------------------------------------------------
+// Daily sales reports — end-of-day accountability. A staff member's sales at
+// one branch, for one business day, get submitted for the Owner to approve,
+// send back (with a note, reopening that day for corrections before
+// resubmission), or reject. Not a DRAFT-first workflow — the row is created
+// at submission time, computed fresh from real Sale/Payment data, never
+// trusted from the client. See src/server/services/sales-report-service.ts.
+// ---------------------------------------------------------------------------
+
+enum SalesReportStatus {
+  SUBMITTED
+  APPROVED
+  SENT_BACK
+  REJECTED
+}
+
+model DailySalesReport {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId  String
+  branch    Branch  @relation(fields: [branchId], references: [id])
+
+  // Plain string, no relation — same pattern as Sale.soldByMembershipId /
+  // StockTransfer.requestedByMembershipId — removing a Membership must never
+  // cascade into rewriting a historical report.
+  membershipId String
+  // Normalized to that business day's midnight in Company.timezone (see
+  // src/lib/business-day.ts) — Sale/Payment timestamps are UTC, but a
+  // report buckets by the business's *local* day.
+  reportDate DateTime
+
+  status SalesReportStatus @default(SUBMITTED)
+
+  salesCount        Int
+  grossSalesTotal   Decimal  @db.Decimal(12, 2)
+  discountTotal     Decimal  @db.Decimal(12, 2)
+  paymentsCollected Decimal  @db.Decimal(12, 2)
+  // The reconciliation ground truth: CASH-mode payments this staff recorded
+  // today at this branch, summed server-side — never client-supplied.
+  cashCollected   Decimal  @db.Decimal(12, 2)
+  declaredCash    Decimal? @db.Decimal(12, 2)
+  cashDiscrepancy Decimal? @db.Decimal(12, 2)
+
+  staffNote String?
+  ownerNote String?
+
+  submittedAt             DateTime  @default(now())
+  respondedByMembershipId String?
+  respondedAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, branchId, membershipId, reportDate])
+  @@index([companyId, status])
+  @@index([companyId, branchId, reportDate])
+}
+
+// ---------------------------------------------------------------------------
 // Branding / theming (Phase 5)
 // ---------------------------------------------------------------------------
 
@@ -1115,6 +1356,10 @@ model BrandingSettings {
   secondaryColor String?
   logoUrl        String?
   layoutPreset   LayoutPreset @default(DEFAULT)
+  // The theme a member of this company sees until they personally
+  // override it (User.theme) — Owner-configurable, same "set the company
+  // default, let individuals override" pattern as everything else here.
+  defaultTheme   Theme        @default(DARK)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }

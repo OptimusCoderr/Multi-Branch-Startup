@@ -45,7 +45,7 @@ export default async function BillingCallbackPage({
 
   return (
     <div className="flex flex-col items-center gap-4 py-16 text-center">
-      <h1 className={`text-xl font-semibold ${result.ok ? "text-green-700" : "text-red-600"}`}>{result.title}</h1>
+      <h1 className={`text-xl font-semibold ${result.ok ? "text-green-700 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>{result.title}</h1>
       <Link href="/settings/billing" className="text-sm text-[var(--brand-primary)] hover:underline">
         Back to billing settings
       </Link>

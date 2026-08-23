@@ -2,9 +2,11 @@ import { NextResponse } from "next/server";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { requireMobileMembership, requireMobilePermission, requireActiveSubscription, handleApiError, ApiError } from "@/lib/api/mobile-auth";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { isOwnerOrAdminMembership } from "@/lib/auth/session";
 import { createSaleSchema } from "@/lib/validation/sale.schema";
 import * as saleService from "@/server/services/sale-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
+import { SalesReportStateError } from "@/server/services/sales-report-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -63,7 +65,10 @@ export async function POST(request: Request) {
     let saleId = "";
 
     await db.$transaction(async (tx) => {
-      const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, parsed.data);
+      const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, {
+        ...parsed.data,
+        isReportExempt: isOwnerOrAdminMembership(membership),
+      });
       saleId = sale.id;
 
       await writeAuditLog(tx, {
@@ -78,6 +83,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ saleId }, { status: 201 });
   } catch (err) {
-    return handleApiError(err, [saleService.SaleValidationError, InsufficientStockError]);
+    return handleApiError(err, [saleService.SaleValidationError, InsufficientStockError, SalesReportStateError]);
   }
 }

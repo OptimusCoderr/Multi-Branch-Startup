@@ -7,6 +7,7 @@ import { api, type SaleSummary } from "@/lib/api";
 import { useMe, useHasPermission, formatMoney } from "@/lib/use-me";
 import { theme } from "@/lib/theme";
 import { Button, ListItem, Badge, EmptyState, SkeletonCard, type BadgeVariant } from "@/components/ui";
+import { PendingSyncBanner } from "@/components/PendingSyncBanner";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   CONFIRMED: "warning",
@@ -18,18 +19,28 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
 export default function SalesListScreen() {
   const { data: me } = useMe();
   const canRecord = useHasPermission("sales.record");
+  const canSubmitReport = useHasPermission("sales_reports.submit");
   const { data, isLoading, refetch, isRefetching } = useQuery({ queryKey: ["sales"], queryFn: api.sales });
   const currency = me?.companyCurrency ?? "NGN";
 
   return (
     <View style={styles.container}>
-      {canRecord && (
+      {(canRecord || canSubmitReport) && (
         <View style={styles.newButtonWrap}>
-          <Link href="/sales/new" asChild>
-            <Button label="Record sale" />
-          </Link>
+          {canRecord && (
+            <Link href="/sales/new" asChild>
+              <Button label="Record sale" />
+            </Link>
+          )}
+          {canSubmitReport && (
+            <Link href="/sales/report" asChild>
+              <Button label="Daily report" variant="secondary" />
+            </Link>
+          )}
         </View>
       )}
+
+      <PendingSyncBanner />
 
       {isLoading ? (
         <View style={{ padding: theme.spacing.lg, gap: theme.spacing.sm }}>
@@ -67,6 +78,6 @@ export default function SalesListScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.surface },
-  newButtonWrap: { padding: theme.spacing.lg, paddingBottom: 0 },
+  newButtonWrap: { flexDirection: "row", gap: theme.spacing.sm, padding: theme.spacing.lg, paddingBottom: 0 },
   amount: { fontWeight: "600", color: theme.textPrimary },
 });

@@ -40,7 +40,7 @@ export default async function BranchesPage() {
         actions={canManage && <LinkButton href="/branches/new">New branch</LinkButton>}
       />
       {atLimit && (
-        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 underline">
+        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 dark:text-amber-400 underline">
           Upgrade for more branches
         </Link>
       )}
@@ -60,8 +60,8 @@ export default async function BranchesPage() {
             {branches.map((b) => (
               <TableRow key={b.id}>
                 <TableCell>{b.name}</TableCell>
-                <TableCell className="text-gray-500">{b.address ?? "—"}</TableCell>
-                <TableCell className="text-gray-500">{b.phone ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{b.address ?? "—"}</TableCell>
+                <TableCell className="text-gray-500 dark:text-gray-400">{b.phone ?? "—"}</TableCell>
                 <TableCell>
                   <Badge variant={b.isActive ? "success" : "neutral"}>{b.isActive ? "Active" : "Inactive"}</Badge>
                 </TableCell>

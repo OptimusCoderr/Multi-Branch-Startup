@@ -35,7 +35,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-6 px-4">
       <div>
         <h1 className="text-2xl font-semibold">Join {invitation.company.name}</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
           You&apos;ve been invited as <span className="font-medium">{invitation.role.name}</span>.
         </p>
       </div>
@@ -60,7 +60,7 @@ function InviteMessage({ title, body }: { title: string; body: string }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-3 px-4 text-center">
       <h1 className="text-xl font-semibold">{title}</h1>
-      <p className="text-sm text-gray-500">{body}</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">{body}</p>
     </main>
   );
 }

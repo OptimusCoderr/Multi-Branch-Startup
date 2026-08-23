@@ -27,7 +27,7 @@ export default async function StaffPage() {
     permissions.has(PERMISSIONS.STAFF_REMOVE);
 
   if (!canManage) {
-    return <p className="text-gray-500">You don&apos;t have permission to view staff management.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view staff management.</p>;
   }
 
   const [members, invitations, roles, { maxStaff }] = await Promise.all([
@@ -57,7 +57,7 @@ export default async function StaffPage() {
         }
       />
       {atLimit && (
-        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 underline">
+        <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 dark:text-amber-400 underline">
           Upgrade for more seats
         </Link>
       )}
@@ -76,9 +76,9 @@ export default async function StaffPage() {
           {members.map((m) => (
             <TableRow key={m.id}>
               <TableCell>
-                {m.displayName ?? m.user.name} {m.id === membership.membershipId && <span className="text-xs text-gray-400">(you)</span>}
+                {m.displayName ?? m.user.name} {m.id === membership.membershipId && <span className="text-xs text-gray-400 dark:text-gray-500">(you)</span>}
               </TableCell>
-              <TableCell className="text-gray-500">{m.user.email}</TableCell>
+              <TableCell className="text-gray-500 dark:text-gray-400">{m.user.email}</TableCell>
               <TableCell>{m.role?.name ?? "—"}</TableCell>
               <TableCell>
                 <Badge variant={STATUS_VARIANTS[m.status] ?? "neutral"}>{m.status}</Badge>
@@ -95,9 +95,9 @@ export default async function StaffPage() {
 
       {canInvite && invitations.length > 0 && (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Pending invitations</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Pending invitations</p>
           {invitations.map((inv) => (
-            <div key={inv.id} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
+            <div key={inv.id} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-800 px-3 py-2 text-sm">
               <span>
                 {inv.email} · {inv.role.name} · expires {inv.expiresAt.toLocaleDateString()}
               </span>

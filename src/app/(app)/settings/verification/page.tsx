@@ -7,11 +7,11 @@ import { CacVerificationForm } from "@/components/forms/cac-verification-form";
 import { PageHeader, Card } from "@/components/ui";
 
 const STATUS_COPY: Record<string, { label: string; icon: typeof ShieldCheck; className: string }> = {
-  UNVERIFIED: { label: "Not yet verified", icon: ShieldAlert, className: "bg-gray-100 text-gray-600" },
-  PENDING_REVIEW: { label: "Submitted — awaiting review", icon: Clock, className: "bg-amber-100 text-amber-700" },
-  VERIFIED: { label: "Verified", icon: ShieldCheck, className: "bg-green-100 text-green-700" },
-  REJECTED: { label: "Rejected — resubmission needed", icon: ShieldX, className: "bg-red-100 text-red-700" },
-  APPROVED_WITHOUT_CAC: { label: "Approved to operate without a CAC", icon: ShieldCheck, className: "bg-blue-100 text-blue-700" },
+  UNVERIFIED: { label: "Not yet verified", icon: ShieldAlert, className: "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" },
+  PENDING_REVIEW: { label: "Submitted — awaiting review", icon: Clock, className: "bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400" },
+  VERIFIED: { label: "Verified", icon: ShieldCheck, className: "bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-400" },
+  REJECTED: { label: "Rejected — resubmission needed", icon: ShieldX, className: "bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400" },
+  APPROVED_WITHOUT_CAC: { label: "Approved to operate without a CAC", icon: ShieldCheck, className: "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400" },
 };
 
 export default async function VerificationSettingsPage() {
@@ -19,7 +19,7 @@ export default async function VerificationSettingsPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.SETTINGS_COMPANY)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view verification settings.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view verification settings.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -45,12 +45,12 @@ export default async function VerificationSettingsPage() {
 
       {company.verificationStatus === "REJECTED" && company.verificationNote && (
         <Card variant="danger">
-          <p className="text-sm text-red-700">Reason: {company.verificationNote}</p>
+          <p className="text-sm text-red-700 dark:text-red-400">Reason: {company.verificationNote}</p>
         </Card>
       )}
 
       {company.verificationStatus === "APPROVED_WITHOUT_CAC" && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           A platform admin reviewed this account and approved it to operate without a CAC certificate. You can still
           submit one later if you register.
         </p>
@@ -58,7 +58,7 @@ export default async function VerificationSettingsPage() {
 
       {company.verificationStatus === "UNVERIFIED" && deadlinePassed && (
         <Card variant="warning">
-          <p className="text-sm text-amber-800">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
             Your 5-day submission window has passed. You can still submit your certificate below whenever it&apos;s
             ready — nothing about your account is restricted in the meantime.
           </p>

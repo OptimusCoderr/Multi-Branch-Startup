@@ -1,5 +1,5 @@
 export function Skeleton({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-gray-200 ${className}`} />;
+  return <div className={`animate-pulse rounded-md bg-gray-200 dark:bg-gray-800 ${className}`} />;
 }
 
 export function SkeletonText({ lines = 1, className = "" }: { lines?: number; className?: string }) {
@@ -14,7 +14,7 @@ export function SkeletonText({ lines = 1, className = "" }: { lines?: number; cl
 
 export function SkeletonCard() {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900">
       <SkeletonText lines={3} />
     </div>
   );

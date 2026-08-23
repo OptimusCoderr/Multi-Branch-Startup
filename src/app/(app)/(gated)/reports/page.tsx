@@ -8,29 +8,29 @@ import { PageHeader, Card, Table, TableHeader, TableHeaderCell, TableBody, Table
 function SummaryCard({ title, summary, currency }: { title: string; summary: PeriodSummary; currency: string }) {
   return (
     <Card>
-      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">{title}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">{title}</p>
       <div className="mt-3 flex flex-col gap-2 text-sm">
         <div className="flex justify-between">
-          <span className="text-gray-500">Revenue ({summary.saleCount} sale{summary.saleCount === 1 ? "" : "s"})</span>
+          <span className="text-gray-500 dark:text-gray-400">Revenue ({summary.saleCount} sale{summary.saleCount === 1 ? "" : "s"})</span>
           <span className="font-medium">{formatMoney(summary.revenue.toString(), currency)}</span>
         </div>
         <div className="flex justify-between">
-          <span className="text-gray-500">Collected</span>
+          <span className="text-gray-500 dark:text-gray-400">Collected</span>
           <span>{formatMoney(summary.collected.toString(), currency)}</span>
         </div>
         {summary.creditedTotal.gt(0) && (
           <div className="flex justify-between">
-            <span className="text-gray-500">Credited</span>
+            <span className="text-gray-500 dark:text-gray-400">Credited</span>
             <span>{formatMoney(summary.creditedTotal.toString(), currency)}</span>
           </div>
         )}
         <div className="flex justify-between">
-          <span className="text-gray-500">Expenses</span>
+          <span className="text-gray-500 dark:text-gray-400">Expenses</span>
           <span>{formatMoney(summary.expenses.toString(), currency)}</span>
         </div>
-        <div className="mt-1 flex justify-between border-t border-gray-100 pt-2 text-base font-semibold">
+        <div className="mt-1 flex justify-between border-t border-gray-100 dark:border-gray-800 pt-2 text-base font-semibold">
           <span>Profit</span>
-          <span className={summary.profit.lt(0) ? "text-red-600" : "text-green-700"}>
+          <span className={summary.profit.lt(0) ? "text-red-600 dark:text-red-400" : "text-green-700 dark:text-green-400"}>
             {formatMoney(summary.profit.toString(), currency)}
           </span>
         </div>
@@ -44,7 +44,7 @@ export default async function ReportsPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.REPORTS_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view reports.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view reports.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -65,8 +65,8 @@ export default async function ReportsPage() {
       />
 
       <Card variant="warning">
-        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Outstanding debt (all customers, right now)</p>
-        <p className="mt-1 text-2xl font-semibold text-amber-800">{formatMoney(outstanding.toString(), currency)}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">Outstanding debt (all customers, right now)</p>
+        <p className="mt-1 text-2xl font-semibold text-amber-800 dark:text-amber-300">{formatMoney(outstanding.toString(), currency)}</p>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -75,9 +75,9 @@ export default async function ReportsPage() {
       </div>
 
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">Top products by revenue (all time)</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Top products by revenue (all time)</p>
         {topProducts.length === 0 ? (
-          <p className="mt-2 text-sm text-gray-500">No sales yet.</p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">No sales yet.</p>
         ) : (
           <div className="mt-3">
             <Table>
@@ -90,7 +90,7 @@ export default async function ReportsPage() {
                 {topProducts.map((p) => (
                   <TableRow key={p.productId}>
                     <TableCell>
-                      {p.name} <span className="font-mono text-xs text-gray-400">({p.sku})</span>
+                      {p.name} <span className="font-mono text-xs text-gray-400 dark:text-gray-500">({p.sku})</span>
                     </TableCell>
                     <TableCell mono>{p.quantitySold}</TableCell>
                     <TableCell align="right">{formatMoney(p.revenue.toString(), currency)}</TableCell>

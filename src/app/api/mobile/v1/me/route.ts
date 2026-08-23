@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireMobileMembership, handleApiError } from "@/lib/api/mobile-auth";
 import { computeEffectivePermissions } from "@/lib/auth/session";
 import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/subscription-gate";
+import { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { resolveMembershipNames } from "@/lib/auth/membership-names";
 
 /**
  * The mobile app's first call after signing in — everything it needs to
@@ -14,13 +16,16 @@ import { getSubscriptionForCompany, isSubscriptionActive } from "@/lib/billing/s
 export async function GET() {
   try {
     const membership = await requireMobileMembership();
-    const [permissions, subscription] = await Promise.all([
+    const db = getScopedPrisma(membership.companyId);
+    const [permissions, subscription, names] = await Promise.all([
       computeEffectivePermissions(membership.membershipId),
       getSubscriptionForCompany(membership.companyId),
+      resolveMembershipNames(db, [membership.membershipId]),
     ]);
 
     return NextResponse.json({
       membershipId: membership.membershipId,
+      displayName: names.get(membership.membershipId) ?? "You",
       companyId: membership.companyId,
       companyName: membership.companyName,
       companyCurrency: membership.companyCurrency,

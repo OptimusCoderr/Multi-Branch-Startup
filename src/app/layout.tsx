@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Space_Grotesk } from "next/font/google";
+import { readThemeCookie } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -25,11 +26,13 @@ export const metadata: Metadata = {
   description: "Multi-tenant inventory management for companies with multiple branches.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const theme = await readThemeCookie();
+
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${spaceGrotesk.variable} h-full antialiased ${theme === "dark" ? "dark" : ""}`}
     >
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>

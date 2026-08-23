@@ -9,7 +9,7 @@ export default async function NewSalePage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.SALES_RECORD)) {
-    return <p className="text-gray-500">You don&apos;t have permission to record sales.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to record sales.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -18,7 +18,7 @@ export default async function NewSalePage() {
     db.product.findMany({
       where: { isActive: true },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, sku: true, unitPrice: true },
+      select: { id: true, name: true, sku: true, unitPrice: true, unitLabel: true },
     }),
     db.customer.findMany({
       where: { isActive: true },
@@ -36,7 +36,7 @@ export default async function NewSalePage() {
     return (
       <div className="flex max-w-lg flex-col gap-4">
         <h1 className="text-2xl font-semibold">Record a sale</h1>
-        <p className="text-gray-500">
+        <p className="text-gray-500 dark:text-gray-400">
           You don&apos;t have a branch yet — every sale belongs to one.{" "}
           <Link href="/branches/new" className="text-[var(--brand-primary)] hover:underline">
             Create your first branch

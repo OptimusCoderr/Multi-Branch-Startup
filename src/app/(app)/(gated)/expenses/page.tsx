@@ -28,7 +28,7 @@ export default async function ExpensesPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.EXPENSES_VIEW)) {
-    return <p className="text-gray-500">You don&apos;t have permission to view expenses.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view expenses.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -63,18 +63,18 @@ export default async function ExpensesPage() {
 
       {canManage && (
         <Card>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Categories</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Categories</p>
           <div className="mb-3 flex flex-wrap gap-2">
             {categories.map((c) => (
               <span
                 key={c.id}
                 className={`inline-flex items-center gap-2 rounded-full px-2 py-0.5 text-xs ${
-                  c.isActive ? "bg-gray-100 text-gray-700" : "bg-gray-50 text-gray-400 line-through"
+                  c.isActive ? "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300" : "bg-gray-50 dark:bg-gray-900 text-gray-400 dark:text-gray-500 line-through"
                 }`}
               >
                 {c.name}
                 <form action={archiveExpenseCategory.bind(null, c.id)}>
-                  <button type="submit" className="text-gray-400 hover:text-red-600">
+                  <button type="submit" className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400">
                     {c.isActive ? "×" : "↺"}
                   </button>
                 </form>
@@ -100,11 +100,11 @@ export default async function ExpensesPage() {
           </TableHeader>
           <TableBody>
             {expenses.map((e) => (
-              <TableRow key={e.id} className={e.voidedAt ? "text-gray-400" : ""}>
+              <TableRow key={e.id} className={e.voidedAt ? "text-gray-400 dark:text-gray-500" : ""}>
                 <TableCell>{e.expenseDate.toLocaleDateString()}</TableCell>
                 <TableCell>
                   {e.category.name}
-                  {e.isRecurring && <span className="ml-1 text-xs text-gray-400">({e.recurrenceInterval?.toLowerCase()})</span>}
+                  {e.isRecurring && <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">({e.recurrenceInterval?.toLowerCase()})</span>}
                 </TableCell>
                 <TableCell>{e.branch?.name ?? "Company-wide"}</TableCell>
                 <TableCell className={e.voidedAt ? "line-through" : ""}>{formatMoney(e.amount.toString(), currency)}</TableCell>

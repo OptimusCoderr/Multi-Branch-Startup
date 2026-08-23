@@ -16,7 +16,7 @@ export function VoidCreditNoteForm({ saleId, creditNoteId }: { saleId: string; c
       <Button type="submit" variant="danger-link" isPending={isPending} pendingLabel="…">
         Void
       </Button>
-      {state.error && <span className="text-xs text-red-600">{state.error}</span>}
+      {state.error && <span className="text-xs text-red-600 dark:text-red-400">{state.error}</span>}
     </form>
   );
 }

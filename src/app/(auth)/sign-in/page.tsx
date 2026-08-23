@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
 import { AuthThemeShell, useAuthTheme } from "@/components/auth/auth-theme";
+import { syncThemeAfterSignIn } from "@/server/actions/theme";
 
 function SignInForm() {
   const router = useRouter();
@@ -32,6 +33,7 @@ function SignInForm() {
       return;
     }
 
+    await syncThemeAfterSignIn();
     router.push("/dashboard");
     router.refresh();
   }
@@ -40,7 +42,7 @@ function SignInForm() {
     <>
       <div>
         <h1 className="font-display text-2xl font-semibold">Welcome back</h1>
-        <p className="mt-1 text-sm text-gray-500">Sign in to your account.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Sign in to your account.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
@@ -48,7 +50,7 @@ function SignInForm() {
           Email
           <input
             type="email"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -60,7 +62,7 @@ function SignInForm() {
           Password
           <input
             type="password"
-            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+            className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
             style={{ "--tw-ring-color": accent } as React.CSSProperties}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -68,7 +70,7 @@ function SignInForm() {
           />
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="submit"
@@ -80,7 +82,7 @@ function SignInForm() {
         </button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-gray-500">
+      <p className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
         Don&apos;t have an account?{" "}
         <Link href="/sign-up" className="font-semibold underline" style={{ color: accent }}>
           Create one

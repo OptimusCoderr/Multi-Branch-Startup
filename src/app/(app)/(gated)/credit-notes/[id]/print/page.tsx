@@ -32,8 +32,8 @@ export default async function CreditNotePrintPage({ params }: { params: Promise<
         <PrintButton />
       </div>
 
-      <div className="rounded-lg border border-gray-200 p-8 print:border-0 print:p-0">
-        <div className="flex items-start justify-between border-b border-gray-200 pb-4">
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 p-8 print:border-0 print:p-0">
+        <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-800 pb-4">
           <div className="flex items-center gap-2">
             {branding.logoUrl && (
               <Image src={branding.logoUrl} alt="" width={32} height={32} unoptimized className="rounded" />
@@ -42,26 +42,26 @@ export default async function CreditNotePrintPage({ params }: { params: Promise<
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold">CREDIT NOTE</p>
-            <p className="font-mono text-sm text-gray-500">{creditNote.creditNoteNumber}</p>
+            <p className="font-mono text-sm text-gray-500 dark:text-gray-400">{creditNote.creditNoteNumber}</p>
           </div>
         </div>
 
         <div className="mt-4 flex justify-between text-sm">
           <div>
-            <p className="text-xs font-semibold uppercase text-gray-400">Against invoice</p>
+            <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Against invoice</p>
             <p className="font-mono">{creditNote.sale.saleNumber}</p>
-            <p className="text-gray-500">{creditNote.sale.customerName ?? "Walk-in customer"}</p>
+            <p className="text-gray-500 dark:text-gray-400">{creditNote.sale.customerName ?? "Walk-in customer"}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs font-semibold uppercase text-gray-400">Details</p>
+            <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Details</p>
             <p>{creditNote.sale.branch.name}</p>
-            <p className="text-gray-500">{creditNote.createdAt.toLocaleDateString()}</p>
-            <p className="text-gray-500">Issued by {issuedBy}</p>
+            <p className="text-gray-500 dark:text-gray-400">{creditNote.createdAt.toLocaleDateString()}</p>
+            <p className="text-gray-500 dark:text-gray-400">Issued by {issuedBy}</p>
           </div>
         </div>
 
-        <div className="mt-6 rounded-md bg-gray-50 p-4 text-sm">
-          <p className="text-xs font-semibold uppercase text-gray-400">Reason</p>
+        <div className="mt-6 rounded-md bg-gray-50 dark:bg-gray-900 p-4 text-sm">
+          <p className="text-xs font-semibold uppercase text-gray-400 dark:text-gray-500">Reason</p>
           <p className="mt-1">{creditNote.reason}</p>
         </div>
 
@@ -70,7 +70,7 @@ export default async function CreditNotePrintPage({ params }: { params: Promise<
         </p>
 
         {creditNote.status === "VOIDED" && (
-          <p className="mt-6 border-t border-gray-200 pt-4 text-center text-sm font-semibold text-red-600">
+          <p className="mt-6 border-t border-gray-200 dark:border-gray-800 pt-4 text-center text-sm font-semibold text-red-600 dark:text-red-400">
             THIS CREDIT NOTE HAS BEEN VOIDED — {creditNote.voidReason}
           </p>
         )}

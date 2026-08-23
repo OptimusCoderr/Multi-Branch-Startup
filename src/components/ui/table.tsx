@@ -11,7 +11,7 @@ export function Table({ children }: { children: ReactNode }) {
 export function TableHeader({ children }: { children: ReactNode }) {
   return (
     <thead>
-      <tr className="border-b border-gray-200 text-xs font-semibold uppercase tracking-wide text-gray-400">{children}</tr>
+      <tr className="border-b border-gray-200 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:border-gray-800">{children}</tr>
     </thead>
   );
 }
@@ -34,7 +34,11 @@ export function TableBody({ children }: { children: ReactNode }) {
 }
 
 export function TableRow({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <tr className={`border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50/80 ${className}`}>{children}</tr>;
+  return (
+    <tr className={`border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50/80 dark:border-gray-800 dark:hover:bg-gray-900/60 ${className}`}>
+      {children}
+    </tr>
+  );
 }
 
 export function TableCell({

@@ -9,7 +9,7 @@ export default async function NewTransferPage() {
   const permissions = await computeEffectivePermissions(membership.membershipId);
 
   if (!permissions.has(PERMISSIONS.TRANSFERS_REQUEST)) {
-    return <p className="text-gray-500">You don&apos;t have permission to request stock transfers.</p>;
+    return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to request stock transfers.</p>;
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -27,7 +27,7 @@ export default async function NewTransferPage() {
     return (
       <div className="flex max-w-lg flex-col gap-4">
         <h1 className="text-2xl font-semibold">Request a stock transfer</h1>
-        <p className="text-gray-500">
+        <p className="text-gray-500 dark:text-gray-400">
           This moves stock out of a warehouse or another branch — you don&apos;t have either set up yet. If
           you&apos;re receiving stock from a supplier, use{" "}
           <Link href="/transfers/new-external" className="text-[var(--brand-primary)] hover:underline">

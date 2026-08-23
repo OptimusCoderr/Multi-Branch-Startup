@@ -46,14 +46,14 @@ export function InviteAuthForm({ token, invitedEmail }: { token: string; invited
         <button
           type="button"
           onClick={() => setMode("sign-up")}
-          className={`rounded-md px-3 py-1.5 ${mode === "sign-up" ? "bg-black text-white" : "border border-gray-300 text-gray-700"}`}
+          className={`rounded-md px-3 py-1.5 ${mode === "sign-up" ? "bg-black text-white" : "border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"}`}
         >
           I&apos;m new here
         </button>
         <button
           type="button"
           onClick={() => setMode("sign-in")}
-          className={`rounded-md px-3 py-1.5 ${mode === "sign-in" ? "bg-black text-white" : "border border-gray-300 text-gray-700"}`}
+          className={`rounded-md px-3 py-1.5 ${mode === "sign-in" ? "bg-black text-white" : "border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300"}`}
         >
           I already have an account
         </button>
@@ -62,14 +62,14 @@ export function InviteAuthForm({ token, invitedEmail }: { token: string; invited
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <label className="flex flex-col gap-1 text-sm">
           Email
-          <input value={invitedEmail} disabled className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-500" />
+          <input value={invitedEmail} disabled className="rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 px-3 py-2 text-gray-500 dark:text-gray-400" />
         </label>
 
         {mode === "sign-up" && (
           <label className="flex flex-col gap-1 text-sm">
             Your name
             <input
-              className="rounded-md border border-gray-300 px-3 py-2"
+              className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -82,7 +82,7 @@ export function InviteAuthForm({ token, invitedEmail }: { token: string; invited
           Password
           <input
             type="password"
-            className="rounded-md border border-gray-300 px-3 py-2"
+            className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -90,7 +90,7 @@ export function InviteAuthForm({ token, invitedEmail }: { token: string; invited
           />
         </label>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <button
           type="submit"

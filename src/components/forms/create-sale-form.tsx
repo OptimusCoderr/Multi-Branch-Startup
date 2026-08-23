@@ -2,13 +2,13 @@
 
 import { useActionState, useMemo, useState } from "react";
 import { createSale } from "@/server/actions/sales";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatQuantity } from "@/lib/format";
 import { Field, Input, Select, Checkbox, FormError, Button } from "@/components/ui";
 
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
 
-type Product = { id: string; name: string; sku: string; unitPrice: string };
+type Product = { id: string; name: string; sku: string; unitPrice: string; unitLabel: string };
 type Customer = { id: string; name: string; phone: string | null };
 
 export function CreateSaleForm({
@@ -102,7 +102,7 @@ export function CreateSaleForm({
       )}
 
       <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-gray-700">Line items</p>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Line items</p>
         {rows.map((row, i) => {
           const product = productById.get(row.productId);
           return (
@@ -111,7 +111,7 @@ export function CreateSaleForm({
                 <option value="">Select a product</option>
                 {products.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} ({p.sku}) — {formatMoney(p.unitPrice, currency)}
+                    {p.name} ({p.sku}) — {formatMoney(p.unitPrice, currency)} / {p.unitLabel}
                   </option>
                 ))}
               </Select>
@@ -123,7 +123,8 @@ export function CreateSaleForm({
                 onChange={(e) => updateRow(i, { quantity: Number(e.target.value) })}
                 className="w-24"
               />
-              <span className="w-28 text-right text-sm text-gray-500">
+              {product && <span className="w-20 text-xs text-gray-400 dark:text-gray-500">{formatQuantity(row.quantity, product.unitLabel)}</span>}
+              <span className="w-28 text-right text-sm text-gray-500 dark:text-gray-400">
                 {product ? formatMoney(Number(product.unitPrice) * row.quantity, currency) : "—"}
               </span>
               <Button type="button" variant="danger-link" onClick={() => removeRow(i)} disabled={rows.length === 1}>

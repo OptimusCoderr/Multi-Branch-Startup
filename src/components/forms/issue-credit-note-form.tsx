@@ -13,7 +13,7 @@ export function IssueCreditNoteForm({ saleId, outstanding }: { saleId: string; o
   return (
     <Card>
       <form action={formAction} className="flex flex-col gap-3">
-        <p className="text-sm text-gray-500">Outstanding balance: {outstanding}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Outstanding balance: {outstanding}</p>
 
         <Field label="Amount">
           <Input name="amount" type="number" step="0.01" min="0.01" required />

@@ -32,10 +32,10 @@ export function CompanyNameField() {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={suggestion}
-        className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1"
+        className="rounded-lg border border-gray-300 px-3 py-2 outline-none transition-shadow focus:ring-2 focus:ring-offset-1 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:focus:ring-offset-gray-950"
         style={{ "--tw-ring-color": accent } as React.CSSProperties}
       />
-      <span className="text-xs text-gray-500">
+      <span className="text-xs text-gray-500 dark:text-gray-400">
         Need an idea?{" "}
         <button type="button" onClick={() => setValue(suggestion)} className="font-medium underline" style={{ color: accent }}>
           Use &ldquo;{suggestion}&rdquo;

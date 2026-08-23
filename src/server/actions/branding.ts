@@ -19,6 +19,7 @@ export async function updateBranding(_prev: ActionResult, formData: FormData): P
     secondaryColor: formData.get("secondaryColor"),
     logoUrl: formData.get("logoUrl"),
     layoutPreset: formData.get("layoutPreset"),
+    defaultTheme: formData.get("defaultTheme"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid branding settings." };
@@ -38,12 +39,14 @@ export async function updateBranding(_prev: ActionResult, formData: FormData): P
         secondaryColor: parsed.data.secondaryColor ?? null,
         logoUrl: parsed.data.logoUrl ?? null,
         layoutPreset: parsed.data.layoutPreset,
+        defaultTheme: parsed.data.defaultTheme,
       },
       update: {
         primaryColor: parsed.data.primaryColor,
         secondaryColor: parsed.data.secondaryColor ?? null,
         logoUrl: parsed.data.logoUrl ?? null,
         layoutPreset: parsed.data.layoutPreset,
+        defaultTheme: parsed.data.defaultTheme,
       },
     });
 

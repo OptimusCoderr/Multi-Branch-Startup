@@ -17,6 +17,7 @@ export function ProductForm({
     barcode: string | null;
     name: string;
     description: string | null;
+    unitLabel: string;
     unitPrice: string;
     costPrice: string | null;
     reorderPoint: string | null;
@@ -42,6 +43,10 @@ export function ProductForm({
 
       <Field label="Description">
         <Textarea name="description" defaultValue={defaultValues?.description ?? ""} rows={3} />
+      </Field>
+
+      <Field label="Unit" optional hint="How you actually sell it — e.g. carton, bag, dozen, yard, mudu. Defaults to “unit”.">
+        <Input name="unitLabel" defaultValue={defaultValues?.unitLabel ?? ""} placeholder="unit" />
       </Field>
 
       <div className="grid grid-cols-2 gap-4">

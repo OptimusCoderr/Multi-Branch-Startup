@@ -42,12 +42,12 @@ export function InviteStaffForm({ roles }: { roles: { id: string; name: string }
       <FormError error={state.error} />
 
       {state.inviteUrl && (
-        <div className="rounded-md bg-gray-50 p-3 text-sm">
-          <p className="text-gray-500">
+        <div className="rounded-md bg-gray-50 dark:bg-gray-900 p-3 text-sm">
+          <p className="text-gray-500 dark:text-gray-400">
             No email provider is configured yet — share this link with the invitee directly:
           </p>
           <div className="mt-1 flex items-center gap-2">
-            <code className="flex-1 truncate rounded bg-white px-2 py-1 text-xs">{state.inviteUrl}</code>
+            <code className="flex-1 truncate rounded bg-white dark:bg-gray-900 px-2 py-1 text-xs">{state.inviteUrl}</code>
             <Button type="button" variant="link" onClick={copyLink}>
               {copied ? "Copied!" : "Copy"}
             </Button>

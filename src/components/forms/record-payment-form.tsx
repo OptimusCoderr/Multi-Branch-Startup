@@ -15,7 +15,7 @@ export function RecordPaymentForm({ saleId, outstanding }: { saleId: string; out
   return (
     <Card>
       <form action={formAction} className="flex flex-col gap-3">
-        <p className="text-sm text-gray-500">Outstanding balance: {outstanding}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Outstanding balance: {outstanding}</p>
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Amount">

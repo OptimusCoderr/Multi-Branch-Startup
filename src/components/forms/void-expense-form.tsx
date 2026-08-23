@@ -25,7 +25,7 @@ export function VoidExpenseForm({ expenseId }: { expenseId: string }) {
       <Button type="submit" variant="danger-link" isPending={isPending} pendingLabel="…">
         Confirm
       </Button>
-      {state.error && <span className="text-xs text-red-600">{state.error}</span>}
+      {state.error && <span className="text-xs text-red-600 dark:text-red-400">{state.error}</span>}
     </form>
   );
 }
