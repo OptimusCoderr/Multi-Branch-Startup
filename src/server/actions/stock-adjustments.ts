@@ -97,8 +97,8 @@ export async function adjustWarehouseStock(_prev: { error: string }, formData: F
   }
 
   revalidatePath("/stock");
-  revalidatePath(`/warehouses/${warehouseId}`);
-  return { error: "" };
+  revalidatePath("/warehouses");
+  return { error: "", success: true };
 }
 
 /**

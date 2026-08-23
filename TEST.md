@@ -1336,6 +1336,29 @@ one-off dev-server hydration warning on an earlier run did not reproduce on a cl
 or in isolated repro attempts, and the production build is clean — treated as test-harness
 noise, not a regression).
 
+### 36. ALLMAAJ-pattern UI redesign — Phase 5: Warehouses (modal CRUD, inline expandable stock)
+
+Rebuilt `/warehouses` around a stat-card row (Warehouses/Stock lines/Stock value/Low-critical,
+computed from one `warehouseStock.findMany` fetched once server-side and grouped by warehouse)
+and a search bar. New/Edit warehouse are `Modal` instances of `LocationForm`. `/warehouses/new`
+and `/warehouses/[id]` are removed — instead, each warehouse in the list is a card that
+**expands inline** (no separate detail route) to show its stock table with the 5-tier colored
+`Level` pill from Phase 1's `warehouseStockLevel()` (Out of Stock/Critical/Low/Moderate/Good),
+its own Edit/Deactivate actions, and an inline "Add/update stock" form.
+
+- `AdjustWarehouseStockForm` gained a `fixedWarehouseId` prop — when set, it renders a hidden
+  input instead of the warehouse `<Select>` since the warehouse is already implied by which
+  card is expanded (only the product still needs picking). The top-level, any-warehouse form
+  still used by `/stock` (unaffected this phase) works unchanged since the prop is optional.
+- `adjustWarehouseStock` now also returns a `success` flag (matching `adjustBranchStock` from
+  Phase 3) so the inline form doesn't need special handling to know when to clear/refresh.
+
+To verify: sign up as a new Owner, create a product, go to `/warehouses`, create a warehouse,
+confirm the 4 stat cards render, expand the warehouse card, add stock to the product inline
+and confirm the stock table shows the correct 5-tier level badge, then edit the warehouse's
+address via the modal and confirm it lands. Exercised end-to-end via a scripted Playwright
+run with zero console/page errors captured.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { Prisma } from "@prisma/client";
@@ -12,14 +11,14 @@ import { provisionStockForNewWarehouse } from "@/server/services/inventory-servi
 import { writeAuditLog } from "@/server/services/audit-service";
 import { assertUnderWarehouseLimit, PlanLimitError } from "@/server/services/plan-limit-service";
 
-type ActionResult = { error: string } | never;
+type ActionResult = { error: string; success?: boolean };
 
 async function requestMeta() {
   const h = await headers();
   return { ipAddress: h.get("x-forwarded-for"), userAgent: h.get("user-agent") };
 }
 
-export async function createWarehouse(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function createWarehouse(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.WAREHOUSES_MANAGE);
 
@@ -70,12 +69,12 @@ export async function createWarehouse(_prev: { error: string }, formData: FormDa
   }
 
   revalidatePath("/warehouses");
-  redirect("/warehouses");
+  return { error: "", success: true };
 }
 
 export async function updateWarehouse(
   warehouseId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -123,7 +122,7 @@ export async function updateWarehouse(
   });
 
   revalidatePath("/warehouses");
-  redirect("/warehouses");
+  return { error: "", success: true };
 }
 
 export async function deactivateWarehouse(warehouseId: string): Promise<void> {
