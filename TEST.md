@@ -41,6 +41,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   24. [Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN](#24-product-units-daily-summary-backup-trust-debtor-pay-links-reminder-credits-quick-switch-pin)
   25. [Staff self-signup by company code, and Owner approval](#25-staff-self-signup-by-company-code-and-owner-approval)
   26. [Services in sales (non-stock-tracked products)](#26-services-in-sales-non-stock-tracked-products)
+  27. [Debt-reminder message templates, per-customer targeting, and company name edit](#27-debt-reminder-message-templates-per-customer-targeting-and-company-name-edit)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -837,6 +838,49 @@ works exactly as before and is unaffected.
    and voiding doesn't error or attempt anything with the Service line item.
 9. Same flow on mobile — record a sale mixing a Goods and a Service product from
    `/sales/new` (mobile); confirm it saves normally and stock behaves identically to web.
+
+### 27. Debt-reminder message templates, per-customer targeting, and company name edit
+
+Web-only. Requires `TERMII_API_KEY` set to see reminders actually attempt to send (without
+it, "Send reminders now" reports "SMS is not configured" and nothing gets sent — the
+template/targeting logic itself is still fully testable either way, since a `DebtReminder`
+row is written with the fully-composed message regardless of whether the provider call
+itself succeeds).
+
+1. `/settings/verification` now opens with a **Company profile** card above the CAC status.
+   Change the name and save; confirm it updates in the sidebar/nav immediately and doesn't
+   touch your URL slug or the company code shown on `/staff`.
+2. `/settings/debt-reminders` — a new **Message templates** section below reminder credits.
+   Add a template (e.g. name "Friendly nudge", message using the placeholder cheat sheet:
+   `Hi {name}, reminder from {company}: {currency} {amount} outstanding. {pay_link}`),
+   checking "Use as the default template". Add a second, different-wording template without
+   checking default. Confirm exactly one ever shows the **Default** badge — checking default
+   on the second template un-defaults the first automatically. Edit a template's wording
+   in place, and delete one — confirm the list updates without a page reload.
+3. `/customers/new` — check "Allow automated payment reminders", leave phone blank, submit.
+   Confirm the browser blocks submission (native required-field validation on Phone) — then
+   inspect the page and confirm the phone field is genuinely `required` only while reminders
+   are checked (uncheck reminders and the requirement should lift). As a defense-in-depth
+   check, strip the `required` attribute via devtools and submit anyway — confirm the server
+   itself also rejects it with "A phone number is required...".
+4. Same page — with a phone filled in and reminders checked, a **Message template** picker
+   appears (hidden entirely when reminders are off). Create one customer with an explicit
+   non-default template selected, and a second with the picker left on "Use company
+   default". Confirm each choice persists on the edit form afterward.
+5. Set `Company.debtReminderDaysOverdue` low (e.g. 1) and `reminderCreditBalance` above 0
+   (`psql`, if this is a fresh company — it starts at 0 until a plan refresh or top-up).
+   Record a credit sale for each customer with a due date safely in the past, then click
+   **Send reminders now** on `/customers`. On each customer's detail page, confirm the
+   **Reminder history** section now shows the actual message text sent (not just date/
+   amount/status) — the customer with an explicit template shows that template's wording;
+   the one left on "company default" shows the default template's wording instead.
+6. Delete the template a customer had explicitly assigned. Confirm it doesn't error and the
+   customer's edit page now shows "Use company default" — the FK sets to null rather than
+   blocking the delete or leaving a dangling reference.
+7. Confirm none of this affected the pre-existing email-based staff/mobile paths: creating a
+   customer from the **mobile app** (no phone, reminders concept not shown there at all)
+   still works exactly as before — the phone-required rule is a web-form-only decision, not
+   baked into the shared validation the mobile API route also uses.
 
 ## Mobile app
 

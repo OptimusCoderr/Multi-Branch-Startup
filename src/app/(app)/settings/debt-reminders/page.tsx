@@ -4,6 +4,7 @@ import { PERMISSIONS } from "@/lib/auth/permissions";
 import { isSmsConfigured } from "@/lib/notifications/sms-client";
 import { DebtReminderSettingsForm } from "@/components/forms/debt-reminder-settings-form";
 import { BuyReminderCreditsForm } from "@/components/forms/buy-reminder-credits-form";
+import { ReminderTemplatesManager } from "@/components/forms/reminder-templates-manager";
 import { SettingsNav } from "@/components/layout/settings-nav";
 import { PageHeader, Card } from "@/components/ui";
 
@@ -16,7 +17,10 @@ export default async function DebtReminderSettingsPage() {
   }
 
   const db = getScopedPrisma(membership.companyId);
-  const company = await db.company.findUnique({ where: { id: membership.companyId } });
+  const [company, templates] = await Promise.all([
+    db.company.findUnique({ where: { id: membership.companyId } }),
+    db.debtReminderTemplate.findMany({ orderBy: { createdAt: "asc" } }),
+  ]);
   if (!company) return null;
 
   const canBuyCredits = permissions.has(PERMISSIONS.BILLING_MANAGE);
@@ -44,6 +48,8 @@ export default async function DebtReminderSettingsPage() {
         </div>
         {canBuyCredits && <BuyReminderCreditsForm currency={membership.companyCurrency} />}
       </Card>
+
+      <ReminderTemplatesManager templates={templates} />
     </div>
   );
 }

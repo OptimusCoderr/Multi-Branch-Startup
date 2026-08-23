@@ -28,13 +28,30 @@ export async function createCustomer(_prev: { error: string }, formData: FormDat
     notes: formData.get("notes"),
     creditLimit: formData.get("creditLimit"),
     remindersEnabled: formData.get("remindersEnabled"),
+    reminderTemplateId: formData.get("reminderTemplateId"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid customer details." };
   }
+  // A reminder can't be sent with nowhere to send it — web-only check (see
+  // customer.schema.ts's comment on why this isn't baked into the shared
+  // schema), so a customer can never be switched on for reminders here with
+  // no phone number.
+  if (parsed.data.remindersEnabled && !parsed.data.phone) {
+    return { error: "A phone number is required to enable automated reminders for this customer." };
+  }
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
+
+  // Same "every FK must be verified to belong to this tenant" defense as
+  // elsewhere (see transfer-service.ts) — getScopedPrisma only forces the
+  // Customer row's own companyId, it never validates that a caller-supplied
+  // reminderTemplateId actually points into this company.
+  if (parsed.data.reminderTemplateId) {
+    const template = await db.debtReminderTemplate.findUnique({ where: { id: parsed.data.reminderTemplateId } });
+    if (!template) return { error: "Selected message template not found." };
+  }
 
   await db.$transaction(async (tx) => {
     const customer = await tx.customer.create({
@@ -47,6 +64,7 @@ export async function createCustomer(_prev: { error: string }, formData: FormDat
         notes: parsed.data.notes ?? null,
         creditLimit: parsed.data.creditLimit ?? null,
         remindersEnabled: parsed.data.remindersEnabled,
+        reminderTemplateId: parsed.data.reminderTemplateId ?? null,
       },
     });
 
@@ -82,9 +100,13 @@ export async function updateCustomer(
     notes: formData.get("notes"),
     creditLimit: formData.get("creditLimit"),
     remindersEnabled: formData.get("remindersEnabled"),
+    reminderTemplateId: formData.get("reminderTemplateId"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid customer details." };
+  }
+  if (parsed.data.remindersEnabled && !parsed.data.phone) {
+    return { error: "A phone number is required to enable automated reminders for this customer." };
   }
 
   const db = getScopedPrisma(membership.companyId);
@@ -93,6 +115,11 @@ export async function updateCustomer(
   const existing = await db.customer.findUnique({ where: { id: customerId } });
   if (!existing) {
     return { error: "Customer not found." };
+  }
+
+  if (parsed.data.reminderTemplateId) {
+    const template = await db.debtReminderTemplate.findUnique({ where: { id: parsed.data.reminderTemplateId } });
+    if (!template) return { error: "Selected message template not found." };
   }
 
   await db.$transaction(async (tx) => {
@@ -106,6 +133,7 @@ export async function updateCustomer(
         notes: parsed.data.notes ?? null,
         creditLimit: parsed.data.creditLimit ?? null,
         remindersEnabled: parsed.data.remindersEnabled,
+        reminderTemplateId: parsed.data.reminderTemplateId ?? null,
       },
     });
 

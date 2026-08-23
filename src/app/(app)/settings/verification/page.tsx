@@ -4,6 +4,7 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { SettingsNav } from "@/components/layout/settings-nav";
 import { CacVerificationForm } from "@/components/forms/cac-verification-form";
+import { CompanyProfileForm } from "@/components/forms/company-profile-form";
 import { PageHeader, Card } from "@/components/ui";
 
 const STATUS_COPY: Record<string, { label: string; icon: typeof ShieldCheck; className: string }> = {
@@ -37,6 +38,8 @@ export default async function VerificationSettingsPage() {
         title="Business verification"
         description="Submit your CAC certificate to get a verified badge on your company. Businesses without a CAC can still use the app — a platform admin can approve you to operate without one."
       />
+
+      <CompanyProfileForm defaultValues={{ name: company.name }} />
 
       <div className={`flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-sm font-medium ${status.className}`}>
         <Icon size={16} strokeWidth={2.25} />

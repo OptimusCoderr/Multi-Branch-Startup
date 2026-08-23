@@ -125,6 +125,7 @@ model Company {
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
   debtReminders     DebtReminder[]
+  reminderTemplates DebtReminderTemplate[]
   creditNotes       CreditNote[]
   productBatches    ProductBatch[]
   suppliers         Supplier[]
@@ -1006,6 +1007,34 @@ model PurchaseOrderLineItem {
 // never drift out of sync with the payment ledger.
 // ---------------------------------------------------------------------------
 
+// A reusable debt-reminder wording a company can define and then assign
+// per customer (Customer.reminderTemplateId) — e.g. a soft "Friendly
+// nudge" for most customers and a firmer "Final notice" for repeat
+// late-payers. `message` supports {name}/{company}/{amount}/{currency}/
+// {pay_link} placeholders, substituted at send time by
+// debt-reminder-service.ts's renderReminderMessage(). Exactly one template
+// per company may have isDefault true at a time — enforced in
+// debt-reminder-template-service.ts, not the database, since Prisma has no
+// partial/filtered unique constraint; it's the fallback for any customer
+// with no template of their own explicitly assigned.
+model DebtReminderTemplate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name      String
+  message   String
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
 model Customer {
   id        String  @id @default(cuid())
   companyId String
@@ -1023,6 +1052,16 @@ model Customer {
   // the company-wide debtReminderEnabled switch — both must be true for a
   // reminder to actually send.
   remindersEnabled Boolean @default(true)
+
+  // Which wording this customer's reminders use. Null falls back to the
+  // company's default template (DebtReminderTemplate.isDefault), or — if
+  // the company has no templates set up at all — the original hardcoded
+  // message, so adopting templates is purely opt-in and never breaks an
+  // existing company's reminders. SetNull (not Restrict) so deleting a
+  // template a customer was assigned just falls them back to the default
+  // rather than blocking the delete.
+  reminderTemplateId String?
+  reminderTemplate   DebtReminderTemplate? @relation(fields: [reminderTemplateId], references: [id], onDelete: SetNull)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

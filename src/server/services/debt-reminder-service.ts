@@ -4,10 +4,11 @@ import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { sendSms, SmsNotConfiguredError } from "@/lib/notifications/sms-client";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { createPaymentLinkToken } from "@/lib/auth/payment-link";
+import { renderReminderMessage, LEGACY_DEFAULT_TEMPLATE_MESSAGE } from "@/server/services/debt-reminder-template-service";
 
 type ScopedClient = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "company" | "customer" | "sale" | "creditNote" | "debtReminder" | "auditLog" | "$transaction"
+  "company" | "customer" | "sale" | "creditNote" | "debtReminder" | "debtReminderTemplate" | "auditLog" | "$transaction"
 >;
 
 // Don't re-message the same customer more than once every few days even
@@ -27,7 +28,14 @@ export type DebtReminderRunSummary = {
   outOfCredits: boolean;
 };
 
-type Candidate = { customerId: string; name: string; phone: string; outstanding: Prisma.Decimal; representativeSaleId: string };
+type Candidate = {
+  customerId: string;
+  name: string;
+  phone: string;
+  outstanding: Prisma.Decimal;
+  representativeSaleId: string;
+  reminderTemplateId: string | null;
+};
 
 async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: number): Promise<Candidate[]> {
   const now = new Date();
@@ -80,7 +88,7 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
       remindersEnabled: true,
       phone: { not: null },
     },
-    select: { id: true, name: true, phone: true },
+    select: { id: true, name: true, phone: true, reminderTemplateId: true },
   });
   if (eligibleCustomers.length === 0) return [];
 
@@ -101,7 +109,14 @@ async function findCandidates(db: ScopedClient, companyId: string, daysOverdue: 
     const outstanding = outstandingByCustomer.get(customer.id);
     const representativeSaleId = representativeSaleByCustomer.get(customer.id);
     if (!outstanding || !representativeSaleId) continue;
-    candidates.push({ customerId: customer.id, name: customer.name, phone: customer.phone, outstanding, representativeSaleId });
+    candidates.push({
+      customerId: customer.id,
+      name: customer.name,
+      phone: customer.phone,
+      outstanding,
+      representativeSaleId,
+      reminderTemplateId: customer.reminderTemplateId,
+    });
   }
 
   return candidates;
@@ -133,6 +148,19 @@ export async function sendDebtReminders(
   let failed = 0;
   let creditBalance = company.reminderCreditBalance;
 
+  // Fetched once per run, not per candidate — every template a candidate
+  // might reference (their own pick, plus whichever one is the company's
+  // default) in a single query.
+  const referencedTemplateIds = [...new Set(candidates.map((c) => c.reminderTemplateId).filter((id): id is string => !!id))];
+  const [explicitTemplates, defaultTemplate] = await Promise.all([
+    referencedTemplateIds.length > 0
+      ? db.debtReminderTemplate.findMany({ where: { id: { in: referencedTemplateIds } }, select: { id: true, message: true } })
+      : Promise.resolve([]),
+    db.debtReminderTemplate.findFirst({ where: { isDefault: true }, select: { message: true } }),
+  ]);
+  const templateMessageById = new Map(explicitTemplates.map((t) => [t.id, t.message]));
+  const fallbackMessage = defaultTemplate?.message ?? LEGACY_DEFAULT_TEMPLATE_MESSAGE;
+
   for (const candidate of candidates) {
     // Checked per-candidate (not once up front) since the balance only
     // ever decreases within this loop — stop the moment it actually runs
@@ -144,7 +172,17 @@ export async function sendDebtReminders(
 
     const baseUrl = process.env.BETTER_AUTH_URL ?? "";
     const payLink = baseUrl ? `${baseUrl}/pay/${createPaymentLinkToken(candidate.representativeSaleId)}` : null;
-    const message = `Hi ${candidate.name}, this is a reminder from ${company.name} that you have an outstanding balance of ${company.currency} ${candidate.outstanding.toFixed(2)}.${payLink ? ` Pay now: ${payLink}` : ""} Thank you for your business with ${company.name}.`;
+    // Per-customer template first, else the company's designated default,
+    // else the original hardcoded wording — see the fetch above.
+    const templateMessage =
+      (candidate.reminderTemplateId && templateMessageById.get(candidate.reminderTemplateId)) || fallbackMessage;
+    const message = renderReminderMessage(templateMessage, {
+      name: candidate.name,
+      company: company.name,
+      amount: candidate.outstanding.toFixed(2),
+      currency: company.currency,
+      payLink,
+    });
 
     let result: { success: boolean; providerResponse?: unknown; error?: string };
     try {
