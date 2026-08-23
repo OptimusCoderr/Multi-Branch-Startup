@@ -194,6 +194,16 @@ model User {
   // in src/lib/auth/session.ts for where that's enforced.
   twoFactorEnabled Boolean @default(false)
 
+  // Per-account lockout, layered on top of Better Auth's IP-based
+  // rateLimit (better-auth.ts) — an IP limit alone doesn't stop repeated
+  // guesses against ONE account spread across many IPs (a credential-
+  // stuffing botnet). Incremented atomically (UPDATE ... SET x = x + 1,
+  // not read-then-write) by the sign-in hooks in better-auth.ts, so
+  // concurrent failed attempts can't race past the threshold. Reset to
+  // 0/null on a successful sign-in.
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
   // Null = no personal override — falls back to the signed-in company's
   // BrandingSettings.defaultTheme (see src/lib/theme.ts's resolveTheme),
   // then to DARK globally. Set the moment someone flips the ThemeToggle
@@ -1302,6 +1312,7 @@ enum NotificationType {
   SALE_FLAG_RESOLVED
   TRANSFER_DISCREPANCY
   LOW_STOCK
+  SALE_VOIDED
 }
 
 // In-app notification delivery — no email/SMS/push, just a bell + list in

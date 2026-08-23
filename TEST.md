@@ -1183,6 +1183,46 @@ to go check.
    just the form. Anyone who also holds approve/dispatch rights (every default role that can
    receive) still sees it, since they already know it from that other step.
 
+### 31. DB-level line-item CHECK constraint, void-sale peer notification, per-account login lockout, and location-scoped stock views
+
+Web-only. Four more picks from the same competitor-codebase review: a DB backstop for an
+invariant only enforced in application code, a peer notification on voiding a sale (the
+same push-not-pull pattern as #30's discrepancy/low-stock notifications, extended), a
+per-account lockout on top of Better Auth's existing IP rate limit, and giving each
+warehouse/branch its own stock view (they only had a rename/deactivate form before).
+
+1. **XOR CHECK constraint.** Nothing to click — this is a DB-level backstop, not app
+   behavior. Confirm normal sales (catalog items and ad-hoc services) still record fine
+   through the UI; if you want to see the constraint itself reject something, attempt a
+   direct SQL insert into `SaleLineItem` with both `productId` and `adHocDescription` set
+   (or neither) — Postgres rejects it regardless of what the application layer would have
+   allowed.
+2. **Void-sale notification.** As a non-Owner Admin (or Branch Manager, if granted
+   `sales.void`), record a sale as a pure credit sale (**Part payment**, leave "Amount
+   paying now" at 0 — a sale with any payment already recorded can't be voided at all, by
+   existing design) and void it with a reason. Confirm the Owner gets a notification naming
+   the sale number, who voided it, and the reason. As the Owner, void a sale yourself —
+   confirm no self-notification (the actor is always excluded from the recipient list).
+3. **Login lockout.** Sign in with a wrong password 5 times for one account — the 5th
+   attempt locks it for 15 minutes. Confirm: every wrong attempt (before and after locking)
+   shows the identical generic "Invalid email or password," never a distinct "account
+   locked" message; a *correct* password during the lockout window still gets rejected with
+   that same generic message rather than succeeding; after the window passes (or, in dev,
+   clearing `User.lockedUntil` directly), a correct password succeeds and resets
+   `failedLoginAttempts` to 0. Note: Better Auth's own separate IP-based rate limit (20
+   requests/60s) is a hard ceiling on top of this — heavy rapid-fire scripted testing from
+   one IP will hit *that* wall independently of the lockout logic; space out live attempts
+   or pre-seed `failedLoginAttempts` directly in dev if you need to drive many attempts.
+4. **Location-scoped stock views.** Open a warehouse's detail page (`/warehouses/[id]`) —
+   confirm a "Stock at ..." table now appears below the rename form, listing every active
+   product with its quantity, unit price, and computed value there, flagging any that are
+   low company-wide. Use the "Add / update stock" form on that same page (pre-scoped to
+   this one warehouse) to adjust it, and confirm the table updates. Repeat for a branch's
+   detail page (`/branches/[id]`) — this is also the *first* place branch stock can be
+   adjusted from the web at all (previously only the mobile app could). Confirm a branch
+   adjustment that pushes a product's total stock at-or-below its reorder point fires the
+   same `LOW_STOCK` notification a sale would.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

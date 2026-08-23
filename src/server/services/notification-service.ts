@@ -8,7 +8,8 @@ export type NotificationKind =
   | "SALE_FLAG_ESCALATED"
   | "SALE_FLAG_RESOLVED"
   | "TRANSFER_DISCREPANCY"
-  | "LOW_STOCK";
+  | "LOW_STOCK"
+  | "SALE_VOIDED";
 
 /** In-app only — no email/SMS/push. Called from inside the same transaction as whatever triggered it, same convention as writeAuditLog. */
 export async function createNotification(
