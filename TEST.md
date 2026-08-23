@@ -1223,6 +1223,28 @@ warehouse/branch its own stock view (they only had a rename/deactivate form befo
    adjustment that pushes a product's total stock at-or-below its reorder point fires the
    same `LOW_STOCK` notification a sale would.
 
+### 32. ALLMAAJ-pattern UI redesign — Phase 1: shared `Modal`/`Confirm` foundation
+
+Web-only, no user-visible surface yet — this is the first of a multi-phase rollout adopting
+ALLMAAJ-SUPERBASE's UI/UX patterns app-wide (modal-based create/edit, stat-card rows,
+tiered stock-level coloring, a consolidated Branch Stock page replacing `/stock` and
+`/transfers`). Phase 1 only adds the shared primitives later phases build on:
+
+- `src/components/ui/modal.tsx` — a generic overlay dialog shell (Escape/backdrop-click to
+  close, `sm|md|lg|xl` sizes).
+- `src/components/ui/confirm.tsx` — a promise-based `useConfirm()` for destructive actions,
+  mounted once via `ConfirmProvider` in `app-shell.tsx`.
+- `Badge` gains an `info` (blue) variant for the "Moderate" tier of the coming 5-tier
+  stock-level scale.
+- `src/lib/format.ts` gains `warehouseStockLevel()` (5-tier) and `branchStockLevel()`
+  (3-tier) — pure display-tier helpers, unrelated to `Product.reorderPoint`/the
+  `LOW_STOCK` notification, which stay the actual business-logic threshold.
+
+To verify: sign in, confirm the app still renders and behaves exactly as before (nothing
+consumes these yet) — no visual or functional change should be visible. Later phases will
+add real usages (products/branches/warehouses modals, the Branch Stock page's delete/reject
+confirmations) that exercise `Modal`/`useConfirm()` directly.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

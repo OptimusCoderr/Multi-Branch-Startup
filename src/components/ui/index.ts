@@ -15,3 +15,6 @@ export type { BadgeVariant } from "./badge";
 export { EmptyState } from "./empty-state";
 export { Skeleton, SkeletonText, SkeletonCard, SkeletonTable } from "./skeleton";
 export { PageHeader } from "./page-header";
+export { Modal } from "./modal";
+export type { ModalSize } from "./modal";
+export { ConfirmProvider, useConfirm } from "./confirm";
