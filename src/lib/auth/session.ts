@@ -68,7 +68,7 @@ export async function getCurrentMembership(): Promise<AuthenticatedMembership | 
 }
 
 /** True for the seeded, one-per-company "Owner" system role — never a company-created role that happens to share the name. */
-function isOwnerMembership(membership: AuthenticatedMembership): boolean {
+export function isOwnerMembership(membership: AuthenticatedMembership): boolean {
   return membership.roleName === "Owner" && membership.roleIsSystem;
 }
 

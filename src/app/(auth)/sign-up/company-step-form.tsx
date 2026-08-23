@@ -5,6 +5,7 @@ import { createCompanyForCurrentUser } from "@/server/actions/onboarding";
 import { CompanyNameField } from "@/components/forms/company-name-field";
 import { CompanyBusinessTypeField } from "@/components/forms/company-business-type-field";
 import { CompanyVerificationFields } from "@/components/forms/company-verification-fields";
+import { SignOutAndRestartLink } from "@/components/auth/sign-out-and-restart-link";
 
 const initialState = { error: "" };
 
@@ -34,6 +35,8 @@ export function CompanyStepForm({ email }: { email: string }) {
       >
         {isPending ? "Creating…" : "Create company"}
       </button>
+
+      <SignOutAndRestartLink />
     </form>
   );
 }

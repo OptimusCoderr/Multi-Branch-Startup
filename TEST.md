@@ -41,6 +41,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   24. [Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN](#24-product-units-daily-summary-backup-trust-debtor-pay-links-reminder-credits-quick-switch-pin)
   25. [Staff self-signup by company code, and Owner approval](#25-staff-self-signup-by-company-code-and-owner-approval)
   26. [Services in sales (non-stock-tracked products)](#26-services-in-sales-non-stock-tracked-products)
+  27. [Debt-reminder message templates, per-customer targeting, and company name edit](#27-debt-reminder-message-templates-per-customer-targeting-and-company-name-edit)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -180,9 +181,13 @@ attribute is given, that's for anyone scripting these steps with Playwright — 
 ### 3. Products, warehouses, branches
 
 1. `/branches/new` — create a branch (`input[name="name"]`).
-2. `/products/new` — create a product (`input[name="sku"]`, `input[name="name"]`,
-   `input[name="unitPrice"]`). Confirm it now shows a zeroed stock row for the branch you
-   just made (visible on `/stock`).
+2. `/products/new` — create a product (`input[name="name"]`, `input[name="unitPrice"]`).
+   There's no SKU field to fill in — it's generated automatically from the first 3 letters
+   of the name (e.g. "Millet" → `MIL`), shown on the confirmation/edit page as read-only.
+   Create a second product with a name that also starts with the same 3 letters (e.g.
+   "Milk") and confirm its SKU comes back as the base code plus a random 3-character suffix
+   (e.g. `MIL-4X7`) instead of colliding. Confirm it now shows a zeroed stock row for the
+   branch you just made (visible on `/stock`).
 3. `/warehouses/new` — create a warehouse. Confirm the *existing* product now also shows a
    zeroed row there — stock provisioning runs symmetrically in both directions (new
    product → all existing locations; new location → all existing products).
@@ -192,45 +197,98 @@ attribute is given, that's for anyone scripting these steps with Playwright — 
 
 ### 4. Stock transfers
 
-Two independent intake paths — test both:
+Two independent intake paths — test both. The **requester never picks a source** — only
+the **reviewer** does, at approval time (Owner, Admin, or Branch Manager — Warehouse
+Manager is not a reviewer by default, only a dispatcher).
 
-1. **External delivery** (no warehouse involved): `/transfers/new-external` — pick a
-   product and destination branch, set a quantity, give it a source name
-   (`input[name="externalSourceName"]`). This goes straight to `RECEIVED` and increments
-   branch stock in one step. This is also the path a business with **zero warehouses**
+1. **Direct add, no request** (`transfers.receive_external`, Owner-only by default):
+   `/transfers/new-external` — pick a product and destination branch or warehouse, set a
+   quantity, give it a source name (`input[name="externalSourceName"]`). This goes
+   straight to `RECEIVED` and increments stock in one step, with no review needed. Confirm
+   an Admin or Branch Manager (or a Cashier) does **not** see "Record external delivery" on
+   `/transfers`, and visiting `/transfers/new-external` directly shows a permission-denied
+   message rather than the form. This is also the path a business with **zero warehouses**
    uses to stock branches at all — confirm it still works for a company that's never
    created a warehouse.
-2. **Warehouse-sourced or branch-sourced transfer**: `/transfers/new` — request a transfer
-   from either a warehouse or another branch (pick the source type; the picker only shows
-   when both are available). As a *different* staff member than the requester, approve it,
-   dispatch it, then receive it. Confirm:
+2. **Request → review**: `/transfers/new` (`transfers.request` — Admin, Branch Manager, and
+   Cashier all have this by default) — pick a product, destination branch, and quantity.
+   No source field on this form at all. Submitting lands on the transfer's detail page
+   showing `REQUESTED` and "Awaiting reviewer" in place of a source.
+   - As a *different* staff member with `transfers.approve` (Owner/Admin/Branch Manager),
+     open the request and pick a source: **a warehouse**, **another branch**, or **an
+     external supplier** — whichever the reviewer decides is actually available, not
+     whatever the requester guessed.
+     - Picking a warehouse or branch source moves the transfer to `APPROVED`; dispatch it,
+       then receive it, same physical chain as before. The source location's stock
+       decrements at dispatch, branch stock increments at receipt — not both at once.
+     - Picking an external supplier credits the destination branch **immediately** —
+       status jumps straight to `RECEIVED`, no dispatch step is offered at all, and (if
+       the product tracks batches) a batch number + expiry are required on the approval
+       form itself.
    - The requester cannot also approve their own request (self-approval is blocked by
-     default) — no Approve button is shown to the requester at all, just an explanation.
-   - The source location's stock decrements at dispatch, branch stock increments at
-     receipt — not both at once.
-   - A branch cannot be selected as its own destination when it's already the source.
-   - Receiving a *different* quantity than requested is recorded as-is and flagged as a
-     discrepancy, not silently corrected.
-3. With **zero warehouses and fewer than two branches**, visit `/transfers/new` directly —
-   it should explain there's no source available and point you to `/transfers/new-external`,
-   not show a broken form with an empty source dropdown.
+     default) — no Approve form is shown to the requester at all, just an explanation.
+   - A branch cannot be picked as its own source when it's already the destination.
+   - Receiving a *different* quantity than requested (warehouse/branch path only) is
+     recorded as-is and flagged as a discrepancy, not silently corrected.
 
 ### 5. Sales and payments
 
-1. `/sales/new` — pick a branch, add a walk-in customer name, add one or more line items,
-   submit. Confirm the total is server-computed (matches what the form showed) and stock
-   decremented by exactly the quantities sold.
+1. `/sales/new` — pick a branch, add one or more line items, and pick a **payment type**
+   button (web-only for now — the mobile app still records a sale unpaid and takes payment
+   separately, unchanged):
+   - **POS**, **Cash**: full payment. Leave the customer name blank and confirm it's
+     auto-numbered "Walk-in Customer #001" (then "#002" on the next one, company-wide, not
+     per-branch) — phone stays optional. The sale is immediately `PAID`, with one Payment
+     row in the matching mode.
+   - **POS + Cash**: enter both a POS amount and a Cash amount. Confirm they must add up to
+     exactly the line-items total — a mismatched split disables "Record sale"; matching it
+     re-enables the button. On submit, confirm **two** Payment rows appear (one POS, one
+     Cash) and the sale is `PAID`.
+   - **Part payment**: confirm the customer name and phone fields become required (native
+     browser validation blocks submitting without them) — this is the one payment type that
+     does *not* auto-generate a walk-in name, since there's a balance to chase later. Enter
+     an amount less than the total (or 0, for a pure credit sale) plus a due date; confirm
+     the sale lands on `CONFIRMED` (0 paid) or `PARTIALLY_PAID` (partial) with the
+     outstanding balance shown, and a Payment row only when the amount was greater than 0.
+   Confirm the total itself is always server-computed (matches what the form showed) and
+   stock decremented by exactly the quantities sold, regardless of payment type.
 2. Try to oversell (quantity greater than available stock) — should be rejected, not
    allowed to go negative.
-3. On the sale detail page, record a **partial** payment, then another partial payment
-   that completes it. Confirm the status transitions `CONFIRMED` → `PARTIALLY_PAID` →
-   `PAID`, and that an overpayment attempt (more than the remaining balance) is rejected.
+3. On the sale detail page, record a further **partial** payment against a sale that isn't
+   fully paid yet (e.g. a part-payment sale from step 1), then another that completes it.
+   Confirm the status transitions toward `PAID`, and that an overpayment attempt (more than
+   the remaining balance) is rejected. The mode picker here now includes **POS** alongside
+   the existing Cash/Card/Bank transfer/Mobile money/Other.
 4. Void a sale (as a role with `sales.void`) and confirm stock is restored via a
    compensating movement — the original sale record stays, just marked `VOIDED`, never
    deleted.
 5. With **zero branches** (a brand-new company before creating one), visit `/sales/new`
    directly — should explain there's no branch yet and link to `/branches/new`, not show a
    broken required dropdown.
+6. **Role-gated `/sales` view windows, search, and export.** Every role has a default date
+   window; `sales.date_search` (Owner/Admin/Branch Manager by default) lets a role widen it
+   with an explicit From/To search, and `sales.export` (Owner/Admin only) gates the CSV
+   export box — both are separate from `reports.view` (which still gates the general
+   `/reports` page, unaffected). Note: after adding/changing a permission key in
+   `src/lib/auth/permissions.ts`, `npm run db:seed` (or the dev server's `predev` hook) must
+   run at least once so the global `Permission` catalog table actually has the new key —
+   without it, `DEFAULT_ROLE_PERMISSIONS` silently drops the grant for every *newly created*
+   company (existing companies are unaffected either way, since role permissions are
+   snapshotted once at company creation, not re-derived from the code on every request).
+   - **Owner**: default view is unrestricted ("All sales"), with From/To search inputs and
+     an Export CSV box, both always present.
+   - **Admin**: default view is the **current calendar week** (`Company.timezone`
+     boundaries) — confirm a sale from earlier this week shows up with no search applied.
+     Same search + export as Owner.
+   - **Branch Manager**: same "current calendar week" default and search inputs as Admin,
+     but confirm the Export CSV box is **absent**.
+   - **Cashier**: default (and *only* possible) view is **today**. Confirm there are no
+     date-search inputs and no export box at all — and that manually visiting
+     `/sales?from=2020-01-01&to=2020-01-02` is silently ignored, still showing only today's
+     sales rather than honoring the query string.
+   - As Admin or Branch Manager, submit the date search for a past range with no sales in
+     it — confirm the page actually narrows to that range (shows "No sales yet") rather than
+     silently ignoring the search, proving the override is real and not just a default.
 
 ### 6. Credit notes and printing
 
@@ -425,12 +483,11 @@ one.
    **earlier-expiring batch's `quantityRemaining` is consumed first** (FEFO) — check
    `/batches` before and after. This should happen transparently; nothing on the sale or
    transfer form asks which batch to use.
-4. Request a transfer sourced from **another branch** (not a warehouse) via `/transfers/new`
-   — the source-type picker only appears when both a warehouse and a second branch are
-   available; otherwise the form defaults to whichever source actually exists. Confirm you
-   cannot pick the same branch as both source and destination, and that the rest of the
-   lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
-   a warehouse-sourced transfer.
+4. Request a transfer via `/transfers/new`, then as the reviewer approve it choosing
+   **another branch** (not a warehouse) as the source — the source options on the approval
+   form only include a warehouse when one exists. Confirm you cannot pick the same branch
+   as both source and destination, and that the rest of the lifecycle (dispatch, receive)
+   behaves exactly like a warehouse-sourced transfer.
 5. **Batch identity survives a branch-to-branch transfer.** Receive a batch-tracked product
    into Branch A with a specific batch number and expiry, then transfer some of it to Branch
    B. Confirm `/batches` shows a batch at Branch B with the **same** batch number and expiry
@@ -806,37 +863,155 @@ works exactly as before and is unaffected.
    request left to show `/pending-approval`, and no active membership) — they'd need a new
    invite or a fresh join request to get in.
 
-### 26. Services in sales (non-stock-tracked products)
+### 26. Ad-hoc service line items in sales
 
-1. `/products/new` — note the new **Type** radio at the top of the form: **Goods
-   (stock-tracked)** (default) or **Service**. Selecting Service hides the Reorder point
-   field and the "Perishable / tracked by batch" checkbox — neither makes sense without
-   physical stock. Create one product of each type (e.g. a stocked "Bag of Rice" and a
-   "Installation Service").
-2. Confirm both products appear on `/products`, each tagged with a **Goods**/**Service**
-   badge in a new Type column, and both are included in the CSV export
-   (`/api/exports/products`) with the same Type column.
-3. Confirm the Service product does **not** appear on `/stock` — Goods appear as normal,
-   Service products carry no stock rows anywhere and are excluded entirely (not shown with
-   a zeroed/blank row).
-4. Confirm the Service product is also excluded from the product picker on
-   `/purchase-orders/new`, `/transfers/new`, and `/transfers/new-external` (all inherently
-   about physical goods) — the Goods product still appears normally in each. On mobile, the
-   Stock tab and stock-count screen (`/api/mobile/v1/stock`) likewise exclude it.
-5. On `/products/[id]` (edit), confirm Type is shown as a fixed label ("Goods" or
-   "Service"), not an editable control — it can't be changed after creation.
-6. `/sales/new` — confirm the Service product appears in the sale-form product picker
-   exactly like any Goods product (this is the one place it's expected to show up). Record
-   a sale with **both** a Goods line item (e.g. qty 2) and a Service line item (e.g. qty 1)
-   in the same sale. Confirm it saves successfully with both line items and the correct
-   total.
-7. Check `/stock` immediately after: the Goods product's quantity dropped by exactly the
-   quantity sold; the Service line item caused no stock movement anywhere (no
-   `StockMovement` row, no error) since it never had any to begin with.
-8. Void that sale. Confirm the Goods product's stock is restored to its pre-sale quantity,
-   and voiding doesn't error or attempt anything with the Service line item.
-9. Same flow on mobile — record a sale mixing a Goods and a Service product from
-   `/sales/new` (mobile); confirm it saves normally and stock behaves identically to web.
+Services are entered directly on a sale — free-text description + a manually typed price —
+with no catalog `Product` record at all, since service pricing tends to be one-off and
+variable. (An earlier iteration of this required registering a Service-type product first;
+that's gone — a service is now always ad-hoc.)
+
+1. `/products/new` — confirm the form is back to plain Goods only: no Type selector, SKU is
+   auto-generated (see section on SKU auto-generation), Reorder point and batch-tracking are
+   always available. Create one stocked product (e.g. "Bag of Rice").
+2. `/sales/new` — next to **+ Add product** there's a **+ Add service** button. Click it:
+   confirm it adds a distinctly-styled row (amber background, a **Service** badge) with a
+   free-text description field and a manually typed price field — no product picker.
+3. Try submitting a service row with a blank description, or a price of 0 — confirm it's
+   excluded from the submittable total/line-item count until both are filled in properly.
+4. Record a sale with **both** a product line item (e.g. qty 2 of "Bag of Rice") and a
+   service line item (e.g. "Installation", ₦5,000) in the same sale. Confirm it saves with
+   the correct combined total.
+5. On the sale's detail page (`/sales/[id]`) and the print view (`/sales/[id]/print`),
+   confirm the service line item shows its typed description with a visible **Service** tag
+   (badge on the detail page, "(Service)" suffix on print) — visually distinct from the
+   product line item, which shows the normal product name.
+6. Check `/stock` immediately after: the product's quantity dropped by exactly the quantity
+   sold; the service line item caused no stock movement anywhere (no `StockMovement` row, no
+   error) since there was never a product record to have stock in the first place.
+7. Void that sale. Confirm the product's stock is restored to its pre-sale quantity, and
+   voiding doesn't error or attempt anything with the service line item.
+8. Same flow on mobile (`/sales/new`) — a **+ Add** button next to "Add a service" opens an
+   inline description + price form. Record a sale mixing a product and a service; confirm it
+   saves normally, the sale detail screen shows "(Service)" next to the service line, and a
+   printed receipt (if you have a Bluetooth printer paired) shows the same.
+
+### 27. Debt-reminder message templates, per-customer targeting, and company name edit
+
+Web-only. Requires `TERMII_API_KEY` set to see reminders actually attempt to send (without
+it, "Send reminders now" reports "SMS is not configured" and nothing gets sent — the
+template/targeting logic itself is still fully testable either way, since a `DebtReminder`
+row is written with the fully-composed message regardless of whether the provider call
+itself succeeds).
+
+1. `/settings/verification` now opens with a **Company profile** card above the CAC status.
+   Change the name and save; confirm it updates in the sidebar/nav immediately and doesn't
+   touch your URL slug or the company code shown on `/staff`.
+2. `/settings/debt-reminders` — a new **Message templates** section below reminder credits.
+   Add a template (e.g. name "Friendly nudge", message using the placeholder cheat sheet:
+   `Hi {name}, reminder from {company}: {currency} {amount} outstanding. {pay_link}`),
+   checking "Use as the default template". Add a second, different-wording template without
+   checking default. Confirm exactly one ever shows the **Default** badge — checking default
+   on the second template un-defaults the first automatically. Edit a template's wording
+   in place, and delete one — confirm the list updates without a page reload.
+3. `/customers/new` — check "Allow automated payment reminders", leave phone blank, submit.
+   Confirm the browser blocks submission (native required-field validation on Phone) — then
+   inspect the page and confirm the phone field is genuinely `required` only while reminders
+   are checked (uncheck reminders and the requirement should lift). As a defense-in-depth
+   check, strip the `required` attribute via devtools and submit anyway — confirm the server
+   itself also rejects it with "A phone number is required...".
+4. Same page — with a phone filled in and reminders checked, a **Message template** picker
+   appears (hidden entirely when reminders are off). Create one customer with an explicit
+   non-default template selected, and a second with the picker left on "Use company
+   default". Confirm each choice persists on the edit form afterward.
+5. Set `Company.debtReminderDaysOverdue` low (e.g. 1) and `reminderCreditBalance` above 0
+   (`psql`, if this is a fresh company — it starts at 0 until a plan refresh or top-up).
+   Record a credit sale for each customer with a due date safely in the past, then click
+   **Send reminders now** on `/customers`. On each customer's detail page, confirm the
+   **Reminder history** section now shows the actual message text sent (not just date/
+   amount/status) — the customer with an explicit template shows that template's wording;
+   the one left on "company default" shows the default template's wording instead.
+6. Delete the template a customer had explicitly assigned. Confirm it doesn't error and the
+   customer's edit page now shows "Use company default" — the FK sets to null rather than
+   blocking the delete or leaving a dangling reference.
+7. Confirm none of this affected the pre-existing email-based staff/mobile paths: creating a
+   customer from the **mobile app** (no phone, reminders concept not shown there at all)
+   still works exactly as before — the phone-required rule is a web-form-only decision, not
+   baked into the shared validation the mobile API route also uses.
+
+### 28. Sale rejection (flag/resolve) and in-app notifications
+
+Web-only. An exception path, not a review gate on every sale — most sales are never
+touched by any of this. A reviewer (Owner/Admin/Branch Manager, `sales.flag`) can flag a
+*specific* sale after the fact; the submitter has until midnight (`Company.timezone`) to
+correct and resubmit it. "Correct" is deliberately narrow — only the customer
+name/phone/email/due date, never line items, quantities, or prices (a mistake there is
+still what void + a fresh sale is for).
+
+1. As a Cashier, record a sale. As a Branch Manager (a different person — flagging is
+   blocked if the reviewer and the submitter are the same membership), open that sale and
+   flag it with a reason. Confirm:
+   - The sale detail page now shows a red "Flagged by ..." banner with the reason, visible
+     to both of you.
+   - The Cashier gets an in-app notification (bell/"Notifications" link in the sidebar,
+     with an unread-count badge) — `/notifications` shows it, marked "New".
+2. As the Cashier (the original submitter, before the deadline), open the flagged sale —
+   confirm a "Correct and resubmit" form appears (only customer name/phone/email/due date,
+   plus a required note explaining the correction). Submit it. Confirm:
+   - The sale now shows the corrected customer info, and the red banner is replaced by a
+     quiet "previously flagged... corrected" notice — the resolve form is gone.
+   - The Branch Manager who flagged it gets a "sale was corrected" notification.
+3. Confirm eligibility is enforced, not just hidden: as the Branch Manager (not the
+   submitter, before the deadline) on a *newly* flagged sale, confirm the resolve form does
+   **not** appear — only the original submitter (or an Owner/Admin, who can act anytime)
+   may resolve before the deadline.
+4. **Escalation.** The deadline is midnight in `Company.timezone`, checked by
+   `/api/cron/sale-flag-deadlines` (Vercel Cron, hourly — see `vercel.json`; requires the
+   `Authorization: Bearer $CRON_SECRET` header, same pattern as the existing
+   `/api/cron/debt-reminders`). To test without waiting for real midnight, backdate a
+   flag's deadline directly (`UPDATE "SaleFlag" SET deadline = NOW() - INTERVAL '1 hour'
+   WHERE id = '...';`) and hit the cron endpoint with the secret. Confirm:
+   - The flag's status becomes `ESCALATED` and the sale detail shows "Flag escalated —
+     deadline missed" instead of the original banner.
+   - The Branch Manager who flagged it (not just the original submitter) can now resolve
+     it — edit rights widen to Cashier/Branch Manager/Admin once escalated.
+   - The Owner gets a notification that the flag missed its deadline (escalation notifies
+     Branch Manager + Owner specifically — a different audience than the widened resolver
+     set).
+5. Confirm a voided sale cannot be flagged, and a sale already carrying an open flag can't
+   be flagged a second time — both are rejected with a clear error, not a silent no-op.
+
+### 29. Navigation: explicit escape hatches instead of back-button reliance
+
+Not a feature so much as an audit — every multi-step flow in the app needs an explicit
+in-page control to move on or bail out, not just the browser back button or (on mobile)
+the OS gesture/hardware back key. This found and fixed a few dead ends where a signed-in
+user had no way out except the browser's own back button, which in a couple of cases would
+have landed them somewhere broken anyway (see below).
+
+1. `/sign-up` as either an Owner or Staff: get to the final step (naming your company, or
+   entering a join code — the account itself is already created by this point). Confirm a
+   "Not you? Sign out and start over" link is present and actually works — it should sign
+   you out and land you back on the very first (role-choice) screen, not leave you looking
+   at the same form. (This step deliberately reloads the page rather than using client-side
+   routing — the whole wizard lives at one URL with the current step held in local state,
+   so a soft navigation back to a URL you're already on is a no-op and leaves the stale step
+   showing.)
+2. `/onboarding` (reached by signing in with no company yet) — same escape hatch, same
+   check.
+3. `/pending-approval` (after requesting to join a company by its code) — confirm a "Sign
+   out" button is present; previously this was a dead-end screen with literally no control
+   on it at all.
+4. Open an invite link (`/invite/[token]`) while signed in as a *different* email than the
+   one it was sent to. Confirm the "signed in as a different email" message — which already
+   told you to "sign out and try again" — now actually has a Sign out button next to it,
+   rather than instructing an action it gave you no way to perform.
+5. Mobile: this is largely already covered by Expo Router's default stack header, which
+   renders a persistent back arrow on every pushed/modal screen unless a screen explicitly
+   opts out (`headerShown: false` — used only at the root sign-in/two-factor/app switch,
+   never mid-flow). Spot-check `sales/new`, `sales/report`, and `customers/new` (all
+   `presentation: "modal"`) still show that header back control, and that the switch-user
+   PIN screen's inline "Cancel" button (for backing out of entering a PIN without leaving
+   the screen) still works.
 
 ## Mobile app
 
@@ -861,9 +1036,11 @@ your machine's LAN IP (not `localhost`) if testing on a **physical** device, sin
 Sign in with an account from an already-onboarded company (mobile doesn't do company
 sign-up/onboarding — that's web-only). Walk through: dashboard, recording a sale (confirm
 the branch picker is skipped entirely for a single-branch company, shown for multiple),
-recording a payment, viewing/creating customers, issuing/voiding a credit note, and
-printing (needs the Development Build + a real Bluetooth thermal printer — see the caveat
-below).
+recording a payment (the mode picker includes **POS** alongside Cash/Card/Bank
+transfer/Mobile money/Other — mobile always records a sale unpaid and takes payment as a
+separate step, unlike web's payment-type buttons at sale creation; see §5 above), viewing/
+creating customers, issuing/voiding a credit note, and printing (needs the Development
+Build + a real Bluetooth thermal printer — see the caveat below).
 
 2FA enrollment/management is web-only (`/settings/security`), but signing in from mobile
 with an account that already has 2FA enabled (set it up on web first) should land on the

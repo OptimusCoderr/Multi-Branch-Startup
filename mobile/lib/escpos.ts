@@ -116,7 +116,7 @@ export type PrintableSale = {
   status: string;
   voidReason: string | null;
   currency: string;
-  lineItems: { productName: string; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
+  lineItems: { productName: string | null; isService?: boolean; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
   subtotal: string;
   grandTotal: string;
   amountPaid: string;
@@ -141,7 +141,7 @@ export function buildInvoiceReceipt(sale: PrintableSale, paperSize: PaperSize = 
   b.rule();
 
   for (const li of sale.lineItems) {
-    b.text(`${li.productName} x${li.quantity}`);
+    b.text(`${li.productName ?? "Item"}${li.isService ? " (Service)" : ""} x${li.quantity}`);
     b.row("", money(li.lineTotal, sale.currency));
   }
   b.rule();

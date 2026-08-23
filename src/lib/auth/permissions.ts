@@ -25,6 +25,17 @@ export const PERMISSIONS = {
   SALES_RECORD: "sales.record",
   SALES_VOID: "sales.void",
   SALES_OVERRIDE_PRICE: "sales.override_price",
+  // Search the sales list by an arbitrary date range, beyond whatever the
+  // role's default view window is (today/this week/unrestricted — see
+  // sales/page.tsx). Cashier never gets this.
+  SALES_DATE_SEARCH: "sales.date_search",
+  // Export the sales list to CSV — narrower than REPORTS_VIEW (which also
+  // covers the general /reports page): a Branch Manager can see reports
+  // but shouldn't be able to export the raw sales ledger.
+  SALES_EXPORT: "sales.export",
+  // Flag/reject a specific sale after the fact — an exception path, not a
+  // review gate on every sale. See sale-flag-service.ts.
+  SALES_FLAG: "sales.flag",
   PAYMENTS_RECORD: "payments.record",
   CREDIT_NOTES_ISSUE: "credit_notes.issue",
   CREDIT_NOTES_VOID: "credit_notes.void",
@@ -89,6 +100,9 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.SALES_RECORD, category: "sales", description: "Record a sale" },
   { key: PERMISSIONS.SALES_VOID, category: "sales", description: "Void a sale" },
   { key: PERMISSIONS.SALES_OVERRIDE_PRICE, category: "sales", description: "Override a product's price on a sale" },
+  { key: PERMISSIONS.SALES_DATE_SEARCH, category: "sales", description: "Search the sales list by a custom date range" },
+  { key: PERMISSIONS.SALES_EXPORT, category: "sales", description: "Export the sales list to CSV" },
+  { key: PERMISSIONS.SALES_FLAG, category: "sales", description: "Flag/reject a specific sale after the fact, with a reason" },
   { key: PERMISSIONS.PAYMENTS_RECORD, category: "sales", description: "Record a payment against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_ISSUE, category: "sales", description: "Issue a credit note against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_VOID, category: "sales", description: "Void a previously issued credit note" },
@@ -138,14 +152,24 @@ export const PERMISSION_CATALOG: {
 /** Default permission sets for the seeded system roles. */
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Owner: PERMISSION_CATALOG.map((p) => p.key),
-  Admin: PERMISSION_CATALOG.filter((p) => p.key !== PERMISSIONS.BILLING_MANAGE).map((p) => p.key),
+  // TRANSFERS_RECEIVE_EXTERNAL (adding stock with no request, no review) is
+  // deliberately withheld from Admin by default — only the Owner gets it
+  // out of the box. Admin/Branch Manager/Cashier all go through the
+  // request → review flow instead (see the roles below and
+  // transfer-service.ts's requestTransfer/approveTransfer). A company can
+  // still grant it to a specific Admin later via the per-staff override.
+  Admin: PERMISSION_CATALOG.filter(
+    (p) => p.key !== PERMISSIONS.BILLING_MANAGE && p.key !== PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL,
+  ).map((p) => p.key),
   "Branch Manager": [
     PERMISSIONS.PRODUCTS_VIEW,
     PERMISSIONS.STOCK_LEVELS_VIEW,
     PERMISSIONS.TRANSFERS_REQUEST,
+    PERMISSIONS.TRANSFERS_APPROVE,
     PERMISSIONS.TRANSFERS_RECEIVE,
-    PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL,
     PERMISSIONS.SALES_RECORD,
+    PERMISSIONS.SALES_DATE_SEARCH,
+    PERMISSIONS.SALES_FLAG,
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,
     PERMISSIONS.CUSTOMERS_MANAGE,
@@ -157,10 +181,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.PURCHASE_ORDERS_RECEIVE,
     PERMISSIONS.SALES_REPORTS_SUBMIT,
   ],
+  // Not a reviewer (approval is Owner/Admin/Branch Manager only) — the
+  // Warehouse Manager's role in the transfer flow is dispatching stock
+  // physically once a reviewer has approved a warehouse-sourced transfer.
   "Warehouse Manager": [
     PERMISSIONS.PRODUCTS_VIEW,
     PERMISSIONS.STOCK_LEVELS_VIEW,
-    PERMISSIONS.TRANSFERS_APPROVE,
     PERMISSIONS.TRANSFERS_DISPATCH,
     PERMISSIONS.REPORTS_VIEW,
     PERMISSIONS.PURCHASE_ORDERS_VIEW,
@@ -169,6 +195,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
   Cashier: [
     PERMISSIONS.PRODUCTS_VIEW,
     PERMISSIONS.STOCK_LEVELS_VIEW,
+    PERMISSIONS.TRANSFERS_REQUEST,
     PERMISSIONS.SALES_RECORD,
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,

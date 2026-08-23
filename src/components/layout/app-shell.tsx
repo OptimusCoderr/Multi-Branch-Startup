@@ -23,6 +23,7 @@ export function AppShell({
   layoutPreset,
   planFeatures,
   canManageBilling,
+  unreadNotifications = 0,
   children,
 }: {
   companyName: string;
@@ -32,6 +33,7 @@ export function AppShell({
   layoutPreset: string;
   planFeatures: PlanFeatures;
   canManageBilling: boolean;
+  unreadNotifications?: number;
   children: ReactNode;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -81,7 +83,12 @@ export function AppShell({
         </div>
 
         <div className={`flex-1 overflow-y-auto px-3 ${compact ? "py-2" : "py-4"}`}>
-          <AppNav planFeatures={planFeatures} canManageBilling={canManageBilling} onNavigate={() => setMobileOpen(false)} />
+          <AppNav
+            planFeatures={planFeatures}
+            canManageBilling={canManageBilling}
+            unreadNotifications={unreadNotifications}
+            onNavigate={() => setMobileOpen(false)}
+          />
         </div>
 
         <div className="flex items-center justify-between gap-2 border-t border-gray-100 p-3 dark:border-gray-800">

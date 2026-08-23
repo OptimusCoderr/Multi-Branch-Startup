@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   try {
     const membership = await requireMembershipOrThrow();
     const permissions = await computeEffectivePermissions(membership.membershipId);
-    if (!permissions.has(PERMISSIONS.REPORTS_VIEW)) {
+    if (!permissions.has(PERMISSIONS.SALES_EXPORT)) {
       throw new AuthorizationError("You don't have permission to export sales.");
     }
 

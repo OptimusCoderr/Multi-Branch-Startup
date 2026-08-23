@@ -41,9 +41,7 @@ export async function provisionStockForNewProduct(tx: ScopedTx, companyId: strin
 }
 
 export async function provisionStockForNewWarehouse(tx: ScopedTx, companyId: string, warehouseId: string) {
-  // SERVICE products never get stock rows anywhere — see Product.productType's
-  // schema comment.
-  const products = await tx.product.findMany({ where: { isActive: true, productType: "GOODS" }, select: { id: true } });
+  const products = await tx.product.findMany({ where: { isActive: true }, select: { id: true } });
   if (products.length > 0) {
     await tx.warehouseStock.createMany({
       data: products.map((p) => ({ companyId, productId: p.id, warehouseId })),
@@ -53,9 +51,7 @@ export async function provisionStockForNewWarehouse(tx: ScopedTx, companyId: str
 }
 
 export async function provisionStockForNewBranch(tx: ScopedTx, companyId: string, branchId: string) {
-  // SERVICE products never get stock rows anywhere — see Product.productType's
-  // schema comment.
-  const products = await tx.product.findMany({ where: { isActive: true, productType: "GOODS" }, select: { id: true } });
+  const products = await tx.product.findMany({ where: { isActive: true }, select: { id: true } });
   if (products.length > 0) {
     await tx.branchStock.createMany({
       data: products.map((p) => ({ companyId, productId: p.id, branchId })),

@@ -1,6 +1,7 @@
-import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
+import { requireMembership, computeEffectivePermissions, isOwnerMembership } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { resolveBusinessDay, resolveBusinessWeek } from "@/lib/business-day";
 import { formatMoney } from "@/lib/format";
 import {
   PageHeader,
@@ -28,20 +29,54 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   VOIDED: "neutral",
 };
 
-export default async function SalesPage() {
+export default async function SalesPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
+  const { from: fromParam, to: toParam } = await searchParams;
   const membership = await requireMembership();
   const permissions = await computeEffectivePermissions(membership.membershipId);
   const db = getScopedPrisma(membership.companyId);
-
-  const sales = await db.sale.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { branch: true },
-    take: 100,
-  });
+  const company = await db.company.findUniqueOrThrow({ where: { id: membership.companyId }, select: { timezone: true } });
 
   const canRecord = permissions.has(PERMISSIONS.SALES_RECORD);
-  const canExport = permissions.has(PERMISSIONS.REPORTS_VIEW);
+  const canExport = permissions.has(PERMISSIONS.SALES_EXPORT);
+  const canDateSearch = permissions.has(PERMISSIONS.SALES_DATE_SEARCH);
   const canSeeReports = permissions.has(PERMISSIONS.SALES_REPORTS_SUBMIT) || permissions.has(PERMISSIONS.SALES_REPORTS_VIEW);
+
+  // Every role's sales view has a default window (see below); only
+  // Owner/Admin/Branch Manager (SALES_DATE_SEARCH) can widen it with an
+  // explicit date search — Cashier is hard-capped to today, full stop, no
+  // query params accepted.
+  let rangeStart: Date | undefined;
+  let rangeEnd: Date | undefined;
+  let rangeLabel: string;
+  const searchedFrom = canDateSearch ? (fromParam ?? "") : "";
+  const searchedTo = canDateSearch ? (toParam ?? "") : "";
+
+  if (!canDateSearch) {
+    const day = resolveBusinessDay(company.timezone);
+    rangeStart = day.startUtc;
+    rangeEnd = day.endUtc;
+    rangeLabel = "Today";
+  } else if (searchedFrom || searchedTo) {
+    rangeStart = searchedFrom ? resolveBusinessDay(company.timezone, new Date(`${searchedFrom}T12:00:00.000Z`)).startUtc : undefined;
+    rangeEnd = searchedTo ? resolveBusinessDay(company.timezone, new Date(`${searchedTo}T12:00:00.000Z`)).endUtc : undefined;
+    rangeLabel = "Custom range";
+  } else if (isOwnerMembership(membership)) {
+    // Owner's default is an unrestricted custom range, not a fixed window.
+    rangeLabel = "All sales";
+  } else {
+    // Admin / Branch Manager default to the current calendar week.
+    const week = resolveBusinessWeek(company.timezone);
+    rangeStart = week.startUtc;
+    rangeEnd = week.endUtc;
+    rangeLabel = "This week";
+  }
+
+  const sales = await db.sale.findMany({
+    where: rangeStart || rangeEnd ? { createdAt: { ...(rangeStart && { gte: rangeStart }), ...(rangeEnd && { lt: rangeEnd }) } } : {},
+    orderBy: { createdAt: "desc" },
+    include: { branch: true },
+    take: 200,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,6 +93,33 @@ export default async function SalesPage() {
           </>
         }
       />
+
+      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Showing: <span className="font-medium text-gray-700 dark:text-gray-300">{rangeLabel}</span> ({sales.length} sale
+            {sales.length === 1 ? "" : "s"})
+          </p>
+          {canDateSearch && (
+            <form className="flex flex-wrap items-end gap-3" method="get">
+              <Field label="From" optional>
+                <Input type="date" name="from" defaultValue={searchedFrom} />
+              </Field>
+              <Field label="To" optional>
+                <Input type="date" name="to" defaultValue={searchedTo} />
+              </Field>
+              <Button type="submit" variant="secondary">
+                Search
+              </Button>
+              {(searchedFrom || searchedTo) && (
+                <LinkButton href="/sales" variant="link">
+                  Clear
+                </LinkButton>
+              )}
+            </form>
+          )}
+        </div>
+      </Card>
 
       {canExport && (
         <Card>
@@ -77,7 +139,11 @@ export default async function SalesPage() {
       )}
 
       {sales.length === 0 ? (
-        <EmptyState icon={Receipt} title="No sales yet" />
+        <EmptyState
+          icon={Receipt}
+          title="No sales yet"
+          description={!canDateSearch ? "No sales recorded today." : undefined}
+        />
       ) : (
         <Table>
           <TableHeader>

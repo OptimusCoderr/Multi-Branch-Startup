@@ -9,7 +9,7 @@ import { printBytes, BluetoothPrinterError } from "@/lib/bluetooth-printer";
 import { theme } from "@/lib/theme";
 import { Button, Card, Field, Input } from "@/components/ui";
 
-const PAYMENT_MODES = ["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"];
+const PAYMENT_MODES = ["CASH", "POS", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"];
 
 function PrintButton({ label, onPress }: { label: string; onPress: () => Promise<void> }) {
   const [printing, setPrinting] = useState(false);
@@ -168,6 +168,7 @@ export default function SaleDetailScreen() {
           <View key={i} style={styles.lineRow}>
             <Text style={{ flex: 1 }}>
               {li.productName} × {li.quantity}
+              {li.isService ? " (Service)" : ""}
             </Text>
             <Text>{formatMoney(li.lineTotal, currency)}</Text>
           </View>

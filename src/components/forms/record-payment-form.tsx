@@ -7,7 +7,7 @@ import { Field, Input, Select, FormError, Button, Card } from "@/components/ui";
 type FormState = { error: string };
 const initialState: FormState = { error: "" };
 
-const PAYMENT_MODES = ["CASH", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"] as const;
+const PAYMENT_MODES = ["CASH", "POS", "CARD", "BANK_TRANSFER", "MOBILE_MONEY", "OTHER"] as const;
 
 export function RecordPaymentForm({ saleId, outstanding }: { saleId: string; outstanding: string }) {
   const [state, formAction, isPending] = useActionState(recordPayment.bind(null, saleId), initialState);

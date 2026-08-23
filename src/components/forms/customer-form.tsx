@@ -1,14 +1,16 @@
 "use client";
 
-import { useActionState } from "react";
-import { Field, Input, Textarea, Checkbox, FormError, Button } from "@/components/ui";
+import { useActionState, useState } from "react";
+import { Field, Input, Textarea, Select, Checkbox, FormError, Button } from "@/components/ui";
 
 type CustomerFormState = { error: string };
 const initialState: CustomerFormState = { error: "" };
+type Template = { id: string; name: string; isDefault: boolean };
 
 export function CustomerForm({
   action,
   defaultValues,
+  templates = [],
   submitLabel,
 }: {
   action: (prev: CustomerFormState, formData: FormData) => Promise<CustomerFormState>;
@@ -20,10 +22,13 @@ export function CustomerForm({
     notes: string | null;
     creditLimit: string | null;
     remindersEnabled: boolean;
+    reminderTemplateId: string | null;
   };
+  templates?: Template[];
   submitLabel: string;
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
+  const [remindersEnabled, setRemindersEnabled] = useState(defaultValues?.remindersEnabled ?? true);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -32,8 +37,8 @@ export function CustomerForm({
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Phone">
-          <Input name="phone" defaultValue={defaultValues?.phone ?? ""} />
+        <Field label="Phone" hint={remindersEnabled ? "Required while automated reminders are on." : undefined}>
+          <Input name="phone" defaultValue={defaultValues?.phone ?? ""} required={remindersEnabled} />
         </Field>
         <Field label="Email">
           <Input name="email" type="email" defaultValue={defaultValues?.email ?? ""} />
@@ -54,9 +59,24 @@ export function CustomerForm({
 
       <Checkbox
         name="remindersEnabled"
-        defaultChecked={defaultValues?.remindersEnabled ?? true}
+        checked={remindersEnabled}
+        onChange={(e) => setRemindersEnabled(e.target.checked)}
         label="Allow automated payment reminders to this customer"
       />
+
+      {remindersEnabled && (
+        <Field label="Message template" optional hint="Leave blank to use the company's default template.">
+          <Select name="reminderTemplateId" defaultValue={defaultValues?.reminderTemplateId ?? ""}>
+            <option value="">Use company default</option>
+            {templates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.isDefault ? " (default)" : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      )}
 
       <FormError error={state.error} />
 

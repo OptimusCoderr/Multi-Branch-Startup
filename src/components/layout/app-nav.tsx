@@ -19,6 +19,7 @@ import {
   UserCog,
   Settings,
   Lock,
+  Bell,
   type LucideIcon,
 } from "lucide-react";
 import type { PlanFeatures } from "@/lib/billing/plan-features";
@@ -50,6 +51,7 @@ const NAV_LINKS: { href: string; label: string; icon: LucideIcon; planFeatureKey
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/audit-log", label: "Audit log", icon: ScrollText },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/staff", label: "Staff", icon: UserCog, planFeatureKey: "maxStaff" },
   { href: "/settings/branding", label: "Settings", icon: Settings },
 ];
@@ -57,10 +59,12 @@ const NAV_LINKS: { href: string; label: string; icon: LucideIcon; planFeatureKey
 export function AppNav({
   planFeatures,
   canManageBilling,
+  unreadNotifications = 0,
   onNavigate,
 }: {
   planFeatures: PlanFeatures;
   canManageBilling: boolean;
+  unreadNotifications?: number;
   /** Fired when a link is actually followed — lets the mobile drawer close itself on navigate. */
   onNavigate?: () => void;
 }) {
@@ -123,6 +127,11 @@ export function AppNav({
           >
             <Icon size={17} strokeWidth={2} />
             {link.label}
+            {link.href === "/notifications" && unreadNotifications > 0 && (
+              <span className="ml-auto rounded-full bg-[var(--brand-primary)] px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                {unreadNotifications > 99 ? "99+" : unreadNotifications}
+              </span>
+            )}
           </Link>
         );
       })}

@@ -1,25 +1,38 @@
 import { z } from "zod";
 import { emptyToUndefined } from "./shared";
 
-export const requestTransferSchema = z
+export const requestTransferSchema = z.object({
+  productId: z.string().min(1, "Select a product"),
+  destinationBranchId: z.string().min(1, "Select a destination branch"),
+  quantity: z.coerce.number().int().positive("Quantity must be greater than 0"),
+  notes: z.preprocess(emptyToUndefined, z.string().trim().max(1000).optional()),
+});
+export type RequestTransferInput = z.infer<typeof requestTransferSchema>;
+
+// The reviewer's source pick at approval time — not the requester's, who
+// no longer chooses one (see requestTransferSchema above).
+export const resolveTransferSchema = z
   .object({
-    productId: z.string().min(1, "Select a product"),
-    sourceType: z.enum(["WAREHOUSE", "BRANCH"]),
+    sourceType: z.enum(["WAREHOUSE", "BRANCH", "EXTERNAL"]),
     sourceWarehouseId: z.preprocess(emptyToUndefined, z.string().optional()),
     sourceBranchId: z.preprocess(emptyToUndefined, z.string().optional()),
-    destinationBranchId: z.string().min(1, "Select a destination branch"),
-    quantity: z.coerce.number().int().positive("Quantity must be greater than 0"),
-    notes: z.preprocess(emptyToUndefined, z.string().trim().max(1000).optional()),
+    externalSourceName: z.preprocess(emptyToUndefined, z.string().trim().max(200).optional()),
+    // Only needed when the product tracks batches and the source is
+    // EXTERNAL — enforced in the service layer (BatchRequiredError), not
+    // here, since that check needs to read Product.tracksBatches.
+    batchNumber: z.preprocess(emptyToUndefined, z.string().trim().min(1).max(100).optional()),
+    expiryDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
+    manufactureDate: z.preprocess(emptyToUndefined, z.coerce.date().optional()),
   })
-  .refine((data) => (data.sourceType === "WAREHOUSE" ? Boolean(data.sourceWarehouseId) : Boolean(data.sourceBranchId)), {
-    message: "Select a source location",
-    path: ["sourceWarehouseId"],
-  })
-  .refine((data) => data.sourceType !== "BRANCH" || data.sourceBranchId !== data.destinationBranchId, {
-    message: "Source and destination branch must be different",
-    path: ["sourceBranchId"],
-  });
-export type RequestTransferInput = z.infer<typeof requestTransferSchema>;
+  .refine(
+    (data) => {
+      if (data.sourceType === "WAREHOUSE") return Boolean(data.sourceWarehouseId);
+      if (data.sourceType === "BRANCH") return Boolean(data.sourceBranchId);
+      return Boolean(data.externalSourceName);
+    },
+    { message: "Select or enter a source", path: ["sourceType"] },
+  );
+export type ResolveTransferInput = z.infer<typeof resolveTransferSchema>;
 
 export const rejectTransferSchema = z.object({
   reason: z.string().trim().min(1, "A rejection reason is required").max(500),

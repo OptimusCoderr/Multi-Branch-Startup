@@ -45,6 +45,7 @@ model Company {
   saleCounter       Int           @default(0)
   creditNoteCounter Int           @default(0)
   poCounter         Int           @default(0)
+  walkInCounter     Int           @default(0)
 
   // What kind of business this is, gathered at Owner sign-up (a curated
   // list in the UI, but stored as free text so a custom "Other" entry
@@ -125,12 +126,15 @@ model Company {
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
   debtReminders     DebtReminder[]
+  reminderTemplates DebtReminderTemplate[]
   creditNotes       CreditNote[]
   productBatches    ProductBatch[]
   suppliers         Supplier[]
   purchaseOrders    PurchaseOrder[]
   dailySalesReports DailySalesReport[]
   reminderCreditPurchases ReminderCreditPurchase[]
+  saleFlags         SaleFlag[]
+  notifications     Notification[]
 
   @@index([status])
   @@index([verificationStatus])
@@ -531,11 +535,6 @@ model PlatformAuditLog {
 // Catalog & locations (Phase 1)
 // ---------------------------------------------------------------------------
 
-enum ProductType {
-  GOODS
-  SERVICE
-}
-
 model Product {
   id          String   @id @default(cuid())
   companyId   String
@@ -559,15 +558,6 @@ model Product {
   unitPrice   Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
-
-  // GOODS (the default, and everything created before this field existed)
-  // is stock-tracked exactly as before. SERVICE opts a product out of
-  // every stock-related behavior — no WarehouseStock/BranchStock rows are
-  // provisioned for it, sales never decrement/restore stock for it, and
-  // it's excluded from /stock, purchase orders, and transfers, which are
-  // all inherently about physical goods. Still fully sellable — it just
-  // shows up on the sale form and product list like any other product.
-  productType ProductType @default(GOODS)
 
   // Null = no low-stock alert configured for this product. Compared
   // against total stock across every location (warehouses + branches
@@ -713,7 +703,10 @@ model StockTransfer {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
 
-  sourceType         StockTransferSourceType
+  // Null while REQUESTED — the requester no longer picks a source; the
+  // reviewer chooses it (warehouse, another branch, or an external
+  // supplier) at approval time, via approveTransfer's resolution.
+  sourceType         StockTransferSourceType?
   sourceWarehouseId  String?
   sourceWarehouse    Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
   sourceBranchId     String?
@@ -1006,6 +999,34 @@ model PurchaseOrderLineItem {
 // never drift out of sync with the payment ledger.
 // ---------------------------------------------------------------------------
 
+// A reusable debt-reminder wording a company can define and then assign
+// per customer (Customer.reminderTemplateId) — e.g. a soft "Friendly
+// nudge" for most customers and a firmer "Final notice" for repeat
+// late-payers. `message` supports {name}/{company}/{amount}/{currency}/
+// {pay_link} placeholders, substituted at send time by
+// debt-reminder-service.ts's renderReminderMessage(). Exactly one template
+// per company may have isDefault true at a time — enforced in
+// debt-reminder-template-service.ts, not the database, since Prisma has no
+// partial/filtered unique constraint; it's the fallback for any customer
+// with no template of their own explicitly assigned.
+model DebtReminderTemplate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name      String
+  message   String
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+}
+
 model Customer {
   id        String  @id @default(cuid())
   companyId String
@@ -1023,6 +1044,16 @@ model Customer {
   // the company-wide debtReminderEnabled switch — both must be true for a
   // reminder to actually send.
   remindersEnabled Boolean @default(true)
+
+  // Which wording this customer's reminders use. Null falls back to the
+  // company's default template (DebtReminderTemplate.isDefault), or — if
+  // the company has no templates set up at all — the original hardcoded
+  // message, so adopting templates is purely opt-in and never breaks an
+  // existing company's reminders. SetNull (not Restrict) so deleting a
+  // template a customer was assigned just falls them back to the default
+  // rather than blocking the delete.
+  reminderTemplateId String?
+  reminderTemplate   DebtReminderTemplate? @relation(fields: [reminderTemplateId], references: [id], onDelete: SetNull)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1201,6 +1232,7 @@ model Sale {
   lineItems   SaleLineItem[]
   payments    Payment[]
   creditNotes CreditNote[]
+  flags       SaleFlag[]
 
   @@unique([companyId, saleNumber])
   @@unique([companyId, clientRequestId])
@@ -1209,15 +1241,109 @@ model Sale {
   @@index([companyId, customerId])
 }
 
+enum SaleFlagStatus {
+  FLAGGED
+  RESOLVED
+  ESCALATED
+}
+
+// A reviewer's after-the-fact rejection of a specific sale — the exception
+// path, not a review gate every sale goes through. Deliberately a separate
+// model rather than fields on Sale itself: a Sale's own lifecycle
+// (SaleStatus) tracks payment progress and must stay untouched by this: a
+// PAID sale can still get flagged (e.g. wrong customer info), and this
+// records that fact + its resolution without disturbing the payment
+// ledger.
+//
+// "Edit and resubmit" here is intentionally narrow — only the
+// customer-identifying fields (name/phone/email/due date) on the Sale are
+// corrected in place (see resolveSaleFlag in sale-flag-service.ts). Line
+// items, quantities, and prices are never touched after the fact anywhere
+// else in this app (they're immutable snapshots — see SaleLineItem's own
+// comment), and correcting a wrong quantity/price/product is still what
+// void + a fresh sale is for. This model only fixes the "who is this sale
+// actually for" class of mistake a reviewer would flag.
+model SaleFlag {
+  id        String         @id @default(cuid())
+  companyId String
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  saleId    String
+  sale      Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  status    SaleFlagStatus @default(FLAGGED)
+
+  // Plain strings, no relation — same pattern as Sale.soldByMembershipId:
+  // removing a Membership must never cascade into rewriting this history.
+  flaggedByMembershipId String
+  reason                String
+
+  // Midnight (Company.timezone) of the day the flag was raised — the
+  // resubmission deadline. Past this instant with status still FLAGGED,
+  // the deadline-check cron (see /api/cron/sale-flag-deadlines) escalates
+  // it: notifies Branch Manager + Owner, and opens resolve rights beyond
+  // just the original submitter.
+  deadline DateTime
+
+  resolvedByMembershipId String?
+  resolvedAt              DateTime?
+  resolutionNote          String?
+
+  escalatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, status])
+  @@index([companyId, saleId])
+}
+
+enum NotificationType {
+  SALE_FLAGGED
+  SALE_FLAG_ESCALATED
+  SALE_FLAG_RESOLVED
+}
+
+// In-app notification delivery — no email/SMS/push, just a bell + list in
+// the web app. membershipId is a plain string (no relation), same
+// removing-a-Membership-shouldn't-cascade reasoning as everywhere else a
+// membership is merely referenced rather than owned.
+model Notification {
+  id           String           @id @default(cuid())
+  companyId    String
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  membershipId String
+  type         NotificationType
+  title        String
+  body         String
+  entityType   String?
+  entityId     String?
+  readAt       DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([companyId, membershipId, readAt])
+}
+
 // Line items are never edited after creation and a Sale is never deleted —
 // unitPriceAtSale is a snapshot so a later change to Product.unitPrice can
 // never rewrite a historical invoice's total.
 model SaleLineItem {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   saleId    String
-  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  // Null for an ad-hoc service line (see isService/adHocDescription below)
+  // — there's no catalog record for it, so nothing to point at.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // An ad-hoc service entry: staff type a free-text description + price
+  // directly on the sale, with no Product record at all (unlike a normal
+  // catalog item). isService is what the UI actually keys off of to show
+  // the "Service" tag — it's independent of productId being null so a
+  // catalog product could theoretically be tagged too, though today only
+  // ad-hoc entries ever set it. adHocDescription holds the free-text
+  // staff typed; unused (null) for a normal product line item.
+  isService        Boolean @default(false)
+  adHocDescription String?
 
   quantity        Int
   unitPriceAtSale Decimal @db.Decimal(12, 2)
@@ -1240,6 +1366,7 @@ enum PaymentMode {
   CARD
   BANK_TRANSFER
   MOBILE_MONEY
+  POS
   OTHER
 }
 

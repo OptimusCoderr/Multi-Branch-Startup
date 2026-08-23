@@ -42,7 +42,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const customer = await db.customer.findUnique({ where: { id } });
   if (!customer) notFound();
 
-  const [balance, sales, reminders] = await Promise.all([
+  const [balance, sales, reminders, templates] = await Promise.all([
     getCustomerBalance(db, customer.id),
     db.sale.findMany({
       where: { customerId: customer.id },
@@ -51,6 +51,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       take: 50,
     }),
     db.debtReminder.findMany({ where: { customerId: customer.id }, orderBy: { createdAt: "desc" }, take: 10 }),
+    db.debtReminderTemplate.findMany({ orderBy: { createdAt: "asc" }, select: { id: true, name: true, isDefault: true } }),
   ]);
 
   const canManage = permissions.has(PERMISSIONS.CUSTOMERS_MANAGE);
@@ -145,11 +146,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">Reminder history</p>
           <ul className="flex flex-col gap-1 text-sm">
             {reminders.map((r) => (
-              <li key={r.id} className="flex items-center justify-between">
-                <span className="text-gray-500 dark:text-gray-400">
-                  {r.createdAt.toLocaleString()} · {formatMoney(r.outstandingSnapshot.toString(), currency)}
-                </span>
-                <Badge variant={r.status === "SENT" ? "success" : "danger"}>{r.status}</Badge>
+              <li key={r.id} className="flex flex-col gap-0.5 py-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {r.createdAt.toLocaleString()} · {formatMoney(r.outstandingSnapshot.toString(), currency)}
+                  </span>
+                  <Badge variant={r.status === "SENT" ? "success" : "danger"}>{r.status}</Badge>
+                </div>
+                <p className="text-xs text-gray-400 dark:text-gray-500">{r.message}</p>
               </li>
             ))}
           </ul>
@@ -169,7 +173,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
               notes: customer.notes,
               creditLimit: customer.creditLimit?.toString() ?? null,
               remindersEnabled: customer.remindersEnabled,
+              reminderTemplateId: customer.reminderTemplateId,
             }}
+            templates={templates}
             submitLabel="Save changes"
           />
         </div>

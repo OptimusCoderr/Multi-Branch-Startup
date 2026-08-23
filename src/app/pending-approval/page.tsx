@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, getCurrentMembership } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { SignOutButton } from "@/components/layout/sign-out-button";
 
 export default async function PendingApprovalPage() {
   const session = await getSession();
@@ -29,6 +30,9 @@ export default async function PendingApprovalPage() {
         You&apos;ll be able to sign in as soon as that happens — check back soon, or ask your employer to review it
         from their Staff page.
       </p>
+      <div className="flex justify-center">
+        <SignOutButton />
+      </div>
     </main>
   );
 }

@@ -64,6 +64,11 @@ export async function createSale(_prev: { error: string }, formData: FormData): 
     customerEmail: formData.get("customerEmail"),
     dueDate: formData.get("dueDate"),
     lineItems,
+    paymentType: formData.get("paymentType"),
+    posAmount: formData.get("posAmount"),
+    cashAmount: formData.get("cashAmount"),
+    partAmountPaid: formData.get("partAmountPaid"),
+    partPaymentMode: formData.get("partPaymentMode"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid sale details." };
@@ -74,24 +79,60 @@ export async function createSale(_prev: { error: string }, formData: FormData): 
   let saleId = "";
 
   try {
-    await db.$transaction(async (tx) => {
-      const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, {
-        ...parsed.data,
-        isReportExempt: isOwnerOrAdminMembership(membership),
-      });
-      saleId = sale.id;
+    // Serializable: recordPayment (called below, once or twice, for the
+    // payment-type buttons) reads-then-writes Sale.amountPaid and requires
+    // this isolation level for the same reason its own doc comment
+    // explains — see sale-service.ts.
+    await db.$transaction(
+      async (tx) => {
+        const sale = await saleService.createSale(tx, membership.companyId, membership.membershipId, {
+          ...parsed.data,
+          isReportExempt: isOwnerOrAdminMembership(membership),
+        });
+        saleId = sale.id;
 
-      await writeAuditLog(tx, {
-        companyId: membership.companyId,
-        actorMembershipId: membership.membershipId,
-        action: "sale.created",
-        entityType: "Sale",
-        entityId: sale.id,
-        metadata: { saleNumber: sale.saleNumber, grandTotal: sale.grandTotal.toString() },
-        ipAddress,
-        userAgent,
-      });
-    });
+        if (parsed.data.paymentType === "POS" || parsed.data.paymentType === "CASH") {
+          await saleService.recordPayment(tx, membership.companyId, membership.membershipId, {
+            saleId: sale.id,
+            amount: sale.grandTotal,
+            mode: parsed.data.paymentType,
+          });
+        } else if (parsed.data.paymentType === "POS_CASH") {
+          const pos = new Prisma.Decimal(parsed.data.posAmount ?? 0);
+          const cash = new Prisma.Decimal(parsed.data.cashAmount ?? 0);
+          if (!pos.add(cash).eq(sale.grandTotal)) {
+            throw new saleService.SaleValidationError("POS and Cash amounts must add up to the total.");
+          }
+          if (pos.gt(0)) {
+            await saleService.recordPayment(tx, membership.companyId, membership.membershipId, { saleId: sale.id, amount: pos, mode: "POS" });
+          }
+          if (cash.gt(0)) {
+            await saleService.recordPayment(tx, membership.companyId, membership.membershipId, { saleId: sale.id, amount: cash, mode: "CASH" });
+          }
+        } else if (parsed.data.paymentType === "PART_PAYMENT") {
+          const amountNow = new Prisma.Decimal(parsed.data.partAmountPaid ?? 0);
+          if (amountNow.gt(0)) {
+            await saleService.recordPayment(tx, membership.companyId, membership.membershipId, {
+              saleId: sale.id,
+              amount: amountNow,
+              mode: parsed.data.partPaymentMode ?? "CASH",
+            });
+          }
+        }
+
+        await writeAuditLog(tx, {
+          companyId: membership.companyId,
+          actorMembershipId: membership.membershipId,
+          action: "sale.created",
+          entityType: "Sale",
+          entityId: sale.id,
+          metadata: { saleNumber: sale.saleNumber, grandTotal: sale.grandTotal.toString(), paymentType: parsed.data.paymentType ?? null },
+          ipAddress,
+          userAgent,
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
   } catch (err) {
     return { error: friendlyError(err, "Could not record the sale.") };
   }
