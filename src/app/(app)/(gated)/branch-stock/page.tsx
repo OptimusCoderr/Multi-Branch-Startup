@@ -1,4 +1,4 @@
-import { requireMembership, computeEffectivePermissions } from "@/lib/auth/session";
+import { requireMembership, computeEffectivePermissions, isOwnerOrAdminMembership } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { PageHeader, EmptyState } from "@/components/ui";
@@ -33,7 +33,7 @@ export default async function BranchStockPage({ searchParams }: { searchParams: 
   const { branch: requestedBranchId } = await searchParams;
   const selectedBranchId = branches.some((b) => b.id === requestedBranchId) ? requestedBranchId! : branches[0].id;
 
-  const [stockRows, pendingTransfers, historyTransfers, myRequests, products, warehouses] = await Promise.all([
+  const [stockRows, pendingTransfers, historyTransfers, myRequests, products, warehouses, waybills] = await Promise.all([
     db.branchStock.findMany({
       where: { branchId: selectedBranchId },
       include: { product: { select: { id: true, name: true, sku: true, category: true, unitLabel: true, unitPrice: true } } },
@@ -58,6 +58,12 @@ export default async function BranchStockPage({ searchParams }: { searchParams: 
     }),
     db.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true, tracksBatches: true } }),
     db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.waybill.findMany({
+      where: { stockTransfer: { destinationBranchId: selectedBranchId } },
+      include: { stockTransfer: { include: { product: true, sourceWarehouse: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
   ]);
 
   const otherBranches = branches.filter((b) => b.id !== selectedBranchId);
@@ -88,6 +94,17 @@ export default async function BranchStockPage({ searchParams }: { searchParams: 
           ...serializeTransfer(t),
           destinationLabel: t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`,
         }))}
+        waybills={waybills.map((w) => ({
+          id: w.id,
+          reference: w.reference,
+          status: w.status,
+          mismatchAttempts: w.mismatchAttempts,
+          lastDeclaredQuantity: w.lastDeclaredQuantity,
+          resolvedAt: w.resolvedAt ? w.resolvedAt.toISOString() : null,
+          productName: w.stockTransfer.product.name,
+          quantity: w.stockTransfer.quantity,
+          sourceWarehouseName: w.stockTransfer.sourceWarehouse?.name ?? null,
+        }))}
         permissions={{
           canView: permissions.has(PERMISSIONS.STOCK_LEVELS_VIEW),
           canRequest: permissions.has(PERMISSIONS.TRANSFERS_REQUEST),
@@ -96,6 +113,7 @@ export default async function BranchStockPage({ searchParams }: { searchParams: 
           canReceive: permissions.has(PERMISSIONS.TRANSFERS_RECEIVE),
           canReceiveExternal: permissions.has(PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL),
           canAdjustDirectly: permissions.has(PERMISSIONS.BRANCHES_MANAGE),
+          canResolveWaybills: isOwnerOrAdminMembership(membership),
         }}
       />
     </div>

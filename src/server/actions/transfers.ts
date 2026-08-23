@@ -13,6 +13,7 @@ import {
   receiveExternalSchema,
 } from "@/lib/validation/transfer.schema";
 import * as transferService from "@/server/services/transfer-service";
+import { guardWaybillReceive } from "@/server/services/waybill-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
@@ -261,6 +262,57 @@ export async function receiveTransfer(
     parsed.data.batchNumber && parsed.data.expiryDate
       ? { batchNumber: parsed.data.batchNumber, expiryDate: parsed.data.expiryDate, manufactureDate: parsed.data.manufactureDate }
       : undefined;
+
+  // Waybill match/mismatch has to be its own, already-committed
+  // transaction, separate from the receive itself below — a mismatch (or
+  // the lock it can trigger) must permanently record the attempt even
+  // though the receive must NOT proceed, and one Prisma transaction can't
+  // partially commit. See guardWaybillReceive()'s doc comment.
+  let guard: Awaited<ReturnType<typeof guardWaybillReceive>>;
+  try {
+    guard = await db.$transaction(async (tx) => {
+      const transfer = await tx.stockTransfer.findUnique({ where: { id: transferId }, select: { quantity: true } });
+      if (!transfer) throw new transferService.TransferNotFoundError();
+      return guardWaybillReceive(tx, transferId, parsed.data.receivedQuantity, transfer.quantity);
+    });
+  } catch (err) {
+    return { error: friendlyError(err, "Could not record the receipt.") };
+  }
+
+  if (guard.outcome === "already_locked") {
+    return { error: "This transfer's waybill is locked pending admin review — it can't be received until then." };
+  }
+  if (guard.outcome === "mismatch") {
+    // A mismatch is still a real, permanent write (see guardWaybillReceive)
+    // — the Waybills tab's attempt count needs to reflect it immediately,
+    // not just the local form error.
+    revalidatePath("/branch-stock");
+    return {
+      error: `That count doesn't match the waybill. ${guard.attemptsRemaining} attempt(s) remaining before this transfer locks for admin review.`,
+    };
+  }
+  if (guard.outcome === "locked_now") {
+    await db.$transaction(async (tx) => {
+      const [product, names, recipientIds] = await Promise.all([
+        tx.stockTransfer.findUnique({ where: { id: transferId }, select: { productId: true } }).then((t) =>
+          t ? tx.product.findUnique({ where: { id: t.productId }, select: { name: true } }) : null,
+        ),
+        resolveMembershipNames(tx, [membership.membershipId]),
+        getOwnerAndAdminMembershipIds(tx),
+      ]);
+      if (recipientIds.length > 0) {
+        await createNotifications(tx, membership.companyId, recipientIds, {
+          type: "WAYBILL_LOCKED",
+          title: `Waybill locked: ${product?.name ?? "a transfer"}`,
+          body: `${names.get(membership.membershipId) ?? "A staff member"} declared a count that didn't match this waybill twice — it's now locked and needs an Owner or Admin to review it.`,
+          entityType: "StockTransfer",
+          entityId: transferId,
+        });
+      }
+    });
+    revalidatePath("/branch-stock");
+    return { error: "That count didn't match twice — this transfer is now locked. An admin has been notified to review it." };
+  }
 
   try {
     await db.$transaction(async (tx) => {

@@ -1410,6 +1410,52 @@ sees a Review button, approves it from an external source through the modal, and
 correctly auto-completes to RECEIVED and appears in Approval History — zero console/page
 errors.
 
+### 38. ALLMAAJ-pattern UI redesign — Phase 7: Waybills (blind-verification receiving)
+
+A new backend feature layered on top of the existing `StockTransfer` flow, not a parallel
+multi-item model — ALLMAAJ's `WaybillItem` table exists because their transfers are
+multi-item batches; this app's transfers are already one-product-per-row, so a `Waybill` here
+is 1:1 with a warehouse-sourced transfer.
+
+- **`Waybill` model** — `reference` (sequential per company, `WB-2026-000001`, generated the
+  same retry-on-collision way `generateProductSku()` already does — not a real Postgres
+  sequence, since that would mean creating one per tenant), `status`
+  (PENDING/MATCHED/LOCKED), `mismatchAttempts`, `lastDeclaredQuantity`, `lockedAt`,
+  `resolvedByMembershipId`/`resolvedAt`. Created automatically inside `dispatchTransfer()` the
+  moment a warehouse-sourced transfer's stock actually leaves the warehouse — never for a
+  branch- or external-sourced transfer, which keep the existing forgiving accept-and-notify
+  receiving behavior from earlier this session.
+- **`guardWaybillReceive()`** (`waybill-service.ts`) checks a declared receive quantity
+  against the transfer's real quantity: exact match → MATCHED, proceeds to a normal receive;
+  mismatch → records the attempt, and on the second mismatch → LOCKED, blocking receiving
+  entirely and notifying every Owner/Admin (`WAYBILL_LOCKED` notification type). The guard
+  **always runs as its own committed transaction**, separate from the receive itself — a
+  mismatch has to permanently record the attempt even though the receive must not proceed,
+  and a single Prisma transaction can't partially commit (recording the attempt inside the
+  same transaction that then aborts the receive would roll the recording back too). The
+  `receiveTransfer` action calls the guard first and only calls
+  `transferService.receiveTransfer` if it resolves to "matched" or "no waybill" (a
+  branch/external-sourced transfer, unaffected).
+- **`resolveLockedWaybill()`** (Owner/Admin only) — the only way past a LOCKED waybill: either
+  accept the last declared count (lands it exactly like a normal receive would have) or reject
+  and reverse the dispatch (gives the stock back to the source warehouse via a new
+  `TRANSFER_REVERSED` stock-movement reason, and cancels the transfer).
+- **UI**: a new Waybills tab on Branch Stock lists this branch's waybills with their
+  reference, status, and mismatch count; a LOCKED, unresolved one gets a "Resolve" button
+  (Owner/Admin only) opening a modal with the two resolution choices. The receive modal
+  surfaces the guard's messages as a normal form error — "N attempt(s) remaining" on a
+  mismatch, "this transfer is now locked" once it locks.
+
+To verify: exercised end-to-end via a scripted two-person Playwright run — Owner stocks a
+warehouse, requests a transfer to a branch, an Admin (company-code self-signup, approved by
+the Owner) approves it from the warehouse source, dispatches it (confirmed the Waybill's
+reference appears on the Waybills tab as PENDING), declares a wrong count twice (confirmed
+the "attempt(s) remaining" message on the first mismatch and the "now locked" message plus
+LOCKED status with a 2-mismatch count on the second), then resolves it by accepting the last
+declared count (confirmed the resolve modal shows that count, the waybill shows "Resolved"
+after, and the transfer lands as RECEIVED in Approval History) — zero console/page errors
+throughout.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

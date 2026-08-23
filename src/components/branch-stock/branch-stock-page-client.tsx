@@ -2,9 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Search, PackageSearch, ArrowLeftRight, PackagePlus, History, ListChecks } from "lucide-react";
+import { Search, PackageSearch, ArrowLeftRight, PackagePlus, History, ListChecks, FileWarning } from "lucide-react";
 import { formatMoney, formatQuantity, branchStockLevel } from "@/lib/format";
 import { dispatchTransfer, cancelTransfer } from "@/server/actions/transfers";
+import { resolveLockedWaybillAction } from "@/server/actions/waybills";
 import { RequestTransferForm } from "@/components/forms/request-transfer-form";
 import { ApproveTransferForm } from "@/components/forms/approve-transfer-form";
 import { RejectTransferForm } from "@/components/forms/reject-transfer-form";
@@ -24,9 +25,11 @@ import {
   Input,
   Select,
   Modal,
+  FormError,
   useConfirm,
   type BadgeVariant,
 } from "@/components/ui";
+import { useActionState, useEffect } from "react";
 
 type StockLine = { productId: string; productName: string; productSku: string; category: string | null; unitLabel: string; unitPrice: string; quantity: number };
 type TransferRow = {
@@ -44,6 +47,17 @@ type TransferRow = {
   carriedBatchCount: number;
 };
 type MyRequestRow = TransferRow & { destinationLabel: string };
+type WaybillRow = {
+  id: string;
+  reference: string;
+  status: string;
+  mismatchAttempts: number;
+  lastDeclaredQuantity: number | null;
+  resolvedAt: string | null;
+  productName: string;
+  quantity: number;
+  sourceWarehouseName: string | null;
+};
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   REQUESTED: "warning",
@@ -54,7 +68,13 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   CANCELLED: "neutral",
 };
 
-const TABS = ["Stock", "Pending Requests", "Approval History", "My Requests"] as const;
+const WAYBILL_STATUS_VARIANTS: Record<string, BadgeVariant> = {
+  PENDING: "neutral",
+  MATCHED: "success",
+  LOCKED: "danger",
+};
+
+const TABS = ["Stock", "Pending Requests", "Approval History", "My Requests", "Waybills"] as const;
 type Tab = (typeof TABS)[number];
 
 export function BranchStockPageClient({
@@ -69,6 +89,7 @@ export function BranchStockPageClient({
   pendingTransfers,
   historyTransfers,
   myRequests,
+  waybills,
   permissions,
 }: {
   membershipId: string;
@@ -82,6 +103,7 @@ export function BranchStockPageClient({
   pendingTransfers: TransferRow[];
   historyTransfers: TransferRow[];
   myRequests: MyRequestRow[];
+  waybills: WaybillRow[];
   permissions: {
     canView: boolean;
     canRequest: boolean;
@@ -90,13 +112,14 @@ export function BranchStockPageClient({
     canReceive: boolean;
     canReceiveExternal: boolean;
     canAdjustDirectly: boolean;
+    canResolveWaybills: boolean;
   };
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const showPendingTab = permissions.canApprove || permissions.canDispatch || permissions.canReceive;
   const visibleTabs = TABS.filter((t) => {
-    if (t === "Pending Requests" || t === "Approval History") return showPendingTab;
+    if (t === "Pending Requests" || t === "Approval History" || t === "Waybills") return showPendingTab;
     if (t === "My Requests") return permissions.canRequest;
     return true;
   });
@@ -165,6 +188,8 @@ export function BranchStockPageClient({
       {tab === "Approval History" && <HistoryTab transfers={historyTransfers} />}
 
       {tab === "My Requests" && <MyRequestsTab requests={myRequests} membershipId={membershipId} canApprove={permissions.canApprove} />}
+
+      {tab === "Waybills" && <WaybillsTab waybills={waybills} canResolve={permissions.canResolveWaybills} />}
     </div>
   );
 }
@@ -596,5 +621,115 @@ function MyRequestsTab({ requests, membershipId, canApprove }: { requests: MyReq
         })}
       </TableBody>
     </Table>
+  );
+}
+
+function WaybillsTab({ waybills, canResolve }: { waybills: WaybillRow[]; canResolve: boolean }) {
+  const [resolving, setResolving] = useState<WaybillRow | null>(null);
+
+  if (waybills.length === 0) {
+    return <EmptyState icon={FileWarning} title="No waybills yet" description="Waybills are created automatically when a warehouse-sourced transfer is dispatched." />;
+  }
+
+  return (
+    <>
+      <Table>
+        <TableHeader>
+          <TableHeaderCell>Reference</TableHeaderCell>
+          <TableHeaderCell>Product</TableHeaderCell>
+          <TableHeaderCell>Qty</TableHeaderCell>
+          <TableHeaderCell>From warehouse</TableHeaderCell>
+          <TableHeaderCell>Status</TableHeaderCell>
+          <TableHeaderCell align="right"></TableHeaderCell>
+        </TableHeader>
+        <TableBody>
+          {waybills.map((w) => (
+            <TableRow key={w.id}>
+              <TableCell mono>{w.reference}</TableCell>
+              <TableCell>{w.productName}</TableCell>
+              <TableCell mono>{w.quantity}</TableCell>
+              <TableCell className="text-gray-500 dark:text-gray-400">{w.sourceWarehouseName ?? "—"}</TableCell>
+              <TableCell>
+                <div className="flex items-center gap-2">
+                  <Badge variant={WAYBILL_STATUS_VARIANTS[w.status] ?? "neutral"}>{w.status}</Badge>
+                  {w.status === "LOCKED" && !w.resolvedAt && (
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {w.mismatchAttempts} mismatch{w.mismatchAttempts === 1 ? "" : "es"}
+                    </span>
+                  )}
+                  {/* resolvedAt, not status, is what marks a waybill handled — ACCEPT_LAST_COUNT
+                      moves status on to MATCHED (it did, eventually, match), while
+                      REJECT_AND_REVERSE leaves it LOCKED as the historical record that it did. */}
+                  {w.resolvedAt && <span className="text-xs text-gray-400 dark:text-gray-500">Resolved</span>}
+                </div>
+              </TableCell>
+              <TableCell align="right">
+                {canResolve && w.status === "LOCKED" && !w.resolvedAt && (
+                  <button type="button" onClick={() => setResolving(w)} className="text-sm font-medium text-[var(--brand-primary)] hover:underline">
+                    Resolve
+                  </button>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {resolving && (
+        <Modal title={`Resolve waybill ${resolving.reference}`} onClose={() => setResolving(null)} size="sm">
+          <ResolveWaybillForm waybill={resolving} onSuccess={() => setResolving(null)} />
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function ResolveWaybillForm({ waybill, onSuccess }: { waybill: WaybillRow; onSuccess: () => void }) {
+  const [state, formAction, isPending] = useActionState(resolveLockedWaybillAction.bind(null, waybill.id), { error: "" } as {
+    error: string;
+    success?: boolean;
+  });
+
+  useEffect(() => {
+    if (state.success) onSuccess();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when the action reports a fresh success
+  }, [state.success]);
+
+  return (
+    <form action={formAction} className="flex flex-col gap-4">
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        This waybill locked after two mismatched counts for <strong>{waybill.productName}</strong> ({waybill.quantity} expected). The
+        last count declared was <strong>{waybill.lastDeclaredQuantity ?? "—"}</strong>.
+      </p>
+
+      <div className="flex flex-col gap-2">
+        <label className="flex items-start gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
+          <input type="radio" name="resolution" value="ACCEPT_LAST_COUNT" defaultChecked className="mt-0.5" />
+          <span>
+            <span className="font-medium text-gray-900 dark:text-gray-100">Accept the last declared count</span>
+            <br />
+            <span className="text-gray-500 dark:text-gray-400">
+              Lands {waybill.lastDeclaredQuantity ?? "—"} unit(s) into this branch, same as a normal receive.
+            </span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 rounded-lg border border-gray-200 p-3 text-sm dark:border-gray-800">
+          <input type="radio" name="resolution" value="REJECT_AND_REVERSE" className="mt-0.5" />
+          <span>
+            <span className="font-medium text-red-600 dark:text-red-400">Reject and reverse the dispatch</span>
+            <br />
+            <span className="text-gray-500 dark:text-gray-400">
+              Gives the stock back to the source warehouse and cancels the transfer entirely.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <FormError error={state.error} />
+
+      <Button type="submit" isPending={isPending} pendingLabel="Resolving…" className="self-start">
+        Resolve
+      </Button>
+    </form>
   );
 }

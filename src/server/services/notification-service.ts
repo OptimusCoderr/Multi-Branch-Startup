@@ -11,7 +11,8 @@ export type NotificationKind =
   | "LOW_STOCK"
   | "SALE_VOIDED"
   | "BACKUP_DOWNLOADED"
-  | "SALES_RESET";
+  | "SALES_RESET"
+  | "WAYBILL_LOCKED";
 
 /** In-app only — no email/SMS/push. Called from inside the same transaction as whatever triggered it, same convention as writeAuditLog. */
 export async function createNotification(

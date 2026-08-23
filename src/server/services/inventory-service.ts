@@ -333,7 +333,8 @@ type RecordStockMovementInput = {
     | "SALE_VOID_RESTOCK"
     | "ADJUSTMENT"
     | "INITIAL_STOCK"
-    | "PURCHASE_RECEIPT";
+    | "PURCHASE_RECEIPT"
+    | "TRANSFER_REVERSED";
   referenceType: string;
   referenceId: string;
   performedByMembershipId: string;
