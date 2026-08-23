@@ -77,7 +77,9 @@ export default async function TransfersPage() {
                     ? `External: ${t.externalSourceName}`
                     : t.sourceType === "BRANCH"
                       ? t.sourceBranch?.name
-                      : t.sourceWarehouse?.name}
+                      : t.sourceType === "WAREHOUSE"
+                        ? t.sourceWarehouse?.name
+                        : "Awaiting reviewer"}
                 </TableCell>
                 <TableCell className="text-gray-500 dark:text-gray-400">
                   {t.destinationBranch ? t.destinationBranch.name : `${t.destinationWarehouse!.name} (warehouse)`}

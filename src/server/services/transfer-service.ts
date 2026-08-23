@@ -43,46 +43,36 @@ async function getTransferOrThrow(tx: ScopedTx, transferId: string) {
   return transfer;
 }
 
-type TransferSource = { sourceWarehouseId: string; sourceBranchId?: never } | { sourceBranchId: string; sourceWarehouseId?: never };
-
 export async function requestTransfer(
   tx: ScopedTx,
   companyId: string,
   membershipId: string,
-  input: { productId: string; quantity: number; destinationBranchId: string; notes?: string } & TransferSource,
+  input: { productId: string; quantity: number; destinationBranchId: string; notes?: string },
 ) {
-  if (input.sourceBranchId && input.sourceBranchId === input.destinationBranchId) {
-    throw new TransferStateError("A branch cannot transfer stock to itself.");
-  }
-
   // Every FK below must be verified to belong to this tenant BEFORE it's
   // ever written onto the StockTransfer row — getScopedPrisma only forces
   // the row's own companyId, it never validates that FKs the caller
   // supplied actually point into the same company. Skipping this let a
   // crafted request (bypassing the UI's own tenant-scoped dropdowns, e.g.
-  // a raw POST) persist another company's real product/branch/warehouse
-  // id on a transfer this company owns — later rendered by-name on the
-  // transfers list/detail pages via `include`, which (unlike a top-level
-  // query) isn't re-scoped by the tenant-isolation extension.
-  const [product, destinationBranch, sourceWarehouse, sourceBranch] = await Promise.all([
+  // a raw POST) persist another company's real product/branch id on a
+  // transfer this company owns — later rendered by-name on the transfers
+  // list/detail pages via `include`, which (unlike a top-level query)
+  // isn't re-scoped by the tenant-isolation extension.
+  const [product, destinationBranch] = await Promise.all([
     tx.product.findUnique({ where: { id: input.productId }, select: { id: true } }),
     tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }),
-    input.sourceWarehouseId ? tx.warehouse.findUnique({ where: { id: input.sourceWarehouseId }, select: { id: true } }) : null,
-    input.sourceBranchId ? tx.branch.findUnique({ where: { id: input.sourceBranchId }, select: { id: true } }) : null,
   ]);
   if (!product) throw new TransferStateError("Selected product not found.");
   if (!destinationBranch) throw new TransferStateError("Destination branch not found.");
-  if (input.sourceWarehouseId && !sourceWarehouse) throw new TransferStateError("Source warehouse not found.");
-  if (input.sourceBranchId && !sourceBranch) throw new TransferStateError("Source branch not found.");
 
+  // No source is picked here — a reviewer chooses warehouse, another
+  // branch, or an external supplier at approval time (see resolveTransfer
+  // below). sourceType stays null until then.
   return tx.stockTransfer.create({
     data: {
       companyId,
       productId: input.productId,
       quantity: input.quantity,
-      sourceType: input.sourceWarehouseId ? "WAREHOUSE" : "BRANCH",
-      sourceWarehouseId: input.sourceWarehouseId ?? null,
-      sourceBranchId: input.sourceBranchId ?? null,
       destinationBranchId: input.destinationBranchId,
       status: "REQUESTED",
       requestedByMembershipId: membershipId,
@@ -91,12 +81,34 @@ export async function requestTransfer(
   });
 }
 
+type TransferResolution =
+  | { sourceType: "WAREHOUSE"; sourceWarehouseId: string }
+  | { sourceType: "BRANCH"; sourceBranchId: string }
+  | {
+      sourceType: "EXTERNAL";
+      externalSourceName: string;
+      batch?: { batchNumber: string; expiryDate: Date; manufactureDate?: Date };
+    };
+
 /**
  * Requester and approver must be different people by default — this is
  * the accountability guarantee that a transfer was actually checked by a
  * second person, not just self-certified by whoever asked for the stock.
+ *
+ * The reviewer picks the source here (the requester never did — see
+ * requestTransfer). A WAREHOUSE or BRANCH source still needs a physical
+ * dispatch/receive to move the stock, same as before. An EXTERNAL source
+ * has no internal counterparty to dispatch from, so approving it credits
+ * the destination branch immediately, the same as the direct
+ * receiveExternalStock path — the transfer goes straight to RECEIVED.
  */
-export async function approveTransfer(tx: ScopedTx, membershipId: string, transferId: string) {
+export async function approveTransfer(
+  tx: ScopedTx,
+  companyId: string,
+  membershipId: string,
+  transferId: string,
+  resolution: TransferResolution,
+) {
   const transfer = await getTransferOrThrow(tx, transferId);
   if (transfer.status !== "REQUESTED") {
     throw new TransferStateError("Only requested transfers can be approved.");
@@ -104,10 +116,84 @@ export async function approveTransfer(tx: ScopedTx, membershipId: string, transf
   if (transfer.requestedByMembershipId === membershipId) {
     throw new TransferStateError("You cannot approve a transfer you requested yourself.");
   }
+  if (!transfer.destinationBranchId) {
+    throw new TransferStateError("This transfer has no destination branch.");
+  }
+  const destinationBranchId = transfer.destinationBranchId;
+
+  if (resolution.sourceType === "BRANCH" && resolution.sourceBranchId === destinationBranchId) {
+    throw new TransferStateError("A branch cannot supply stock to itself.");
+  }
+
+  // Same cross-tenant FK guard as requestTransfer — the reviewer's picks
+  // come from a tenant-scoped dropdown, but a crafted request could still
+  // try to smuggle another company's id through.
+  if (resolution.sourceType === "WAREHOUSE") {
+    const sourceWarehouse = await tx.warehouse.findUnique({ where: { id: resolution.sourceWarehouseId }, select: { id: true } });
+    if (!sourceWarehouse) throw new TransferStateError("Source warehouse not found.");
+  } else if (resolution.sourceType === "BRANCH") {
+    const sourceBranch = await tx.branch.findUnique({ where: { id: resolution.sourceBranchId }, select: { id: true } });
+    if (!sourceBranch) throw new TransferStateError("Source branch not found.");
+  }
+
+  if (resolution.sourceType === "EXTERNAL") {
+    const product = await tx.product.findUnique({ where: { id: transfer.productId }, select: { tracksBatches: true } });
+    if (product?.tracksBatches && !resolution.batch) {
+      throw new BatchRequiredError();
+    }
+
+    const updated = await tx.stockTransfer.update({
+      where: { id: transferId },
+      data: {
+        sourceType: "EXTERNAL",
+        externalSourceName: resolution.externalSourceName,
+        status: "RECEIVED",
+        approvedByMembershipId: membershipId,
+        approvedAt: new Date(),
+        receivedByMembershipId: membershipId,
+        receivedAt: new Date(),
+        receivedQuantity: transfer.quantity,
+      },
+    });
+
+    await incrementBranchStock(tx, transfer.productId, destinationBranchId, transfer.quantity);
+    await recordStockMovement(tx, {
+      companyId,
+      productId: transfer.productId,
+      locationType: "BRANCH",
+      branchId: destinationBranchId,
+      quantityDelta: transfer.quantity,
+      reason: "EXTERNAL_RECEIPT",
+      referenceType: "StockTransfer",
+      referenceId: transfer.id,
+      stockTransferId: transfer.id,
+      performedByMembershipId: membershipId,
+    });
+
+    if (resolution.batch) {
+      await createProductBatch(tx, companyId, membershipId, {
+        productId: transfer.productId,
+        branchId: destinationBranchId,
+        batchNumber: resolution.batch.batchNumber,
+        expiryDate: resolution.batch.expiryDate,
+        manufactureDate: resolution.batch.manufactureDate,
+        quantity: transfer.quantity,
+      });
+    }
+
+    return updated;
+  }
 
   return tx.stockTransfer.update({
     where: { id: transferId },
-    data: { status: "APPROVED", approvedByMembershipId: membershipId, approvedAt: new Date() },
+    data: {
+      sourceType: resolution.sourceType,
+      sourceWarehouseId: resolution.sourceType === "WAREHOUSE" ? resolution.sourceWarehouseId : null,
+      sourceBranchId: resolution.sourceType === "BRANCH" ? resolution.sourceBranchId : null,
+      status: "APPROVED",
+      approvedByMembershipId: membershipId,
+      approvedAt: new Date(),
+    },
   });
 }
 

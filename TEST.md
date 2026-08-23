@@ -197,28 +197,39 @@ attribute is given, that's for anyone scripting these steps with Playwright — 
 
 ### 4. Stock transfers
 
-Two independent intake paths — test both:
+Two independent intake paths — test both. The **requester never picks a source** — only
+the **reviewer** does, at approval time (Owner, Admin, or Branch Manager — Warehouse
+Manager is not a reviewer by default, only a dispatcher).
 
-1. **External delivery** (no warehouse involved): `/transfers/new-external` — pick a
-   product and destination branch, set a quantity, give it a source name
-   (`input[name="externalSourceName"]`). This goes straight to `RECEIVED` and increments
-   branch stock in one step. This is also the path a business with **zero warehouses**
+1. **Direct add, no request** (`transfers.receive_external`, Owner-only by default):
+   `/transfers/new-external` — pick a product and destination branch or warehouse, set a
+   quantity, give it a source name (`input[name="externalSourceName"]`). This goes
+   straight to `RECEIVED` and increments stock in one step, with no review needed. Confirm
+   an Admin or Branch Manager (or a Cashier) does **not** see "Record external delivery" on
+   `/transfers`, and visiting `/transfers/new-external` directly shows a permission-denied
+   message rather than the form. This is also the path a business with **zero warehouses**
    uses to stock branches at all — confirm it still works for a company that's never
    created a warehouse.
-2. **Warehouse-sourced or branch-sourced transfer**: `/transfers/new` — request a transfer
-   from either a warehouse or another branch (pick the source type; the picker only shows
-   when both are available). As a *different* staff member than the requester, approve it,
-   dispatch it, then receive it. Confirm:
+2. **Request → review**: `/transfers/new` (`transfers.request` — Admin, Branch Manager, and
+   Cashier all have this by default) — pick a product, destination branch, and quantity.
+   No source field on this form at all. Submitting lands on the transfer's detail page
+   showing `REQUESTED` and "Awaiting reviewer" in place of a source.
+   - As a *different* staff member with `transfers.approve` (Owner/Admin/Branch Manager),
+     open the request and pick a source: **a warehouse**, **another branch**, or **an
+     external supplier** — whichever the reviewer decides is actually available, not
+     whatever the requester guessed.
+     - Picking a warehouse or branch source moves the transfer to `APPROVED`; dispatch it,
+       then receive it, same physical chain as before. The source location's stock
+       decrements at dispatch, branch stock increments at receipt — not both at once.
+     - Picking an external supplier credits the destination branch **immediately** —
+       status jumps straight to `RECEIVED`, no dispatch step is offered at all, and (if
+       the product tracks batches) a batch number + expiry are required on the approval
+       form itself.
    - The requester cannot also approve their own request (self-approval is blocked by
-     default) — no Approve button is shown to the requester at all, just an explanation.
-   - The source location's stock decrements at dispatch, branch stock increments at
-     receipt — not both at once.
-   - A branch cannot be selected as its own destination when it's already the source.
-   - Receiving a *different* quantity than requested is recorded as-is and flagged as a
-     discrepancy, not silently corrected.
-3. With **zero warehouses and fewer than two branches**, visit `/transfers/new` directly —
-   it should explain there's no source available and point you to `/transfers/new-external`,
-   not show a broken form with an empty source dropdown.
+     default) — no Approve form is shown to the requester at all, just an explanation.
+   - A branch cannot be picked as its own source when it's already the destination.
+   - Receiving a *different* quantity than requested (warehouse/branch path only) is
+     recorded as-is and flagged as a discrepancy, not silently corrected.
 
 ### 5. Sales and payments
 
@@ -430,12 +441,11 @@ one.
    **earlier-expiring batch's `quantityRemaining` is consumed first** (FEFO) — check
    `/batches` before and after. This should happen transparently; nothing on the sale or
    transfer form asks which batch to use.
-4. Request a transfer sourced from **another branch** (not a warehouse) via `/transfers/new`
-   — the source-type picker only appears when both a warehouse and a second branch are
-   available; otherwise the form defaults to whichever source actually exists. Confirm you
-   cannot pick the same branch as both source and destination, and that the rest of the
-   lifecycle (approve by a different staff member, dispatch, receive) behaves exactly like
-   a warehouse-sourced transfer.
+4. Request a transfer via `/transfers/new`, then as the reviewer approve it choosing
+   **another branch** (not a warehouse) as the source — the source options on the approval
+   form only include a warehouse when one exists. Confirm you cannot pick the same branch
+   as both source and destination, and that the rest of the lifecycle (dispatch, receive)
+   behaves exactly like a warehouse-sourced transfer.
 5. **Batch identity survives a branch-to-branch transfer.** Receive a batch-tracked product
    into Branch A with a specific batch number and expiry, then transfer some of it to Branch
    B. Confirm `/batches` shows a batch at Branch B with the **same** batch number and expiry

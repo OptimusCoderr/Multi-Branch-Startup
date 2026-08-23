@@ -8,6 +8,7 @@ import { requireMembershipOrThrow, requirePermission } from "@/lib/auth/session"
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   requestTransferSchema,
+  resolveTransferSchema,
   rejectTransferSchema,
   receiveTransferSchema,
   receiveExternalSchema,
@@ -41,9 +42,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
 
   const parsed = requestTransferSchema.safeParse({
     productId: formData.get("productId"),
-    sourceType: formData.get("sourceType"),
-    sourceWarehouseId: formData.get("sourceWarehouseId"),
-    sourceBranchId: formData.get("sourceBranchId"),
     destinationBranchId: formData.get("destinationBranchId"),
     quantity: formData.get("quantity"),
     notes: formData.get("notes"),
@@ -56,11 +54,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
   const { ipAddress, userAgent } = await requestMeta();
   let transferId = "";
 
-  const source =
-    parsed.data.sourceType === "WAREHOUSE"
-      ? { sourceWarehouseId: parsed.data.sourceWarehouseId! }
-      : { sourceBranchId: parsed.data.sourceBranchId! };
-
   try {
     await db.$transaction(async (tx) => {
       const transfer = await transferService.requestTransfer(tx, membership.companyId, membership.membershipId, {
@@ -68,7 +61,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
         quantity: parsed.data.quantity,
         destinationBranchId: parsed.data.destinationBranchId,
         notes: parsed.data.notes,
-        ...source,
       });
       transferId = transfer.id;
 
@@ -91,29 +83,64 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
   redirect(`/transfers/${transferId}`);
 }
 
-export async function approveTransfer(transferId: string): Promise<void> {
+export async function approveTransfer(
+  transferId: string,
+  _prev: { error: string },
+  formData: FormData,
+): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.TRANSFERS_APPROVE);
+
+  const parsed = resolveTransferSchema.safeParse({
+    sourceType: formData.get("sourceType"),
+    sourceWarehouseId: formData.get("sourceWarehouseId"),
+    sourceBranchId: formData.get("sourceBranchId"),
+    externalSourceName: formData.get("externalSourceName"),
+    batchNumber: formData.get("batchNumber"),
+    expiryDate: formData.get("expiryDate"),
+    manufactureDate: formData.get("manufactureDate"),
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Select a source for this transfer." };
+  }
+
+  const resolution =
+    parsed.data.sourceType === "WAREHOUSE"
+      ? ({ sourceType: "WAREHOUSE", sourceWarehouseId: parsed.data.sourceWarehouseId! } as const)
+      : parsed.data.sourceType === "BRANCH"
+        ? ({ sourceType: "BRANCH", sourceBranchId: parsed.data.sourceBranchId! } as const)
+        : ({
+            sourceType: "EXTERNAL",
+            externalSourceName: parsed.data.externalSourceName!,
+            batch:
+              parsed.data.batchNumber && parsed.data.expiryDate
+                ? { batchNumber: parsed.data.batchNumber, expiryDate: parsed.data.expiryDate, manufactureDate: parsed.data.manufactureDate }
+                : undefined,
+          } as const);
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
 
-  await db.$transaction(async (tx) => {
-    const transfer = await transferService.approveTransfer(tx, membership.membershipId, transferId);
-    await writeAuditLog(tx, {
-      companyId: membership.companyId,
-      actorMembershipId: membership.membershipId,
-      action: "transfer.approved",
-      entityType: "StockTransfer",
-      entityId: transfer.id,
-      metadata: {},
-      ipAddress,
-      userAgent,
+  try {
+    await db.$transaction(async (tx) => {
+      const transfer = await transferService.approveTransfer(tx, membership.companyId, membership.membershipId, transferId, resolution);
+      await writeAuditLog(tx, {
+        companyId: membership.companyId,
+        actorMembershipId: membership.membershipId,
+        action: "transfer.approved",
+        entityType: "StockTransfer",
+        entityId: transfer.id,
+        metadata: { sourceType: resolution.sourceType },
+        ipAddress,
+        userAgent,
+      });
     });
-  });
+  } catch (err) {
+    return { error: friendlyError(err, "Could not approve the transfer.") };
+  }
 
-  revalidatePath(`/transfers/${transferId}`);
   revalidatePath("/transfers");
+  redirect(`/transfers/${transferId}`);
 }
 
 export async function rejectTransfer(

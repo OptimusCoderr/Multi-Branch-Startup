@@ -700,7 +700,10 @@ model StockTransfer {
   product   Product @relation(fields: [productId], references: [id])
   quantity  Int
 
-  sourceType         StockTransferSourceType
+  // Null while REQUESTED — the requester no longer picks a source; the
+  // reviewer chooses it (warehouse, another branch, or an external
+  // supplier) at approval time, via approveTransfer's resolution.
+  sourceType         StockTransferSourceType?
   sourceWarehouseId  String?
   sourceWarehouse    Warehouse?              @relation("StockTransferSourceWarehouse", fields: [sourceWarehouseId], references: [id])
   sourceBranchId     String?

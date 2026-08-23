@@ -3,9 +3,10 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { resolveMembershipNames } from "@/lib/auth/membership-names";
-import { approveTransfer, dispatchTransfer, cancelTransfer } from "@/server/actions/transfers";
+import { dispatchTransfer, cancelTransfer } from "@/server/actions/transfers";
 import { RejectTransferForm } from "@/components/forms/reject-transfer-form";
 import { ReceiveTransferForm } from "@/components/forms/receive-transfer-form";
+import { ApproveTransferForm } from "@/components/forms/approve-transfer-form";
 
 const STATUS_STYLES: Record<string, string> = {
   REQUESTED: "bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400",
@@ -37,6 +38,15 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   // know for sure the source had no matching batch rows to consume from.
   const carriedBatchCount = Array.isArray(transfer.dispatchedBatches) ? transfer.dispatchedBatches.length : 0;
   const requiresManualBatch = transfer.product.tracksBatches && transfer.status === "IN_TRANSIT" && carriedBatchCount === 0;
+
+  const [approveWarehouses, approveBranches] = await Promise.all([
+    db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    db.branch.findMany({
+      where: { isActive: true, id: { not: transfer.destinationBranchId ?? undefined } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ]);
 
   const names = await resolveMembershipNames(db, [
     transfer.requestedByMembershipId,
@@ -95,7 +105,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             ? `External: ${transfer.externalSourceName}`
             : transfer.sourceType === "BRANCH"
               ? transfer.sourceBranch?.name
-              : transfer.sourceWarehouse?.name}{" "}
+              : transfer.sourceType === "WAREHOUSE"
+                ? transfer.sourceWarehouse?.name
+                : "Awaiting reviewer"}{" "}
           → {transfer.destinationBranch ? transfer.destinationBranch.name : `${transfer.destinationWarehouse!.name} (warehouse)`}
         </p>
         {transfer.notes && <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Notes: {transfer.notes}</p>}
@@ -127,11 +139,12 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
             )}
             {canApprove && !isSelfApproval && (
               <div className="flex flex-col gap-3">
-                <form action={approveTransfer.bind(null, transfer.id)}>
-                  <button type="submit" className="rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-medium text-white">
-                    Approve
-                  </button>
-                </form>
+                <ApproveTransferForm
+                  transferId={transfer.id}
+                  warehouses={approveWarehouses}
+                  branches={approveBranches}
+                  requiresBatch={transfer.product.tracksBatches}
+                />
                 <RejectTransferForm transferId={transfer.id} />
               </div>
             )}
