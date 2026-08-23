@@ -3,6 +3,7 @@ import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   PageHeader,
+  StatCard,
   Table,
   TableHeader,
   TableHeaderCell,
@@ -14,7 +15,7 @@ import {
   EmptyState,
   type BadgeVariant,
 } from "@/components/ui";
-import { ClipboardList } from "lucide-react";
+import { ClipboardList, FileEdit, Truck, PackageCheck } from "lucide-react";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   DRAFT: "neutral",
@@ -42,6 +43,10 @@ export default async function PurchaseOrdersPage() {
 
   const canManage = permissions.has(PERMISSIONS.PURCHASE_ORDERS_MANAGE);
 
+  const draftCount = purchaseOrders.filter((po) => po.status === "DRAFT").length;
+  const orderedCount = purchaseOrders.filter((po) => po.status === "ORDERED" || po.status === "PARTIALLY_RECEIVED").length;
+  const receivedCount = purchaseOrders.filter((po) => po.status === "RECEIVED").length;
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -55,6 +60,13 @@ export default async function PurchaseOrdersPage() {
           </>
         }
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard icon={ClipboardList} label="Total" value={String(purchaseOrders.length)} tint="#6b7280" />
+        <StatCard icon={FileEdit} label="Draft" value={String(draftCount)} tint="var(--brand-primary)" />
+        <StatCard icon={Truck} label="Ordered" value={String(orderedCount)} tint="#d97706" />
+        <StatCard icon={PackageCheck} label="Received" value={String(receivedCount)} tint="#16a34a" />
+      </div>
 
       {purchaseOrders.length === 0 ? (
         <EmptyState icon={ClipboardList} title="No purchase orders yet" />

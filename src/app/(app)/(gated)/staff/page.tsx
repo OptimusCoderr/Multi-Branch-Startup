@@ -7,7 +7,8 @@ import { CompanyCodeCard } from "@/components/forms/company-code-card";
 import { ApprovePendingStaffForm } from "@/components/forms/approve-pending-staff-form";
 import { revokeInvitation } from "@/server/actions/staff";
 import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
-import { PageHeader, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, Badge, Button, LinkButton, type BadgeVariant } from "@/components/ui";
+import { PageHeader, StatCard, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, Badge, Button, LinkButton, type BadgeVariant } from "@/components/ui";
+import { Users, UserCheck, Mail, UserPlus } from "lucide-react";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   ACTIVE: "success",
@@ -49,7 +50,8 @@ export default async function StaffPage() {
     db.company.findUniqueOrThrow({ where: { id: membership.companyId }, select: { companyCode: true } }),
   ]);
 
-  const seatsUsed = members.filter((m) => m.status === "ACTIVE").length + invitations.length;
+  const activeCount = members.filter((m) => m.status === "ACTIVE").length;
+  const seatsUsed = activeCount + invitations.length;
   const atLimit = maxStaff !== undefined && seatsUsed >= maxStaff;
 
   return (
@@ -62,6 +64,14 @@ export default async function StaffPage() {
             : undefined
         }
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard icon={Users} label="Total" value={String(members.length)} tint="#6b7280" />
+        <StatCard icon={UserCheck} label="Active" value={String(activeCount)} tint="#16a34a" />
+        <StatCard icon={Mail} label="Invited" value={String(invitations.length)} tint="var(--brand-primary)" />
+        <StatCard icon={UserPlus} label="Join requests" value={String(pendingRequests.length)} tint="#d97706" />
+      </div>
+
       {atLimit && (
         <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 dark:text-amber-400 underline">
           Upgrade for more seats

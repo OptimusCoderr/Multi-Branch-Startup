@@ -1456,6 +1456,45 @@ declared count (confirmed the resolve modal shows that count, the waybill shows 
 after, and the transfer lands as RECEIVED in Approval History) — zero console/page errors
 throughout.
 
+### 39. ALLMAAJ-pattern UI redesign — Phase 8: remaining pages restyle pass
+
+The final phase of the 8-phase redesign — a survey-then-fix pass over every page not yet
+touched (Sales, Customers, Expenses, Purchase Orders, Reports, Staff, Audit Log,
+Notifications, Settings), applying the stat-card-row/Card/Badge/Table/EmptyState
+conventions established in Phases 2–6 wherever a page was still missing them.
+
+Survey findings (read each page in full before touching anything):
+
+- **Customers, Expenses, Reports, Audit Log, Notifications, Settings** — already meet the
+  bar from earlier design-system work this project's history (Phases 15–17): stat-card
+  rows, `Card` containers, `Badge` pills, `EmptyState`, `Table` primitives, filter chips
+  where relevant. **No changes made** — forcing a uniform template onto pages that already
+  match the pattern would be pure churn.
+- **Sales** — had search/export/table already on the new primitives, but no stat-card row.
+  Added one: Sales (count), Revenue, Collected, Outstanding — all computed from the
+  already-fetched `sales` array via `Prisma.Decimal` arithmetic (excluding VOIDED sales),
+  no new queries.
+- **Purchase Orders** — same gap. Added: Total, Draft, Ordered (ORDERED +
+  PARTIALLY_RECEIVED), Received — counted from the already-fetched `purchaseOrders` array.
+- **Staff** — had the seat-usage line in the page description but no stat-card row. Added:
+  Total, Active, Invited, Join requests — counted from the already-fetched `members`/
+  `invitations`/`pendingRequests` arrays.
+
+Deliberately *not* done: forcing the multi-line-item Sale/Purchase Order creation forms
+into modals. Those are complex, multi-step forms (line items, quantities, discounts,
+customer/supplier selection) — cramming them into a modal would be a disproportionate risk
+for a phase the plan itself framed as "smaller, mostly-visual"; they stay on their own
+`/new` route.
+
+To verify: scripted Playwright run — signed up a fresh Owner, completed company onboarding,
+confirmed the Staff/Purchase Orders/Sales stat-card rows all render their labels correctly
+in the zero-data state, then seeded one `Sale` directly (`grandTotal` 2000, `amountPaid`
+1200) and reloaded `/sales` to confirm the stat cards showed the correct computed values —
+1 sale, ₦2,000.00 revenue, ₦1,200.00 collected, ₦800.00 outstanding — proving the
+`Prisma.Decimal` subtraction renders correctly, not just that the labels are present. Zero
+console/page errors throughout. `npx tsc --noEmit`, `npm run lint`, and `npm run build` all
+clean.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

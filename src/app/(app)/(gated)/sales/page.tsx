@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { requireMembership, computeEffectivePermissions, isOwnerMembership } from "@/lib/auth/session";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -5,6 +6,7 @@ import { resolveBusinessDay, resolveBusinessWeek } from "@/lib/business-day";
 import { formatMoney } from "@/lib/format";
 import {
   PageHeader,
+  StatCard,
   Card,
   Field,
   Input,
@@ -20,7 +22,7 @@ import {
   EmptyState,
   type BadgeVariant,
 } from "@/components/ui";
-import { Receipt } from "lucide-react";
+import { Receipt, TrendingUp, CircleDollarSign, CircleAlert } from "lucide-react";
 
 const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   CONFIRMED: "warning",
@@ -78,6 +80,11 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     take: 200,
   });
 
+  const nonVoided = sales.filter((s) => s.status !== "VOIDED");
+  const revenue = nonVoided.reduce((sum, s) => sum.add(s.grandTotal), new Prisma.Decimal(0));
+  const collected = nonVoided.reduce((sum, s) => sum.add(s.amountPaid), new Prisma.Decimal(0));
+  const outstanding = revenue.sub(collected);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -93,6 +100,13 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
           </>
         }
       />
+
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard icon={Receipt} label="Sales" value={String(sales.length)} tint="#6b7280" />
+        <StatCard icon={TrendingUp} label="Revenue" value={formatMoney(revenue.toString(), membership.companyCurrency)} tint="var(--brand-primary)" />
+        <StatCard icon={CircleDollarSign} label="Collected" value={formatMoney(collected.toString(), membership.companyCurrency)} tint="#16a34a" />
+        <StatCard icon={CircleAlert} label="Outstanding" value={formatMoney(outstanding.toString(), membership.companyCurrency)} tint="#d97706" />
+      </div>
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3">
