@@ -558,6 +558,12 @@ model Product {
   barcode     String?
   name        String
   description String?
+  // Free-text, merchant-chosen ("Beverages", "Snacks", "Electronics") —
+  // same reasoning as unitLabel below: an informal-market merchant's
+  // categories don't fit a fixed enum. Purely a filtering/grouping aid in
+  // the UI (category chips on the products list); never affects stock or
+  // sale logic. Null = uncategorized, shown under "All" only.
+  category    String?
   // Free-text, merchant-chosen ("carton", "bag", "dozen", "mudu", "yard")
   // rather than a fixed enum — informal-market goods aren't sold in
   // generic "units," and forcing a fixed list would mean missing whatever

@@ -1,15 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { Field, Input, Textarea, Checkbox, FormError, Button } from "@/components/ui";
 
-type ProductFormState = { error: string };
+type ProductFormState = { error: string; success?: boolean };
 const initialState: ProductFormState = { error: "" };
 
 export function ProductForm({
   action,
   defaultValues,
   submitLabel,
+  categorySuggestions,
+  onSuccess,
 }: {
   action: (prev: ProductFormState, formData: FormData) => Promise<ProductFormState>;
   defaultValues?: {
@@ -17,6 +19,7 @@ export function ProductForm({
     barcode: string | null;
     name: string;
     description: string | null;
+    category: string | null;
     unitLabel: string;
     unitPrice: string;
     costPrice: string | null;
@@ -24,8 +27,16 @@ export function ProductForm({
     tracksBatches: boolean;
   };
   submitLabel: string;
+  /** Distinct categories already in use, offered as a datalist so entries stay consistent instead of drifting into near-duplicates. */
+  categorySuggestions?: string[];
+  onSuccess?: () => void;
 }) {
   const [state, formAction, isPending] = useActionState(action, initialState);
+
+  useEffect(() => {
+    if (state.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when the action reports a fresh success
+  }, [state.success]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -49,6 +60,17 @@ export function ProductForm({
 
       <Field label="Description">
         <Textarea name="description" defaultValue={defaultValues?.description ?? ""} rows={3} />
+      </Field>
+
+      <Field label="Category" optional hint="Groups this product under a chip on the products list — free text, e.g. Beverages, Snacks.">
+        <Input name="category" list="product-category-suggestions" defaultValue={defaultValues?.category ?? ""} />
+        {categorySuggestions && categorySuggestions.length > 0 && (
+          <datalist id="product-category-suggestions">
+            {categorySuggestions.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+        )}
       </Field>
 
       <Field label="Unit" optional hint="How you actually sell it — e.g. carton, bag, dozen, yard, mudu. Defaults to “unit”.">

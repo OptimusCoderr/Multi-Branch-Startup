@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
@@ -11,14 +10,14 @@ import { provisionStockForNewProduct } from "@/server/services/inventory-service
 import { generateProductSku } from "@/lib/sku";
 import { writeAuditLog } from "@/server/services/audit-service";
 
-type ActionResult = { error: string } | never;
+type ActionResult = { error: string; success?: boolean };
 
 async function requestMeta() {
   const h = await headers();
   return { ipAddress: h.get("x-forwarded-for"), userAgent: h.get("user-agent") };
 }
 
-export async function createProduct(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function createProduct(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.PRODUCTS_CREATE);
 
@@ -26,6 +25,7 @@ export async function createProduct(_prev: { error: string }, formData: FormData
     barcode: formData.get("barcode"),
     name: formData.get("name"),
     description: formData.get("description"),
+    category: formData.get("category"),
     unitLabel: formData.get("unitLabel"),
     unitPrice: formData.get("unitPrice"),
     costPrice: formData.get("costPrice"),
@@ -55,6 +55,7 @@ export async function createProduct(_prev: { error: string }, formData: FormData
         barcode: parsed.data.barcode ?? null,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
+        category: parsed.data.category ?? null,
         unitLabel: parsed.data.unitLabel ?? "unit",
         unitPrice: parsed.data.unitPrice,
         costPrice: parsed.data.costPrice ?? null,
@@ -78,12 +79,12 @@ export async function createProduct(_prev: { error: string }, formData: FormData
   });
 
   revalidatePath("/products");
-  redirect("/products");
+  return { error: "", success: true };
 }
 
 export async function updateProduct(
   productId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -93,6 +94,7 @@ export async function updateProduct(
     barcode: formData.get("barcode"),
     name: formData.get("name"),
     description: formData.get("description"),
+    category: formData.get("category"),
     unitLabel: formData.get("unitLabel"),
     unitPrice: formData.get("unitPrice"),
     costPrice: formData.get("costPrice"),
@@ -127,6 +129,7 @@ export async function updateProduct(
         barcode: parsed.data.barcode ?? null,
         name: parsed.data.name,
         description: parsed.data.description ?? null,
+        category: parsed.data.category ?? null,
         unitLabel: parsed.data.unitLabel ?? "unit",
         unitPrice: parsed.data.unitPrice,
         costPrice: parsed.data.costPrice ?? null,
@@ -148,7 +151,7 @@ export async function updateProduct(
   });
 
   revalidatePath("/products");
-  redirect("/products");
+  return { error: "", success: true };
 }
 
 export async function deactivateProduct(productId: string): Promise<void> {

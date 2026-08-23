@@ -1280,6 +1280,37 @@ console errors. Click "Backup" — confirm it triggers a file download named
 run (fresh Owner sign-up → dashboard → Reset Data modal open/type-gate/submit/result →
 Backup download) with zero console/page errors captured.
 
+### 34. ALLMAAJ-pattern UI redesign — Phase 3: Products (modal CRUD, category chips, assign-stock)
+
+Rebuilt `/products` around a stat-card row (Total/Active/Categories/Avg. price), a search +
+status-pill + category-chip filter bar, and a table/grid view toggle
+(`src/components/products/products-page-client.tsx`, client-side filtering over the
+already-fetched list — no new queries). "New product"/"Edit product" are now `Modal`
+instances of the existing `ProductForm`; `/products/new` and `/products/[id]` are removed.
+
+- **`Product.category`** (schema + migration `20260823223417_add_product_category`) — a new
+  optional free-text field, same "merchant-chosen, not a fixed enum" philosophy as
+  `unitLabel`, backing the category chips. A product without one shows under "All
+  categories" only. The product form offers a datalist of categories already in use so
+  entries stay consistent instead of drifting into near-duplicates.
+- **Modal-close-on-success pattern** — `createProduct`/`updateProduct` no longer call
+  `redirect("/products")` on success (that only worked when the form lived on its own route);
+  they now `revalidatePath` and return `{ error: "", success: true }`, and `ProductForm`
+  watches `state.success` to call an `onSuccess` callback that closes its modal. This is the
+  template later phases (Branches, Warehouses, Staff) reuse for their own modal CRUD.
+- **Assign Branch Stock** (`src/components/forms/assign-product-stock-form.tsx`) — an admin
+  quick-assign modal scoped to one product, reusing `adjustBranchStock` as-is (the same
+  direct "admin already has authority" escape hatch the `/stock` page's
+  `AdjustBranchStockForm` exposes) rather than a new backend path. `adjustBranchStock` now
+  also returns a `success` flag so this modal can close itself the same way.
+
+To verify: sign up as a new Owner (2FA bypassed for the test via a direct DB flag flip — not
+a UI path), go to `/products`, create two products in different categories, confirm the stat
+cards update, the category chips filter the list, the grid/table toggle both render the
+products, edit a product's price via the modal and confirm it lands, deactivate a product and
+confirm the badge flips, and open the "Assign stock" modal. Exercised end-to-end via a
+scripted Playwright run with zero console/page errors captured.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

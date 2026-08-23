@@ -16,7 +16,7 @@ import {
 } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
 
-type ActionResult = { error: string } | { error: "" };
+type ActionResult = { error: string; success?: boolean };
 
 /**
  * Manual correction to a warehouse's stock count — the on-ramp for initial
@@ -179,5 +179,6 @@ export async function adjustBranchStock(_prev: { error: string }, formData: Form
 
   revalidatePath("/stock");
   revalidatePath(`/branches/${branchId}`);
-  return { error: "" };
+  revalidatePath("/products");
+  return { error: "", success: true };
 }
