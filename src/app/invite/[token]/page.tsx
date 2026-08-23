@@ -4,6 +4,7 @@ import { hashInvitationToken } from "@/lib/auth/invitation-token";
 import { getSession, getCurrentMembership } from "@/lib/auth/session";
 import { InviteAuthForm } from "./invite-auth-form";
 import { AcceptInvitationButton } from "./accept-invitation-button";
+import { SignOutButton } from "@/components/layout/sign-out-button";
 
 export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -47,6 +48,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
           <InviteMessage
             title="Signed in as a different email"
             body={`This invitation was sent to ${invitation.email}, but you're signed in as ${session.user.email}. Sign out and try again.`}
+            showSignOut
           />
         )
       ) : (
@@ -56,11 +58,16 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   );
 }
 
-function InviteMessage({ title, body }: { title: string; body: string }) {
+function InviteMessage({ title, body, showSignOut }: { title: string; body: string; showSignOut?: boolean }) {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-3 px-4 text-center">
       <h1 className="text-xl font-semibold">{title}</h1>
       <p className="text-sm text-gray-500 dark:text-gray-400">{body}</p>
+      {showSignOut && (
+        <div className="flex justify-center">
+          <SignOutButton />
+        </div>
+      )}
     </main>
   );
 }

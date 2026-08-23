@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { requestToJoinCompany } from "@/server/actions/staff-signup";
 import { useAuthTheme } from "@/components/auth/auth-theme";
+import { SignOutAndRestartLink } from "@/components/auth/sign-out-and-restart-link";
 
 const initialState = { error: "" };
 
@@ -42,6 +43,8 @@ export function JoinCompanyStepForm({ email }: { email: string }) {
       >
         {isPending ? "Sending request…" : "Request to join"}
       </button>
+
+      <SignOutAndRestartLink />
     </form>
   );
 }

@@ -980,6 +980,39 @@ still what void + a fresh sale is for).
 5. Confirm a voided sale cannot be flagged, and a sale already carrying an open flag can't
    be flagged a second time — both are rejected with a clear error, not a silent no-op.
 
+### 29. Navigation: explicit escape hatches instead of back-button reliance
+
+Not a feature so much as an audit — every multi-step flow in the app needs an explicit
+in-page control to move on or bail out, not just the browser back button or (on mobile)
+the OS gesture/hardware back key. This found and fixed a few dead ends where a signed-in
+user had no way out except the browser's own back button, which in a couple of cases would
+have landed them somewhere broken anyway (see below).
+
+1. `/sign-up` as either an Owner or Staff: get to the final step (naming your company, or
+   entering a join code — the account itself is already created by this point). Confirm a
+   "Not you? Sign out and start over" link is present and actually works — it should sign
+   you out and land you back on the very first (role-choice) screen, not leave you looking
+   at the same form. (This step deliberately reloads the page rather than using client-side
+   routing — the whole wizard lives at one URL with the current step held in local state,
+   so a soft navigation back to a URL you're already on is a no-op and leaves the stale step
+   showing.)
+2. `/onboarding` (reached by signing in with no company yet) — same escape hatch, same
+   check.
+3. `/pending-approval` (after requesting to join a company by its code) — confirm a "Sign
+   out" button is present; previously this was a dead-end screen with literally no control
+   on it at all.
+4. Open an invite link (`/invite/[token]`) while signed in as a *different* email than the
+   one it was sent to. Confirm the "signed in as a different email" message — which already
+   told you to "sign out and try again" — now actually has a Sign out button next to it,
+   rather than instructing an action it gave you no way to perform.
+5. Mobile: this is largely already covered by Expo Router's default stack header, which
+   renders a persistent back arrow on every pushed/modal screen unless a screen explicitly
+   opts out (`headerShown: false` — used only at the root sign-in/two-factor/app switch,
+   never mid-flow). Spot-check `sales/new`, `sales/report`, and `customers/new` (all
+   `presentation: "modal"`) still show that header back control, and that the switch-user
+   PIN screen's inline "Cancel" button (for backing out of entering a PIN without leaving
+   the screen) still works.
+
 ## Mobile app
 
 ```bash
