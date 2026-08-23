@@ -40,6 +40,7 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   23. [End-of-day sales reports, approval, and cash reconciliation](#23-end-of-day-sales-reports-approval-and-cash-reconciliation)
   24. [Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN](#24-product-units-daily-summary-backup-trust-debtor-pay-links-reminder-credits-quick-switch-pin)
   25. [Staff self-signup by company code, and Owner approval](#25-staff-self-signup-by-company-code-and-owner-approval)
+  26. [Services in sales (non-stock-tracked products)](#26-services-in-sales-non-stock-tracked-products)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -804,6 +805,38 @@ works exactly as before and is unaffected.
    approving. Confirm the requester's account stays stuck on `/onboarding` (no pending
    request left to show `/pending-approval`, and no active membership) — they'd need a new
    invite or a fresh join request to get in.
+
+### 26. Services in sales (non-stock-tracked products)
+
+1. `/products/new` — note the new **Type** radio at the top of the form: **Goods
+   (stock-tracked)** (default) or **Service**. Selecting Service hides the Reorder point
+   field and the "Perishable / tracked by batch" checkbox — neither makes sense without
+   physical stock. Create one product of each type (e.g. a stocked "Bag of Rice" and a
+   "Installation Service").
+2. Confirm both products appear on `/products`, each tagged with a **Goods**/**Service**
+   badge in a new Type column, and both are included in the CSV export
+   (`/api/exports/products`) with the same Type column.
+3. Confirm the Service product does **not** appear on `/stock` — Goods appear as normal,
+   Service products carry no stock rows anywhere and are excluded entirely (not shown with
+   a zeroed/blank row).
+4. Confirm the Service product is also excluded from the product picker on
+   `/purchase-orders/new`, `/transfers/new`, and `/transfers/new-external` (all inherently
+   about physical goods) — the Goods product still appears normally in each. On mobile, the
+   Stock tab and stock-count screen (`/api/mobile/v1/stock`) likewise exclude it.
+5. On `/products/[id]` (edit), confirm Type is shown as a fixed label ("Goods" or
+   "Service"), not an editable control — it can't be changed after creation.
+6. `/sales/new` — confirm the Service product appears in the sale-form product picker
+   exactly like any Goods product (this is the one place it's expected to show up). Record
+   a sale with **both** a Goods line item (e.g. qty 2) and a Service line item (e.g. qty 1)
+   in the same sale. Confirm it saves successfully with both line items and the correct
+   total.
+7. Check `/stock` immediately after: the Goods product's quantity dropped by exactly the
+   quantity sold; the Service line item caused no stock movement anywhere (no
+   `StockMovement` row, no error) since it never had any to begin with.
+8. Void that sale. Confirm the Goods product's stock is restored to its pre-sale quantity,
+   and voiding doesn't error or attempt anything with the Service line item.
+9. Same flow on mobile — record a sale mixing a Goods and a Service product from
+   `/sales/new` (mobile); confirm it saves normally and stock behaves identically to web.
 
 ## Mobile app
 

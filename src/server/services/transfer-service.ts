@@ -65,12 +65,14 @@ export async function requestTransfer(
   // transfers list/detail pages via `include`, which (unlike a top-level
   // query) isn't re-scoped by the tenant-isolation extension.
   const [product, destinationBranch, sourceWarehouse, sourceBranch] = await Promise.all([
-    tx.product.findUnique({ where: { id: input.productId }, select: { id: true } }),
+    // SERVICE products carry no stock to transfer — treated the same as a
+    // nonexistent product below.
+    tx.product.findUnique({ where: { id: input.productId }, select: { id: true, productType: true } }),
     tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }),
     input.sourceWarehouseId ? tx.warehouse.findUnique({ where: { id: input.sourceWarehouseId }, select: { id: true } }) : null,
     input.sourceBranchId ? tx.branch.findUnique({ where: { id: input.sourceBranchId }, select: { id: true } }) : null,
   ]);
-  if (!product) throw new TransferStateError("Selected product not found.");
+  if (!product || product.productType === "SERVICE") throw new TransferStateError("Selected product not found.");
   if (!destinationBranch) throw new TransferStateError("Destination branch not found.");
   if (input.sourceWarehouseId && !sourceWarehouse) throw new TransferStateError("Source warehouse not found.");
   if (input.sourceBranchId && !sourceBranch) throw new TransferStateError("Source branch not found.");
@@ -387,11 +389,12 @@ export async function receiveExternalStock(
   } & ExternalDestination,
 ) {
   const [product, destinationBranch, destinationWarehouse] = await Promise.all([
-    tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true } }),
+    // SERVICE products carry no stock — a delivery of one is nonsensical.
+    tx.product.findUnique({ where: { id: input.productId }, select: { tracksBatches: true, productType: true } }),
     input.destinationBranchId ? tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }) : null,
     input.destinationWarehouseId ? tx.warehouse.findUnique({ where: { id: input.destinationWarehouseId }, select: { id: true } }) : null,
   ]);
-  if (!product) throw new TransferStateError("Selected product not found.");
+  if (!product || product.productType === "SERVICE") throw new TransferStateError("Selected product not found.");
   if (input.destinationBranchId && !destinationBranch) throw new TransferStateError("Destination branch not found.");
   if (input.destinationWarehouseId && !destinationWarehouse) throw new TransferStateError("Destination warehouse not found.");
   if (product.tracksBatches && !input.batch) {

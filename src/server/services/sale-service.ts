@@ -1,7 +1,7 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
-import { decrementBranchStock, incrementBranchStock, recordStockMovement } from "@/server/services/inventory-service";
+import { decrementBranchStock, incrementBranchStock, recordStockMovement, type ConsumedBatch } from "@/server/services/inventory-service";
 import { getCreditedTotal } from "@/server/services/credit-note-service";
 import { assertNoOpenReportBlockingSale } from "@/server/services/sales-report-service";
 
@@ -163,12 +163,20 @@ export async function createSale(
   });
 
   for (const li of lineItemsData) {
+    // SERVICE products (e.g. "installation", "consultation") have no
+    // physical stock — no WarehouseStock/BranchStock rows were ever
+    // provisioned for them, so skip every stock-related step entirely.
+    // Still a perfectly normal, fully-priced sale line item otherwise.
+    const isService = productById.get(li.productId)?.productType === "SERVICE";
+
     // Throws InsufficientStockError if the branch doesn't have enough —
     // the whole transaction (including the Sale row already created above)
     // rolls back, so a failed sale never partially commits. Runs before
     // the line item is created so the exact batch(es) consumed can be
     // recorded on it in one write — voidSale() reverses precisely this.
-    const consumedBatches = await decrementBranchStock(tx, li.productId, input.branchId, li.quantity);
+    const consumedBatches: ConsumedBatch[] = isService
+      ? []
+      : await decrementBranchStock(tx, li.productId, input.branchId, li.quantity);
 
     await tx.saleLineItem.create({
       data: {
@@ -182,17 +190,19 @@ export async function createSale(
       },
     });
 
-    await recordStockMovement(tx, {
-      companyId,
-      productId: li.productId,
-      locationType: "BRANCH",
-      branchId: input.branchId,
-      quantityDelta: -li.quantity,
-      reason: "SALE",
-      referenceType: "Sale",
-      referenceId: sale.id,
-      performedByMembershipId: membershipId,
-    });
+    if (!isService) {
+      await recordStockMovement(tx, {
+        companyId,
+        productId: li.productId,
+        locationType: "BRANCH",
+        branchId: input.branchId,
+        quantityDelta: -li.quantity,
+        reason: "SALE",
+        referenceType: "Sale",
+        referenceId: sale.id,
+        performedByMembershipId: membershipId,
+      });
+    }
   }
 
   return sale;
@@ -280,7 +290,17 @@ export async function voidSale(tx: ScopedTx, companyId: string, membershipId: st
     );
   }
 
+  const products = await tx.product.findMany({
+    where: { id: { in: [...new Set(sale.lineItems.map((li) => li.productId))] } },
+    select: { id: true, productType: true },
+  });
+  const productTypeById = new Map(products.map((p) => [p.id, p.productType]));
+
   for (const li of sale.lineItems) {
+    // SERVICE line items never touched stock when the sale was created —
+    // see createSale() — so there's nothing to reverse here either.
+    if (productTypeById.get(li.productId) === "SERVICE") continue;
+
     await incrementBranchStock(tx, li.productId, sale.branchId, li.quantity);
     await recordStockMovement(tx, {
       companyId,

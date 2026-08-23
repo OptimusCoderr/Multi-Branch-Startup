@@ -13,8 +13,10 @@ export default async function NewExternalDeliveryPage() {
 
   const db = getScopedPrisma(membership.companyId);
   const [products, warehouses, branches] = await Promise.all([
+    // An external delivery is physical stock arriving — SERVICE products
+    // never have any.
     db.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, productType: "GOODS" },
       orderBy: { name: "asc" },
       select: { id: true, name: true, sku: true, tracksBatches: true },
     }),

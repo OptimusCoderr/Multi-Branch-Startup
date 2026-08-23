@@ -31,6 +31,7 @@ export async function createProduct(_prev: { error: string }, formData: FormData
     costPrice: formData.get("costPrice"),
     reorderPoint: formData.get("reorderPoint"),
     tracksBatches: formData.get("tracksBatches"),
+    productType: formData.get("productType"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid product details." };
@@ -51,6 +52,8 @@ export async function createProduct(_prev: { error: string }, formData: FormData
     }
   }
 
+  const isService = parsed.data.productType === "SERVICE";
+
   await db.$transaction(async (tx) => {
     const product = await tx.product.create({
       data: {
@@ -63,11 +66,17 @@ export async function createProduct(_prev: { error: string }, formData: FormData
         unitPrice: parsed.data.unitPrice,
         costPrice: parsed.data.costPrice ?? null,
         reorderPoint: parsed.data.reorderPoint ?? null,
-        tracksBatches: parsed.data.tracksBatches,
+        // A service has no physical stock to track batches of.
+        tracksBatches: isService ? false : parsed.data.tracksBatches,
+        productType: parsed.data.productType,
       },
     });
 
-    await provisionStockForNewProduct(tx, membership.companyId, product.id);
+    // SERVICE products never get WarehouseStock/BranchStock rows — see
+    // Product.productType's schema comment.
+    if (!isService) {
+      await provisionStockForNewProduct(tx, membership.companyId, product.id);
+    }
 
     await writeAuditLog(tx, {
       companyId: membership.companyId,
@@ -103,6 +112,7 @@ export async function updateProduct(
     costPrice: formData.get("costPrice"),
     reorderPoint: formData.get("reorderPoint"),
     tracksBatches: formData.get("tracksBatches"),
+    productType: formData.get("productType"),
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid product details." };

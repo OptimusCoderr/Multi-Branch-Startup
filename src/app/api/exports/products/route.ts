@@ -24,6 +24,7 @@ export async function GET() {
         p.sku,
         p.barcode ?? "",
         p.name,
+        p.productType === "SERVICE" ? "Service" : "Goods",
         p.description ?? "",
         p.unitPrice.toFixed(2),
         p.costPrice?.toFixed(2) ?? "",
@@ -34,7 +35,7 @@ export async function GET() {
     });
 
     const csv = toCsv(
-      ["SKU", "Barcode", "Name", "Description", "Unit price", "Cost price", "Total stock on hand", "Stock value (at cost)", "Status"],
+      ["SKU", "Barcode", "Name", "Type", "Description", "Unit price", "Cost price", "Total stock on hand", "Stock value (at cost)", "Status"],
       rows,
     );
 

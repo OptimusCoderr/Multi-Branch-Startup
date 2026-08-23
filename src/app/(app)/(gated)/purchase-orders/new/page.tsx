@@ -15,7 +15,8 @@ export default async function NewPurchaseOrderPage() {
   const db = getScopedPrisma(membership.companyId);
   const [suppliers, products, warehouses, branches, company] = await Promise.all([
     db.supplier.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    db.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
+    // Purchase orders bring in physical stock — SERVICE products never have any.
+    db.product.findMany({ where: { isActive: true, productType: "GOODS" }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
     db.warehouse.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.branch.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.company.findUnique({ where: { id: membership.companyId }, select: { currency: true } }),
