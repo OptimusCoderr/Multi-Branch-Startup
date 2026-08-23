@@ -1036,9 +1036,11 @@ your machine's LAN IP (not `localhost`) if testing on a **physical** device, sin
 Sign in with an account from an already-onboarded company (mobile doesn't do company
 sign-up/onboarding — that's web-only). Walk through: dashboard, recording a sale (confirm
 the branch picker is skipped entirely for a single-branch company, shown for multiple),
-recording a payment, viewing/creating customers, issuing/voiding a credit note, and
-printing (needs the Development Build + a real Bluetooth thermal printer — see the caveat
-below).
+recording a payment (the mode picker includes **POS** alongside Cash/Card/Bank
+transfer/Mobile money/Other — mobile always records a sale unpaid and takes payment as a
+separate step, unlike web's payment-type buttons at sale creation; see §5 above), viewing/
+creating customers, issuing/voiding a credit note, and printing (needs the Development
+Build + a real Bluetooth thermal printer — see the caveat below).
 
 2FA enrollment/management is web-only (`/settings/security`), but signing in from mobile
 with an account that already has 2FA enabled (set it up on web first) should land on the
