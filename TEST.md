@@ -1245,6 +1245,41 @@ consumes these yet) — no visual or functional change should be visible. Later 
 add real usages (products/branches/warehouses modals, the Branch Stock page's delete/reject
 confirmations) that exercise `Modal`/`useConfirm()` directly.
 
+### 33. ALLMAAJ-pattern UI redesign — Phase 2: dashboard stat cards + Reset Data + Backup Download
+
+Rebuilt `src/app/(app)/dashboard/page.tsx` around a 5-card stat row (Today's sales, Cash
+sales, POS sales, Today's expenses, Net income), a two-column panel (7-day sales-report
+status breakdown, debtor overview), and Low stock alerts / Expiring soon cards — plus two
+new Owner-only admin tools:
+
+- **Reset Data** (`src/components/forms/reset-sales-day-form.tsx`, `src/server/actions/dashboard-admin.ts`,
+  `src/server/services/sale-reset-service.ts`) — a danger button opens a `Modal` with a date
+  picker (capped at today) and a "type RESET to confirm" text field; submit stays disabled
+  until the text matches exactly. The server action re-checks the Owner role and the date
+  server-side, then voids every non-voided sale for that business day inside one
+  transaction. Deliberately reuses `voidSale()`'s existing guard rather than bypassing it:
+  an already-paid sale is left untouched (counted as `skippedPaidCount`) instead of being
+  force-voided, so collected cash never silently vanishes from reports — correct those
+  individually via a credit note. Writes an audit-log row (`company.sales_reset`) and
+  notifies other Owner/Admin peers.
+- **Backup Download** (`src/server/services/backup-service.ts`,
+  `src/app/api/exports/backup/route.ts`) — an Owner-only `GET` route that streams a
+  company-scoped JSON export (products, branches, warehouses, stock, customers, sales with
+  line items/payments/credit notes, expenses) as a file download. Company-scoped rather than
+  a raw DB dump, since this is a multi-tenant schema. Writes an audit-log row
+  (`company.backup_downloaded`) and notifies other Owner/Admin peers via a new
+  `BACKUP_DOWNLOADED` notification type (`SALES_RESET` was added alongside it for the reset
+  tool above).
+
+To verify: sign up as a new Owner, land on `/dashboard` and confirm the 5 stat cards, the
+report-status/debtors panels, and (once Owner-only) the "Backup" link + "Reset data" button
+render. Click "Reset data" — confirm the submit button stays disabled until "RESET" is typed
+exactly, then submit and confirm a result summary appears (voided/skipped counts) with no
+console errors. Click "Backup" — confirm it triggers a file download named
+`backup-<company-slug>-<date>.json`. Both were exercised end-to-end via a scripted Playwright
+run (fresh Owner sign-up → dashboard → Reset Data modal open/type-gate/submit/result →
+Backup download) with zero console/page errors captured.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

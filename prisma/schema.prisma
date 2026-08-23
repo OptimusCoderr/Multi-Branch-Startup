@@ -1313,6 +1313,8 @@ enum NotificationType {
   TRANSFER_DISCREPANCY
   LOW_STOCK
   SALE_VOIDED
+  BACKUP_DOWNLOADED
+  SALES_RESET
 }
 
 // In-app notification delivery — no email/SMS/push, just a bell + list in
