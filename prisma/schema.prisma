@@ -46,6 +46,21 @@ model Company {
   creditNoteCounter Int           @default(0)
   poCounter         Int           @default(0)
 
+  // What kind of business this is, gathered at Owner sign-up (a curated
+  // list in the UI, but stored as free text so a custom "Other" entry
+  // doesn't need a schema change). Not required to be one of the UI's
+  // suggested options.
+  businessType String?
+
+  // The code a staff member types at self-service sign-up to request to
+  // join this company (see staff-signup-service.ts) — always present and
+  // globally unique, set once at company creation and never changed.
+  // Distinct from rcNumber below: this is normalized from rcNumber if one
+  // was given at sign-up, or app-generated otherwise, and it doesn't
+  // change even if the company later corrects/resubmits a different
+  // rcNumber for CAC verification.
+  companyCode String @unique
+
   // Off by default — sending automated messages to a company's customers
   // is a consent-adjacent action that shouldn't silently turn on for an
   // existing company just because this feature shipped.
@@ -277,6 +292,13 @@ model Verification {
 
 enum MembershipStatus {
   INVITED
+  // A staff member who self-signed-up with the company's join code (see
+  // staff-signup-service.ts) rather than being invited by an Owner —
+  // awaiting Owner approval and a role assignment before becoming ACTIVE.
+  // Distinct from INVITED (Owner-initiated, currently unused — see
+  // plan-limit-service.ts) since the direction of initiation matters for
+  // anyone reading a membership's history.
+  PENDING
   ACTIVE
   SUSPENDED
   REMOVED
@@ -509,6 +531,11 @@ model PlatformAuditLog {
 // Catalog & locations (Phase 1)
 // ---------------------------------------------------------------------------
 
+enum ProductType {
+  GOODS
+  SERVICE
+}
+
 model Product {
   id          String   @id @default(cuid())
   companyId   String
@@ -532,6 +559,15 @@ model Product {
   unitPrice   Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
+
+  // GOODS (the default, and everything created before this field existed)
+  // is stock-tracked exactly as before. SERVICE opts a product out of
+  // every stock-related behavior — no WarehouseStock/BranchStock rows are
+  // provisioned for it, sales never decrement/restore stock for it, and
+  // it's excluded from /stock, purchase orders, and transfers, which are
+  // all inherently about physical goods. Still fully sellable — it just
+  // shows up on the sale form and product list like any other product.
+  productType ProductType @default(GOODS)
 
   // Null = no low-stock alert configured for this product. Compared
   // against total stock across every location (warehouses + branches

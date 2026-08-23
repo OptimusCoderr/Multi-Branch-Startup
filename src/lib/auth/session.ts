@@ -96,7 +96,9 @@ export async function requireSession() {
  * their company has been suspended (see getCurrentMembership() above — it
  * returns null for both cases, so this re-checks specifically to give a
  * suspended user a real explanation instead of a confusing "create your
- * company" form), or to /onboarding if they truly haven't finished
+ * company" form), to /pending-approval if they self-signed-up with a
+ * company code and are still waiting on an Owner to review the request
+ * (see staff-signup.ts), or to /onboarding if they truly haven't started
  * creating/joining a company yet.
  */
 export async function requireMembership(): Promise<AuthenticatedMembership> {
@@ -110,6 +112,13 @@ export async function requireMembership(): Promise<AuthenticatedMembership> {
       select: { id: true },
     });
     if (suspendedMembership) redirect("/account-disabled");
+
+    const pendingMembership = await prisma.membership.findFirst({
+      where: { userId: session.user.id, status: "PENDING" },
+      select: { id: true },
+    });
+    if (pendingMembership) redirect("/pending-approval");
+
     redirect("/onboarding");
   }
   return membership;

@@ -20,6 +20,7 @@ const PROTECTED_PREFIXES = [
   "/settings",
   "/billing-required",
   "/account-disabled",
+  "/pending-approval",
   "/admin",
 ];
 export function proxy(request: NextRequest) {
@@ -58,6 +59,7 @@ export const config = {
     "/settings/:path*",
     "/billing-required",
     "/account-disabled",
+    "/pending-approval",
     "/admin/:path*",
   ],
 };

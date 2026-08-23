@@ -5,10 +5,60 @@ import Link from "next/link";
 import { authClient } from "@/lib/auth/auth-client";
 import { AuthThemeShell, useAuthTheme } from "@/components/auth/auth-theme";
 import { CompanyStepForm } from "./company-step-form";
+import { JoinCompanyStepForm } from "./join-company-step-form";
+
+type SignUpRole = "owner" | "staff";
+
+function RoleChoiceStep({ onChoose }: { onChoose: (role: SignUpRole) => void }) {
+  const { accent } = useAuthTheme();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="font-display text-2xl font-semibold">Create your account</h1>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          Are you setting up a new company, or joining one your employer already created?
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <button
+          type="button"
+          onClick={() => onChoose("owner")}
+          className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-3 text-left transition-shadow hover:ring-2"
+          style={{ "--tw-ring-color": accent } as React.CSSProperties}
+        >
+          <span className="block font-semibold">I&apos;m the business owner</span>
+          <span className="block text-sm text-gray-500 dark:text-gray-400">Start a 14-day trial and set up your company.</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onChoose("staff")}
+          className="rounded-lg border border-gray-300 dark:border-gray-700 px-4 py-3 text-left transition-shadow hover:ring-2"
+          style={{ "--tw-ring-color": accent } as React.CSSProperties}
+        >
+          <span className="block font-semibold">I&apos;m joining as staff</span>
+          <span className="block text-sm text-gray-500 dark:text-gray-400">Use your company&apos;s code to request access.</span>
+        </button>
+      </div>
+
+      <p className="text-center text-sm text-gray-500 dark:text-gray-400">
+        Already have an account?{" "}
+        <Link href="/sign-in" className="font-semibold underline" style={{ color: accent }}>
+          Sign in
+        </Link>
+      </p>
+    </div>
+  );
+}
 
 function SignUpFormStep({
+  role,
+  onBack,
   onSubmit,
 }: {
+  role: SignUpRole;
+  onBack: () => void;
   onSubmit: (input: { name: string; email: string; password: string }) => Promise<string | null>;
 }) {
   const { accent } = useAuthTheme();
@@ -30,8 +80,13 @@ function SignUpFormStep({
   return (
     <>
       <div>
+        <button type="button" onClick={onBack} className="mb-2 text-sm text-gray-500 dark:text-gray-400 underline">
+          ← Back
+        </button>
         <h1 className="font-display text-2xl font-semibold">Create your account</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Start a 14-day trial — no card required.</p>
+        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          {role === "owner" ? "Start a 14-day trial — no card required." : "Next, you'll enter your company's join code."}
+        </p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -95,8 +150,14 @@ function SignUpFormStep({
 }
 
 export default function SignUpPage() {
-  const [step, setStep] = useState<"account" | "company">("account");
+  const [step, setStep] = useState<"role" | "account" | "company" | "join">("role");
+  const [role, setRole] = useState<SignUpRole>("owner");
   const [email, setEmail] = useState("");
+
+  function handleRoleChoice(chosenRole: SignUpRole) {
+    setRole(chosenRole);
+    setStep("account");
+  }
 
   async function handleAccountSubmit(input: { name: string; email: string; password: string }): Promise<string | null> {
     const { error: signUpError } = await authClient.signUp.email(input);
@@ -105,18 +166,26 @@ export default function SignUpPage() {
     }
 
     setEmail(input.email);
-    // Move to the company-creation step. That form posts through a real
-    // <form action={...}> bound to the Server Action, which is the pattern
+    // Move to the company/join step. Those forms post through a real
+    // <form action={...}> bound to a Server Action, which is the pattern
     // Next.js's action runtime handles reliably when the action calls
     // redirect() — calling a redirecting Server Action as a bare function
     // from an event handler is not a supported pattern.
-    setStep("company");
+    setStep(role === "owner" ? "company" : "join");
     return null;
   }
 
   return (
     <AuthThemeShell>
-      {step === "company" ? (
+      {step === "role" && <RoleChoiceStep onChoose={handleRoleChoice} />}
+
+      {step === "account" && (
+        <div className="flex flex-col gap-6">
+          <SignUpFormStep role={role} onBack={() => setStep("role")} onSubmit={handleAccountSubmit} />
+        </div>
+      )}
+
+      {step === "company" && (
         <div className="flex flex-col gap-6">
           <div>
             <h1 className="font-display text-2xl font-semibold">Create your company</h1>
@@ -124,9 +193,15 @@ export default function SignUpPage() {
           </div>
           <CompanyStepForm email={email} />
         </div>
-      ) : (
+      )}
+
+      {step === "join" && (
         <div className="flex flex-col gap-6">
-          <SignUpFormStep onSubmit={handleAccountSubmit} />
+          <div>
+            <h1 className="font-display text-2xl font-semibold">Join your company</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Last step — enter the code your employer shared with you.</p>
+          </div>
+          <JoinCompanyStepForm email={email} />
         </div>
       )}
     </AuthThemeShell>

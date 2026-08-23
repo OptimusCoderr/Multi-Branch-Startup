@@ -37,6 +37,9 @@ own end-to-end tests, see [Writing your own smoke tests](#writing-your-own-smoke
   20. [Warehouse-level batch tracking](#20-warehouse-level-batch-tracking)
   21. [Purchase orders and suppliers](#21-purchase-orders-and-suppliers)
   22. [Dark mode](#22-dark-mode)
+  23. [End-of-day sales reports, approval, and cash reconciliation](#23-end-of-day-sales-reports-approval-and-cash-reconciliation)
+  24. [Product units, daily summary, backup trust, debtor pay-links, reminder credits, quick-switch PIN](#24-product-units-daily-summary-backup-trust-debtor-pay-links-reminder-credits-quick-switch-pin)
+  25. [Staff self-signup by company code, and Owner approval](#25-staff-self-signup-by-company-code-and-owner-approval)
 - [Mobile app](#mobile-app)
 - [Writing your own smoke tests](#writing-your-own-smoke-tests)
 - [Troubleshooting](#troubleshooting)
@@ -139,9 +142,10 @@ attribute is given, that's for anyone scripting these steps with Playwright — 
 
 ### 1. Sign-up, onboarding, and tenant isolation
 
-1. Go to `/sign-up`, create an account (name, email, password), then fill in a company
-   name on the onboarding screen that follows. You land on `/dashboard` as the company's
-   **Owner**.
+1. Go to `/sign-up`. First choose **I'm the business owner**, create an account (name,
+   email, password), then fill in a company name, a **business type** (pick from the list,
+   or choose "Other" and type a custom one), and optionally an RC number, on the company
+   step that follows. You land on `/dashboard` as the company's **Owner**.
 2. **Sign out and repeat with a second, unrelated email** to create a second company. This
    second company is your tenant-isolation control group for every section below — after
    creating any resource (a product, a sale, a customer...) as Company A, sign in as
@@ -770,6 +774,36 @@ acts as whoever you switched to (their name/permissions), and that a wrong PIN i
 **Remove** to drop a profile from the device; confirm it now requires a full sign-in again.
 Signing all the way out (not just switching) should clear every remembered profile from that
 device.
+
+### 25. Staff self-signup by company code, and Owner approval
+
+Web-only (mobile still shows "New companies and staff invitations are set up on the web app
+for now" and has no company-code entry point). This is a *second* way for someone to join a
+company, alongside the pre-existing email-invite flow (section 2) — the invite flow still
+works exactly as before and is unaffected.
+
+1. As an Owner, go to `/staff`. Confirm a **company code** card is now shown near the top
+   (e.g. `BIZ-XXXXXXXX` if you signed up with no RC number, or your normalized RC number if
+   you gave one) with a **Copy** button. This is the code you'd hand to a new hire.
+2. Sign out. Go to `/sign-up`, this time choosing **I'm joining as staff**. Create an
+   account (name/email/password), then on the next step enter the company code from step 1.
+   Confirm you land on `/pending-approval`, not the dashboard — the message explains an
+   Owner needs to approve the request and assign a role.
+3. While still signed in as that pending user, try navigating directly to `/dashboard` (or
+   any other gated page). Confirm you're bounced straight back to `/pending-approval` — a
+   company code alone must never grant real access, only a request.
+4. Confirm entering a made-up/garbled code on the join-company step shows a clear "No
+   company found with that code" error instead of crashing or silently succeeding.
+5. Sign back in as the Owner, go to `/staff`. Confirm a **Pending join requests** section
+   now lists the requester's name and email. Pick a role and click **Approve**.
+6. Confirm the request disappears from the pending list and the new staff member now
+   appears in the regular members table with the role you assigned. Sign in as that staff
+   member (or switch back to their already-open session) and confirm `/dashboard` is now
+   reachable with that role's permissions.
+7. Repeat steps 2–4 with a fresh account, but this time click **Reject** instead of
+   approving. Confirm the requester's account stays stuck on `/onboarding` (no pending
+   request left to show `/pending-approval`, and no active membership) — they'd need a new
+   invite or a fresh join request to get in.
 
 ## Mobile app
 

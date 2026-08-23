@@ -189,6 +189,41 @@ async function killSessionsForMembership(tx: ScopedTx, membershipId: string) {
   await prisma.session.deleteMany({ where: { userId: membership.userId } });
 }
 
+/**
+ * Approves a self-service join request (see staff-signup.ts): assigns the
+ * chosen role and flips the Membership from PENDING to ACTIVE. Gated on
+ * STAFF_INVITE, not STAFF_MANAGE_ROLES — approving a join request is the
+ * staff-initiated mirror of sending an invite (both are "let this person
+ * into the company"), not an ordinary role change on an existing member.
+ */
+export async function approvePendingStaff(tx: ScopedTx, membershipId: string, roleId: string) {
+  const membership = await tx.membership.findUnique({ where: { id: membershipId } });
+  if (!membership) throw new StaffActionError("Request not found.");
+  if (membership.status !== "PENDING") throw new StaffActionError("This request has already been resolved.");
+
+  const role = await tx.role.findUnique({ where: { id: roleId } });
+  if (!role) throw new StaffActionError("Role not found.");
+
+  return tx.membership.update({
+    where: { id: membershipId },
+    data: { roleId, status: "ACTIVE", joinedAt: new Date() },
+  });
+}
+
+/**
+ * Rejects a self-service join request. Kept as REMOVED rather than
+ * hard-deleted — same "never lose the trail" approach as every other
+ * status change in this file — so there's a record the request existed
+ * and was declined.
+ */
+export async function rejectPendingStaff(tx: ScopedTx, membershipId: string) {
+  const membership = await tx.membership.findUnique({ where: { id: membershipId } });
+  if (!membership) throw new StaffActionError("Request not found.");
+  if (membership.status !== "PENDING") throw new StaffActionError("This request has already been resolved.");
+
+  return tx.membership.update({ where: { id: membershipId }, data: { status: "REMOVED" } });
+}
+
 export async function setStaffStatus(
   tx: ScopedTx,
   actorMembershipId: string,

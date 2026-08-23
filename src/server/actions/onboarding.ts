@@ -7,6 +7,7 @@ import { getSession } from "@/lib/auth/session";
 import { createCompanySchema, slugify } from "@/lib/validation/onboarding.schema";
 import { DEFAULT_ROLE_PERMISSIONS, SYSTEM_ROLE_NAMES } from "@/lib/auth/permissions";
 import { DEFAULT_EXPENSE_CATEGORIES } from "@/lib/expenses/default-categories";
+import { resolveCompanyCode, CompanyCodeTakenError } from "@/lib/company-code";
 
 type ActionResult = { error: string } | never;
 
@@ -27,6 +28,7 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
 
   const parsed = createCompanySchema.safeParse({
     companyName: formData.get("companyName"),
+    businessType: formData.get("businessType"),
     rcNumber: formData.get("rcNumber"),
     incorporationDate: formData.get("incorporationDate"),
   });
@@ -34,8 +36,15 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
     return { error: parsed.error.issues[0]?.message ?? "Invalid company name." };
   }
 
+  let companyCode: string;
+  try {
+    companyCode = await resolveCompanyCode(parsed.data.rcNumber);
+  } catch (err) {
+    return { error: err instanceof CompanyCodeTakenError ? err.message : "Could not set up your company code. Please try again." };
+  }
+
   const existingMembership = await prisma.membership.findFirst({
-    where: { userId: session.user.id, status: { in: ["ACTIVE", "INVITED"] } },
+    where: { userId: session.user.id, status: { in: ["ACTIVE", "INVITED", "PENDING"] } },
   });
   if (existingMembership) {
     return { error: "This account is already linked to a company." };
@@ -70,6 +79,8 @@ export async function createCompanyForCurrentUser(formData: FormData): Promise<A
         name: parsed.data.companyName,
         slug,
         status: "TRIAL",
+        businessType: parsed.data.businessType,
+        companyCode,
         rcNumber: parsed.data.rcNumber ?? null,
         incorporationDate: parsed.data.incorporationDate ?? null,
         verificationDeadline,

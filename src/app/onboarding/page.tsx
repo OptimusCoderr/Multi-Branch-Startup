@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession, getCurrentMembership } from "@/lib/auth/session";
+import { prisma } from "@/lib/db/prisma";
 import { AuthThemeShell } from "@/components/auth/auth-theme";
 import { OnboardingForm } from "./onboarding-form";
 
@@ -9,6 +10,12 @@ export default async function OnboardingPage() {
 
   const membership = await getCurrentMembership();
   if (membership) redirect("/dashboard");
+
+  const pendingMembership = await prisma.membership.findFirst({
+    where: { userId: session.user.id, status: "PENDING" },
+    select: { id: true },
+  });
+  if (pendingMembership) redirect("/pending-approval");
 
   return (
     <AuthThemeShell>
