@@ -61,7 +61,7 @@ export async function adjustWarehouseStock(_prev: { error: string }, formData: F
       if (delta > 0) {
         await incrementWarehouseStock(tx, productId, warehouseId, delta);
       } else {
-        await decrementWarehouseStock(tx, productId, warehouseId, -delta);
+        await decrementWarehouseStock(tx, membership.companyId, productId, warehouseId, -delta);
       }
 
       await recordStockMovement(tx, {

@@ -16,6 +16,8 @@ type ScopedTx = Pick<
   | "warehouseStock"
   | "stockMovement"
   | "productBatch"
+  | "notification"
+  | "membership"
 >;
 
 export class PurchaseOrderNotFoundError extends Error {

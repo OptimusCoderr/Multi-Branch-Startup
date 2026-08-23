@@ -16,6 +16,8 @@ import {
 import * as transferService from "@/server/services/transfer-service";
 import { InsufficientStockError } from "@/server/services/inventory-service";
 import { writeAuditLog } from "@/server/services/audit-service";
+import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
+import { resolveMembershipNames } from "@/lib/auth/membership-names";
 
 type ActionResult = { error: string } | never;
 
@@ -299,6 +301,24 @@ export async function receiveTransfer(
           ipAddress,
           userAgent,
         });
+
+        // Push, not pull — a discrepancy used to only reach the passive
+        // audit log, so nobody was actually alerted unless they happened
+        // to go look. Owner + Admin get notified the moment it happens.
+        const [product, names, recipientIds] = await Promise.all([
+          tx.product.findUnique({ where: { id: transfer.productId }, select: { name: true } }),
+          resolveMembershipNames(tx, [membership.membershipId]),
+          getOwnerAndAdminMembershipIds(tx),
+        ]);
+        if (recipientIds.length > 0) {
+          await createNotifications(tx, membership.companyId, recipientIds, {
+            type: "TRANSFER_DISCREPANCY",
+            title: `Transfer discrepancy: ${product?.name ?? "a product"}`,
+            body: `${names.get(membership.membershipId) ?? "A staff member"} received ${parsed.data.receivedQuantity} unit(s) of ${product?.name ?? "this product"}, but ${transfer.quantity} were requested.`,
+            entityType: "StockTransfer",
+            entityId: transfer.id,
+          });
+        }
       }
     });
   } catch (err) {

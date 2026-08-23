@@ -1300,6 +1300,8 @@ enum NotificationType {
   SALE_FLAGGED
   SALE_FLAG_ESCALATED
   SALE_FLAG_RESOLVED
+  TRANSFER_DISCREPANCY
+  LOW_STOCK
 }
 
 // In-app notification delivery — no email/SMS/push, just a bell + list in

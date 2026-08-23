@@ -1,9 +1,18 @@
 import "server-only";
 import type { getScopedPrisma } from "@/lib/db/scoped-prisma";
+import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
 
 type ScopedTx = Pick<
   ReturnType<typeof getScopedPrisma>,
-  "warehouse" | "branch" | "product" | "warehouseStock" | "branchStock" | "stockMovement" | "productBatch"
+  | "warehouse"
+  | "branch"
+  | "product"
+  | "warehouseStock"
+  | "branchStock"
+  | "stockMovement"
+  | "productBatch"
+  | "notification"
+  | "membership"
 >;
 
 export class InsufficientStockError extends Error {
@@ -62,6 +71,64 @@ export async function provisionStockForNewBranch(tx: ScopedTx, companyId: string
 
 export type ConsumedBatch = { batchId: string; batchNumber: string; expiryDate: Date; quantity: number };
 
+export type LowStockProduct = { productId: string; name: string; sku: string; totalStock: number; reorderPoint: number };
+
+/**
+ * Total stock for one product across every warehouse and branch, against
+ * its configured reorder point — the single-product version of
+ * getLowStockProducts() below, used to check whether a decrement just
+ * pushed this specific product at-or-below its threshold. Returns null
+ * when the product has no reorderPoint configured (no alert wanted) or
+ * isn't currently at-or-below it.
+ */
+async function checkLowStock(tx: ScopedTx, productId: string): Promise<LowStockProduct | null> {
+  const product = await tx.product.findUnique({
+    where: { id: productId },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      reorderPoint: true,
+      warehouseStocks: { select: { quantity: true } },
+      branchStocks: { select: { quantity: true } },
+    },
+  });
+  if (!product || product.reorderPoint === null) return null;
+
+  const totalStock =
+    product.warehouseStocks.reduce((sum, w) => sum + w.quantity, 0) + product.branchStocks.reduce((sum, b) => sum + b.quantity, 0);
+  if (totalStock > product.reorderPoint) return null;
+
+  return { productId: product.id, name: product.name, sku: product.sku, totalStock, reorderPoint: product.reorderPoint };
+}
+
+/**
+ * Notifies Owner + Admin the moment a decrement pushes a product
+ * at-or-below its reorder point — but only on the crossing itself
+ * (preTotal was still above it), not on every subsequent sale while a
+ * product stays low, so this doesn't spam one notification per sale.
+ * quantityJustRemoved is what the caller just decremented, used to
+ * reconstruct the pre-decrement total without a second read.
+ */
+async function notifyIfLowStockCrossing(tx: ScopedTx, companyId: string, productId: string, quantityJustRemoved: number) {
+  const low = await checkLowStock(tx, productId);
+  if (!low) return;
+
+  const preTotal = low.totalStock + quantityJustRemoved;
+  if (preTotal <= low.reorderPoint) return; // was already low before this decrement — already notified
+
+  const recipientIds = await getOwnerAndAdminMembershipIds(tx);
+  if (recipientIds.length === 0) return;
+
+  await createNotifications(tx, companyId, recipientIds, {
+    type: "LOW_STOCK",
+    title: `${low.name} is running low`,
+    body: `${low.name} (${low.sku}) is down to ${low.totalStock} unit(s) across all locations — at or below its reorder point of ${low.reorderPoint}.`,
+    entityType: "Product",
+    entityId: low.productId,
+  });
+}
+
 /**
  * Decrements warehouse stock atomically: the WHERE clause (quantity >=
  * requested amount) and the decrement happen in a single Postgres UPDATE
@@ -79,6 +146,7 @@ export type ConsumedBatch = { batchId: string; batchNumber: string; expiryDate: 
  */
 export async function decrementWarehouseStock(
   tx: ScopedTx,
+  companyId: string,
   productId: string,
   warehouseId: string,
   quantity: number,
@@ -88,6 +156,7 @@ export async function decrementWarehouseStock(
     data: { quantity: { decrement: quantity } },
   });
   if (result.count === 0) throw new InsufficientStockError();
+  await notifyIfLowStockCrossing(tx, companyId, productId, quantity);
 
   const product = await tx.product.findUnique({ where: { id: productId }, select: { tracksBatches: true } });
   if (!product?.tracksBatches) return [];
@@ -149,6 +218,7 @@ export async function incrementWarehouseStock(
  */
 export async function decrementBranchStock(
   tx: ScopedTx,
+  companyId: string,
   productId: string,
   branchId: string,
   quantity: number,
@@ -158,6 +228,7 @@ export async function decrementBranchStock(
     data: { quantity: { decrement: quantity } },
   });
   if (result.count === 0) throw new InsufficientStockError();
+  await notifyIfLowStockCrossing(tx, companyId, productId, quantity);
 
   const product = await tx.product.findUnique({ where: { id: productId }, select: { tracksBatches: true } });
   if (!product?.tracksBatches) return [];
@@ -287,8 +358,6 @@ export async function recordStockMovement(tx: ScopedTx, input: RecordStockMoveme
     },
   });
 }
-
-export type LowStockProduct = { productId: string; name: string; sku: string; totalStock: number; reorderPoint: number };
 
 /**
  * Products at or below their configured reorder point, summed across

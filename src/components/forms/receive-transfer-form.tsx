@@ -9,19 +9,22 @@ const initialState: FormState = { error: "" };
 
 export function ReceiveTransferForm({
   transferId,
-  expectedQuantity,
   requiresManualBatch,
 }: {
   transferId: string;
-  expectedQuantity: number;
   requiresManualBatch?: boolean;
 }) {
   const [state, formAction, isPending] = useActionState(receiveTransfer.bind(null, transferId), initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-2">
-      <Field label="Quantity received">
-        <Input name="receivedQuantity" type="number" min="0" step="1" defaultValue={expectedQuantity} required />
+      {/* Deliberately blank, not pre-filled with what was requested — the
+          receiver counts the physical delivery and enters what they
+          actually found. Pre-filling this with the expected number would
+          make receiving a rubber stamp: a receiver could confirm without
+          ever counting anything. */}
+      <Field label="Quantity received" hint="Count what actually arrived — don't assume it matches what was requested">
+        <Input name="receivedQuantity" type="number" min="0" step="1" required autoFocus />
       </Field>
       <Field label="Notes" hint="Required if the amount doesn't match">
         <Input name="notes" />

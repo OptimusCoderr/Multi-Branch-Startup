@@ -1153,6 +1153,36 @@ SPP — iOS can't talk to that at all from a third-party app) and that
 `mobile/lib/bluetooth-printer.ts`'s "first writable characteristic" heuristic actually
 found the right one for your printer's chipset.
 
+### 30. Blind transfer receiving and push notifications (discrepancy + low stock)
+
+Web-only. Closes two "found it while reviewing a competitor codebase" gaps: receiving a
+stock transfer used to be a rubber stamp (the quantity field was pre-filled with what was
+requested, so a receiver could confirm without counting anything), and a discrepancy only
+ever reached the passive audit log — nobody was actually alerted. Also adds a push
+notification the moment a product's total stock (across every warehouse and branch) crosses
+its configured reorder point, instead of that only being a dashboard/`/stock` page you have
+to go check.
+
+1. As an Owner, set a low `reorderPoint` on a product (e.g. 5) and bring a warehouse's stock
+   of it up above that (e.g. 10).
+2. Request a transfer of some of it to a branch. As a *different* staff member with approval
+   rights (Branch Manager or Admin — approving your own request is still blocked), approve
+   it, resolving the source as that warehouse.
+3. Open the receive form. Confirm the "Quantity received" field is **empty**, not pre-filled
+   with the requested amount — you have to actually type what you counted.
+4. Enter a quantity different from what was requested (e.g. request 8, receive 5) and
+   confirm. As the Owner, check `/notifications` (or the bell) for a `TRANSFER_DISCREPANCY`
+   notification naming the product, the receiver, and both quantities.
+5. Back on `/stock`, adjust the same product's warehouse quantity down so total stock
+   crosses at-or-below its reorder point. Confirm a `LOW_STOCK` notification appears. Adjust
+   it down again (still low) — confirm a **second** low-stock notification does **not**
+   appear; it only fires on the crossing, not on every subsequent decrement.
+6. If a staff member holds `transfers.receive` but *not* `transfers.approve`/`transfers.dispatch`
+   (a custom per-staff permission grant, not any default role), confirm the requested
+   quantity is also hidden from the transfer detail page itself before they receive it — not
+   just the form. Anyone who also holds approve/dispatch rights (every default role that can
+   receive) still sees it, since they already know it from that other step.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

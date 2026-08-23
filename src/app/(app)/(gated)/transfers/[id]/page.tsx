@@ -65,6 +65,17 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
   const isSelfApproval = isRequester && transfer.status === "REQUESTED";
   const hasDiscrepancy = transfer.receivedQuantity !== null && transfer.receivedQuantity !== transfer.quantity;
 
+  // Blind receiving: someone who can ONLY receive transfers (not also
+  // approve or dispatch them) has no legitimate prior reason to know the
+  // requested quantity — showing it to them before they count would make
+  // receiving a rubber stamp. Anyone who also holds approve/dispatch
+  // rights already knows what was requested from doing that step, so
+  // hiding it from them would only break their own workflow for no
+  // benefit. Once the transfer is RECEIVED, the number is shown to
+  // everyone — blinding only matters before the count is submitted.
+  const isReceiveOnlyViewer = canReceive && !canApprove && !canDispatch;
+  const hideRequestedQuantity = isReceiveOnlyViewer && transfer.status !== "RECEIVED";
+
   const events: { label: string; detail: string }[] = [
     { label: "Requested", detail: `${nameOf(transfer.requestedByMembershipId)} · ${transfer.requestedAt.toLocaleString()}` },
   ];
@@ -100,7 +111,7 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
           </span>
         </div>
         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-          {transfer.quantity} units ·{" "}
+          {!hideRequestedQuantity && <>{transfer.quantity} units · </>}
           {transfer.sourceType === "EXTERNAL"
             ? `External: ${transfer.externalSourceName}`
             : transfer.sourceType === "BRANCH"
@@ -171,12 +182,9 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
               <div>
                 <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
                   Receiving now (without a separate dispatch step) will move the stock directly.
+                  {hideRequestedQuantity && " Count what physically arrived — the requested quantity isn't shown until after you submit your count."}
                 </p>
-                <ReceiveTransferForm
-                  transferId={transfer.id}
-                  expectedQuantity={transfer.quantity}
-                  requiresManualBatch={requiresManualBatch}
-                />
+                <ReceiveTransferForm transferId={transfer.id} requiresManualBatch={requiresManualBatch} />
               </div>
             )}
             {(isRequester || canApprove) && (
@@ -190,7 +198,14 @@ export default async function TransferDetailPage({ params }: { params: Promise<{
         )}
 
         {transfer.status === "IN_TRANSIT" && canReceive && (
-          <ReceiveTransferForm transferId={transfer.id} expectedQuantity={transfer.quantity} />
+          <div>
+            {hideRequestedQuantity && (
+              <p className="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                Count what physically arrived — the requested quantity isn&apos;t shown until after you submit your count.
+              </p>
+            )}
+            <ReceiveTransferForm transferId={transfer.id} />
+          </div>
         )}
       </div>
     </div>

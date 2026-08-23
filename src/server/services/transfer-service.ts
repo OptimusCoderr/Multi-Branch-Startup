@@ -21,6 +21,8 @@ type ScopedTx = Pick<
   | "warehouse"
   | "branch"
   | "productBatch"
+  | "notification"
+  | "membership"
 >;
 
 export class TransferNotFoundError extends Error {
@@ -243,7 +245,7 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
     // Captured here (not re-derived at receipt) for the same reason as the
     // branch case below — FEFO order can shift between dispatch and
     // receipt.
-    dispatchedBatches = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+    dispatchedBatches = await decrementWarehouseStock(tx, companyId, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -260,7 +262,7 @@ export async function dispatchTransfer(tx: ScopedTx, companyId: string, membersh
     // Captured here (not re-derived at receipt) because FEFO order can
     // shift between dispatch and receipt — a later delivery or another
     // sale could add/consume batches at this branch in the meantime.
-    dispatchedBatches = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+    dispatchedBatches = await decrementBranchStock(tx, companyId, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
     await recordStockMovement(tx, {
       companyId,
       productId: transfer.productId,
@@ -356,7 +358,7 @@ export async function receiveTransfer(
       throw new TransferStateError("This transfer has no source location to receive from.");
     }
     if (transfer.sourceWarehouseId) {
-      batchesToLand = await decrementWarehouseStock(tx, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
+      batchesToLand = await decrementWarehouseStock(tx, companyId, transfer.productId, transfer.sourceWarehouseId, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
@@ -370,7 +372,7 @@ export async function receiveTransfer(
         performedByMembershipId: membershipId,
       });
     } else {
-      batchesToLand = await decrementBranchStock(tx, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
+      batchesToLand = await decrementBranchStock(tx, companyId, transfer.productId, transfer.sourceBranchId!, transfer.quantity);
       await recordStockMovement(tx, {
         companyId,
         productId: transfer.productId,
