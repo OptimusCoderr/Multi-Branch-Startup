@@ -20,6 +20,7 @@ import { authClient } from "@/lib/auth/auth-client";
 export function SignOutAndRestartLink() {
   async function handleClick() {
     await authClient.signOut();
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- deliberate full reload, see comment above: router.push to the same route the page is already on is a same-route no-op.
     window.location.assign("/sign-up");
   }
 
