@@ -110,19 +110,22 @@ export async function getTopProductsByRevenue(db: ScopedClient, since: Date | nu
     where: { status: { not: "VOIDED" }, ...(since && { createdAt: { gte: since } }) },
     select: { lineItems: { select: { quantity: true, lineTotal: true, product: { select: { id: true, name: true, sku: true } } } } },
   });
-  const lineItems = sales.flatMap((s) => s.lineItems);
+  // Ad-hoc service line items have no Product to attribute revenue to —
+  // this report is specifically about catalog products, so they're excluded.
+  const lineItems = sales.flatMap((s) => s.lineItems).filter((li) => li.product);
 
   const byProduct = new Map<string, TopProduct>();
   for (const li of lineItems) {
-    const existing = byProduct.get(li.product.id);
+    const product = li.product!;
+    const existing = byProduct.get(product.id);
     if (existing) {
       existing.quantitySold += li.quantity;
       existing.revenue = existing.revenue.add(li.lineTotal);
     } else {
-      byProduct.set(li.product.id, {
-        productId: li.product.id,
-        name: li.product.name,
-        sku: li.product.sku,
+      byProduct.set(product.id, {
+        productId: product.id,
+        name: product.name,
+        sku: product.sku,
         quantitySold: li.quantity,
         revenue: li.lineTotal,
       });

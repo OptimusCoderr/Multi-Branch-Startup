@@ -1,10 +1,21 @@
 import { z } from "zod";
 import { emptyToUndefined } from "./shared";
 
-export const saleLineItemSchema = z.object({
-  productId: z.string().min(1),
-  quantity: z.coerce.number().int().positive("Quantity must be greater than 0"),
-});
+// A line item is either a catalog product (productId set) or an ad-hoc
+// service — a free-text description + a manually typed price, no catalog
+// record required (see SaleLineItem.isService/adHocDescription's schema
+// comment). Exactly one of the two shapes must be satisfied.
+export const saleLineItemSchema = z
+  .object({
+    productId: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    quantity: z.coerce.number().int().positive("Quantity must be greater than 0"),
+    description: z.preprocess(emptyToUndefined, z.string().trim().max(500).optional()),
+    unitPrice: z.preprocess(emptyToUndefined, z.coerce.number().positive().optional()),
+  })
+  .refine((data) => Boolean(data.productId) || (Boolean(data.description) && data.unitPrice !== undefined), {
+    message: "A service line item needs both a description and a price.",
+    path: ["description"],
+  });
 
 export const createSaleSchema = z.object({
   branchId: z.string().min(1, "Select a branch"),

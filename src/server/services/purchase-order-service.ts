@@ -64,10 +64,7 @@ export async function createPurchaseOrder(
     tx.supplier.findUnique({ where: { id: input.supplierId }, select: { id: true, isActive: true } }),
     input.destinationBranchId ? tx.branch.findUnique({ where: { id: input.destinationBranchId }, select: { id: true } }) : null,
     input.destinationWarehouseId ? tx.warehouse.findUnique({ where: { id: input.destinationWarehouseId }, select: { id: true } }) : null,
-    // Purchase orders bring in physical stock — SERVICE products never have
-    // any, so one slipping through here is treated the same as a
-    // nonexistent product (below).
-    tx.product.findMany({ where: { id: { in: input.lineItems.map((li) => li.productId) }, productType: "GOODS" }, select: { id: true } }),
+    tx.product.findMany({ where: { id: { in: input.lineItems.map((li) => li.productId) } }, select: { id: true } }),
   ]);
   if (!supplier) throw new PurchaseOrderStateError("Selected supplier not found.");
   if (!supplier.isActive) throw new PurchaseOrderStateError("This supplier is archived and cannot receive new orders.");

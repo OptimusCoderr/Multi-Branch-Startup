@@ -63,7 +63,12 @@ export async function createSale(
     customerPhone?: string;
     customerEmail?: string;
     dueDate?: Date;
-    lineItems: { productId: string; quantity: number }[];
+    // A line item is either a catalog product (productId + quantity) or an
+    // ad-hoc service (no productId — a free-text description + a manually
+    // typed price instead, no catalog record required). Which one it is is
+    // determined purely by whether productId is present; a client can't
+    // send a mismatched combination.
+    lineItems: { productId?: string; quantity: number; description?: string; unitPrice?: number }[];
     /** True for Owner/Admin recorders — they're exempt from the end-of-day report lock. See sales-report-service.ts. */
     isReportExempt?: boolean;
     /** Set only by the mobile app's offline sync queue, for idempotent retries — see Sale.clientRequestId's schema comment. */
@@ -113,21 +118,58 @@ export async function createSale(
     customerName = recorder?.displayName ?? recorder?.user.name ?? undefined;
   }
 
-  const productIds = [...new Set(input.lineItems.map((li) => li.productId))];
+  const productIds = [...new Set(input.lineItems.filter((li) => li.productId).map((li) => li.productId as string))];
   const products = await tx.product.findMany({ where: { id: { in: productIds }, isActive: true } });
   const productById = new Map(products.map((p) => [p.id, p]));
 
   let subtotal = new Prisma.Decimal(0);
-  const lineItemsData: { productId: string; quantity: number; unitPriceAtSale: Prisma.Decimal; lineTotal: Prisma.Decimal }[] = [];
+  const lineItemsData: {
+    productId: string | null;
+    isService: boolean;
+    description: string | null;
+    quantity: number;
+    unitPriceAtSale: Prisma.Decimal;
+    lineTotal: Prisma.Decimal;
+  }[] = [];
 
   for (const li of input.lineItems) {
-    const product = productById.get(li.productId);
-    if (!product) {
-      throw new SaleValidationError("One of the selected products is unavailable.");
+    if (li.productId) {
+      const product = productById.get(li.productId);
+      if (!product) {
+        throw new SaleValidationError("One of the selected products is unavailable.");
+      }
+      const lineTotal = product.unitPrice.mul(li.quantity);
+      subtotal = subtotal.add(lineTotal);
+      lineItemsData.push({
+        productId: li.productId,
+        isService: false,
+        description: null,
+        quantity: li.quantity,
+        unitPriceAtSale: product.unitPrice,
+        lineTotal,
+      });
+    } else {
+      // Ad-hoc service — no catalog record, so nothing to validate against
+      // except that the staff actually typed a description and a price.
+      if (!li.description?.trim()) {
+        throw new SaleValidationError("Every service line item needs a description.");
+      }
+      if (li.unitPrice === undefined || li.unitPrice <= 0) {
+        throw new SaleValidationError("Every service line item needs a price greater than 0.");
+      }
+      const quantity = li.quantity > 0 ? li.quantity : 1;
+      const unitPriceAtSale = new Prisma.Decimal(li.unitPrice);
+      const lineTotal = unitPriceAtSale.mul(quantity);
+      subtotal = subtotal.add(lineTotal);
+      lineItemsData.push({
+        productId: null,
+        isService: true,
+        description: li.description.trim(),
+        quantity,
+        unitPriceAtSale,
+        lineTotal,
+      });
     }
-    const lineTotal = product.unitPrice.mul(li.quantity);
-    subtotal = subtotal.add(lineTotal);
-    lineItemsData.push({ productId: li.productId, quantity: li.quantity, unitPriceAtSale: product.unitPrice, lineTotal });
   }
 
   const grandTotal = subtotal;
@@ -163,25 +205,25 @@ export async function createSale(
   });
 
   for (const li of lineItemsData) {
-    // SERVICE products (e.g. "installation", "consultation") have no
-    // physical stock — no WarehouseStock/BranchStock rows were ever
-    // provisioned for them, so skip every stock-related step entirely.
+    // An ad-hoc service line has no catalog record and never had any
+    // stock provisioned for it — skip every stock-related step entirely.
     // Still a perfectly normal, fully-priced sale line item otherwise.
-    const isService = productById.get(li.productId)?.productType === "SERVICE";
 
     // Throws InsufficientStockError if the branch doesn't have enough —
     // the whole transaction (including the Sale row already created above)
     // rolls back, so a failed sale never partially commits. Runs before
     // the line item is created so the exact batch(es) consumed can be
     // recorded on it in one write — voidSale() reverses precisely this.
-    const consumedBatches: ConsumedBatch[] = isService
+    const consumedBatches: ConsumedBatch[] = li.isService
       ? []
-      : await decrementBranchStock(tx, li.productId, input.branchId, li.quantity);
+      : await decrementBranchStock(tx, li.productId as string, input.branchId, li.quantity);
 
     await tx.saleLineItem.create({
       data: {
         saleId: sale.id,
         productId: li.productId,
+        isService: li.isService,
+        adHocDescription: li.description,
         quantity: li.quantity,
         unitPriceAtSale: li.unitPriceAtSale,
         discountAmount: 0,
@@ -190,10 +232,10 @@ export async function createSale(
       },
     });
 
-    if (!isService) {
+    if (!li.isService) {
       await recordStockMovement(tx, {
         companyId,
-        productId: li.productId,
+        productId: li.productId as string,
         locationType: "BRANCH",
         branchId: input.branchId,
         quantityDelta: -li.quantity,
@@ -290,16 +332,10 @@ export async function voidSale(tx: ScopedTx, companyId: string, membershipId: st
     );
   }
 
-  const products = await tx.product.findMany({
-    where: { id: { in: [...new Set(sale.lineItems.map((li) => li.productId))] } },
-    select: { id: true, productType: true },
-  });
-  const productTypeById = new Map(products.map((p) => [p.id, p.productType]));
-
   for (const li of sale.lineItems) {
-    // SERVICE line items never touched stock when the sale was created —
-    // see createSale() — so there's nothing to reverse here either.
-    if (productTypeById.get(li.productId) === "SERVICE") continue;
+    // An ad-hoc service line item never touched stock when the sale was
+    // created — see createSale() — so there's nothing to reverse here.
+    if (li.isService || !li.productId) continue;
 
     await incrementBranchStock(tx, li.productId, sale.branchId, li.quantity);
     await recordStockMovement(tx, {

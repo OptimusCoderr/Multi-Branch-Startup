@@ -77,7 +77,10 @@ export default async function SaleInvoicePrintPage({ params }: { params: Promise
           <tbody>
             {sale.lineItems.map((li) => (
               <tr key={li.id} className="border-b border-gray-100 dark:border-gray-800">
-                <td className="py-2">{li.product.name}</td>
+                <td className="py-2">
+                  {li.isService ? li.adHocDescription : li.product?.name}
+                  {li.isService && <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">(Service)</span>}
+                </td>
                 <td className="py-2">{li.quantity}</td>
                 <td className="py-2">{formatMoney(li.unitPriceAtSale.toString(), currency)}</td>
                 <td className="py-2 text-right">{formatMoney(li.lineTotal.toString(), currency)}</td>

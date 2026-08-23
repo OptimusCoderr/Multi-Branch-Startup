@@ -56,7 +56,6 @@ export default async function ProductsPage() {
           <TableHeader>
             <TableHeaderCell>SKU</TableHeaderCell>
             <TableHeaderCell>Name</TableHeaderCell>
-            <TableHeaderCell>Type</TableHeaderCell>
             <TableHeaderCell>Price</TableHeaderCell>
             <TableHeaderCell>Status</TableHeaderCell>
             <TableHeaderCell />
@@ -66,9 +65,6 @@ export default async function ProductsPage() {
               <TableRow key={p.id}>
                 <TableCell mono>{p.sku}</TableCell>
                 <TableCell>{p.name}</TableCell>
-                <TableCell>
-                  <Badge variant="neutral">{p.productType === "SERVICE" ? "Service" : "Goods"}</Badge>
-                </TableCell>
                 <TableCell>{formatMoney(p.unitPrice.toString(), membership.companyCurrency)}</TableCell>
                 <TableCell>
                   <Badge variant={p.isActive ? "success" : "neutral"}>{p.isActive ? "Active" : "Inactive"}</Badge>

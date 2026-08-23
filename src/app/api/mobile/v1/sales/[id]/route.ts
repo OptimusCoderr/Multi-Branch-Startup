@@ -42,7 +42,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       dueDate: sale.dueDate?.toISOString() ?? null,
       createdAt: sale.createdAt.toISOString(),
       lineItems: sale.lineItems.map((li) => ({
-        productName: li.product.name,
+        productName: li.isService ? li.adHocDescription : li.product?.name,
+        isService: li.isService,
         quantity: li.quantity,
         unitPriceAtSale: li.unitPriceAtSale.toString(),
         lineTotal: li.lineTotal.toString(),

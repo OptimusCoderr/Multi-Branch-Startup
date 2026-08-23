@@ -532,11 +532,6 @@ model PlatformAuditLog {
 // Catalog & locations (Phase 1)
 // ---------------------------------------------------------------------------
 
-enum ProductType {
-  GOODS
-  SERVICE
-}
-
 model Product {
   id          String   @id @default(cuid())
   companyId   String
@@ -560,15 +555,6 @@ model Product {
   unitPrice   Decimal  @db.Decimal(12, 2)
   costPrice   Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
-
-  // GOODS (the default, and everything created before this field existed)
-  // is stock-tracked exactly as before. SERVICE opts a product out of
-  // every stock-related behavior — no WarehouseStock/BranchStock rows are
-  // provisioned for it, sales never decrement/restore stock for it, and
-  // it's excluded from /stock, purchase orders, and transfers, which are
-  // all inherently about physical goods. Still fully sellable — it just
-  // shows up on the sale form and product list like any other product.
-  productType ProductType @default(GOODS)
 
   // Null = no low-stock alert configured for this product. Compared
   // against total stock across every location (warehouses + branches
@@ -1252,11 +1238,23 @@ model Sale {
 // unitPriceAtSale is a snapshot so a later change to Product.unitPrice can
 // never rewrite a historical invoice's total.
 model SaleLineItem {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   saleId    String
-  sale      Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
+  sale      Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  // Null for an ad-hoc service line (see isService/adHocDescription below)
+  // — there's no catalog record for it, so nothing to point at.
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  // An ad-hoc service entry: staff type a free-text description + price
+  // directly on the sale, with no Product record at all (unlike a normal
+  // catalog item). isService is what the UI actually keys off of to show
+  // the "Service" tag — it's independent of productId being null so a
+  // catalog product could theoretically be tagged too, though today only
+  // ad-hoc entries ever set it. adHocDescription holds the free-text
+  // staff typed; unused (null) for a normal product line item.
+  isService        Boolean @default(false)
+  adHocDescription String?
 
   quantity        Int
   unitPriceAtSale Decimal @db.Decimal(12, 2)

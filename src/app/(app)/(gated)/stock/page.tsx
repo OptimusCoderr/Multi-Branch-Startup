@@ -18,11 +18,8 @@ export default async function StockPage() {
   const canAdjust = permissions.has(PERMISSIONS.WAREHOUSES_MANAGE);
 
   const [products, warehouses, warehouseCount] = await Promise.all([
-    // SERVICE products carry no stock rows at all — see
-    // Product.productType's schema comment — so they're excluded here
-    // entirely rather than showing an always-empty stock breakdown.
     db.product.findMany({
-      where: { isActive: true, productType: "GOODS" },
+      where: { isActive: true },
       orderBy: { name: "asc" },
       include: {
         warehouseStocks: { include: { warehouse: true } },

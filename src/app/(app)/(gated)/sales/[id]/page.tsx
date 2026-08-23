@@ -95,7 +95,12 @@ export default async function SaleDetailPage({ params }: { params: Promise<{ id:
           <TableBody>
             {sale.lineItems.map((li) => (
               <TableRow key={li.id}>
-                <TableCell>{li.product.name}</TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-2">
+                    {li.isService ? li.adHocDescription : li.product?.name}
+                    {li.isService && <Badge variant="brand">Service</Badge>}
+                  </span>
+                </TableCell>
                 <TableCell>{li.quantity}</TableCell>
                 <TableCell>{formatMoney(li.unitPriceAtSale.toString(), currency)}</TableCell>
                 <TableCell align="right">{formatMoney(li.lineTotal.toString(), currency)}</TableCell>

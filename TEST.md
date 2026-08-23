@@ -181,9 +181,13 @@ attribute is given, that's for anyone scripting these steps with Playwright — 
 ### 3. Products, warehouses, branches
 
 1. `/branches/new` — create a branch (`input[name="name"]`).
-2. `/products/new` — create a product (`input[name="sku"]`, `input[name="name"]`,
-   `input[name="unitPrice"]`). Confirm it now shows a zeroed stock row for the branch you
-   just made (visible on `/stock`).
+2. `/products/new` — create a product (`input[name="name"]`, `input[name="unitPrice"]`).
+   There's no SKU field to fill in — it's generated automatically from the first 3 letters
+   of the name (e.g. "Millet" → `MIL`), shown on the confirmation/edit page as read-only.
+   Create a second product with a name that also starts with the same 3 letters (e.g.
+   "Milk") and confirm its SKU comes back as the base code plus a random 3-character suffix
+   (e.g. `MIL-4X7`) instead of colliding. Confirm it now shows a zeroed stock row for the
+   branch you just made (visible on `/stock`).
 3. `/warehouses/new` — create a warehouse. Confirm the *existing* product now also shows a
    zeroed row there — stock provisioning runs symmetrically in both directions (new
    product → all existing locations; new location → all existing products).
@@ -807,37 +811,37 @@ works exactly as before and is unaffected.
    request left to show `/pending-approval`, and no active membership) — they'd need a new
    invite or a fresh join request to get in.
 
-### 26. Services in sales (non-stock-tracked products)
+### 26. Ad-hoc service line items in sales
 
-1. `/products/new` — note the new **Type** radio at the top of the form: **Goods
-   (stock-tracked)** (default) or **Service**. Selecting Service hides the Reorder point
-   field and the "Perishable / tracked by batch" checkbox — neither makes sense without
-   physical stock. Create one product of each type (e.g. a stocked "Bag of Rice" and a
-   "Installation Service").
-2. Confirm both products appear on `/products`, each tagged with a **Goods**/**Service**
-   badge in a new Type column, and both are included in the CSV export
-   (`/api/exports/products`) with the same Type column.
-3. Confirm the Service product does **not** appear on `/stock` — Goods appear as normal,
-   Service products carry no stock rows anywhere and are excluded entirely (not shown with
-   a zeroed/blank row).
-4. Confirm the Service product is also excluded from the product picker on
-   `/purchase-orders/new`, `/transfers/new`, and `/transfers/new-external` (all inherently
-   about physical goods) — the Goods product still appears normally in each. On mobile, the
-   Stock tab and stock-count screen (`/api/mobile/v1/stock`) likewise exclude it.
-5. On `/products/[id]` (edit), confirm Type is shown as a fixed label ("Goods" or
-   "Service"), not an editable control — it can't be changed after creation.
-6. `/sales/new` — confirm the Service product appears in the sale-form product picker
-   exactly like any Goods product (this is the one place it's expected to show up). Record
-   a sale with **both** a Goods line item (e.g. qty 2) and a Service line item (e.g. qty 1)
-   in the same sale. Confirm it saves successfully with both line items and the correct
-   total.
-7. Check `/stock` immediately after: the Goods product's quantity dropped by exactly the
-   quantity sold; the Service line item caused no stock movement anywhere (no
-   `StockMovement` row, no error) since it never had any to begin with.
-8. Void that sale. Confirm the Goods product's stock is restored to its pre-sale quantity,
-   and voiding doesn't error or attempt anything with the Service line item.
-9. Same flow on mobile — record a sale mixing a Goods and a Service product from
-   `/sales/new` (mobile); confirm it saves normally and stock behaves identically to web.
+Services are entered directly on a sale — free-text description + a manually typed price —
+with no catalog `Product` record at all, since service pricing tends to be one-off and
+variable. (An earlier iteration of this required registering a Service-type product first;
+that's gone — a service is now always ad-hoc.)
+
+1. `/products/new` — confirm the form is back to plain Goods only: no Type selector, SKU is
+   auto-generated (see section on SKU auto-generation), Reorder point and batch-tracking are
+   always available. Create one stocked product (e.g. "Bag of Rice").
+2. `/sales/new` — next to **+ Add product** there's a **+ Add service** button. Click it:
+   confirm it adds a distinctly-styled row (amber background, a **Service** badge) with a
+   free-text description field and a manually typed price field — no product picker.
+3. Try submitting a service row with a blank description, or a price of 0 — confirm it's
+   excluded from the submittable total/line-item count until both are filled in properly.
+4. Record a sale with **both** a product line item (e.g. qty 2 of "Bag of Rice") and a
+   service line item (e.g. "Installation", ₦5,000) in the same sale. Confirm it saves with
+   the correct combined total.
+5. On the sale's detail page (`/sales/[id]`) and the print view (`/sales/[id]/print`),
+   confirm the service line item shows its typed description with a visible **Service** tag
+   (badge on the detail page, "(Service)" suffix on print) — visually distinct from the
+   product line item, which shows the normal product name.
+6. Check `/stock` immediately after: the product's quantity dropped by exactly the quantity
+   sold; the service line item caused no stock movement anywhere (no `StockMovement` row, no
+   error) since there was never a product record to have stock in the first place.
+7. Void that sale. Confirm the product's stock is restored to its pre-sale quantity, and
+   voiding doesn't error or attempt anything with the service line item.
+8. Same flow on mobile (`/sales/new`) — a **+ Add** button next to "Add a service" opens an
+   inline description + price form. Record a sale mixing a product and a service; confirm it
+   saves normally, the sale detail screen shows "(Service)" next to the service line, and a
+   printed receipt (if you have a Bluetooth printer paired) shows the same.
 
 ### 27. Debt-reminder message templates, per-customer targeting, and company name edit
 

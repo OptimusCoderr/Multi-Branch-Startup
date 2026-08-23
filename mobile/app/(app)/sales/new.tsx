@@ -11,7 +11,13 @@ import { Button, Field, Input, ListItem } from "@/components/ui";
 import { enqueueSale, generateClientRequestId } from "@/lib/offline-queue";
 import { isOnline } from "@/lib/network-status";
 
-type LineItem = { productId: string; name: string; unitPrice: number; unitLabel: string; quantity: number };
+type LineItem =
+  | { kind: "product"; productId: string; name: string; unitPrice: number; unitLabel: string; quantity: number }
+  | { kind: "service"; key: string; description: string; unitPrice: number; quantity: number };
+
+function lineItemKey(li: LineItem): string {
+  return li.kind === "product" ? li.productId : li.key;
+}
 
 export default function NewSaleScreen() {
   const router = useRouter();
@@ -28,6 +34,9 @@ export default function NewSaleScreen() {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [addingService, setAddingService] = useState(false);
+  const [serviceDescription, setServiceDescription] = useState("");
+  const [servicePrice, setServicePrice] = useState("");
 
   // A single-shop owner has exactly one branch and shouldn't have to tap a
   // picker with one option in it every time they record a sale.
@@ -42,7 +51,11 @@ export default function NewSaleScreen() {
       const input = {
         branchId: branchId!,
         customerName: customerName || undefined,
-        lineItems: lineItems.map((li) => ({ productId: li.productId, quantity: li.quantity })),
+        lineItems: lineItems.map((li) =>
+          li.kind === "product"
+            ? { productId: li.productId, quantity: li.quantity }
+            : { description: li.description, unitPrice: li.unitPrice, quantity: li.quantity },
+        ),
       };
       const clientRequestId = generateClientRequestId();
 
@@ -85,12 +98,28 @@ export default function NewSaleScreen() {
 
   function addProduct(productId: string, name: string, unitPrice: number, unitLabel: string) {
     setLineItems((prev) => {
-      const existing = prev.find((li) => li.productId === productId);
+      const existing = prev.find((li) => li.kind === "product" && li.productId === productId);
       if (existing) {
-        return prev.map((li) => (li.productId === productId ? { ...li, quantity: li.quantity + 1 } : li));
+        return prev.map((li) => (li.kind === "product" && li.productId === productId ? { ...li, quantity: li.quantity + 1 } : li));
       }
-      return [...prev, { productId, name, unitPrice, unitLabel, quantity: 1 }];
+      return [...prev, { kind: "product", productId, name, unitPrice, unitLabel, quantity: 1 }];
     });
+  }
+
+  function addService() {
+    const price = Number(servicePrice);
+    if (!serviceDescription.trim() || !price || price <= 0) {
+      setError("A service needs a description and a price greater than 0.");
+      return;
+    }
+    setError(null);
+    setLineItems((prev) => [
+      ...prev,
+      { kind: "service", key: `service-${Date.now()}`, description: serviceDescription.trim(), unitPrice: price, quantity: 1 },
+    ]);
+    setServiceDescription("");
+    setServicePrice("");
+    setAddingService(false);
   }
 
   function handleBarcodeScanned(data: string) {
@@ -104,18 +133,16 @@ export default function NewSaleScreen() {
     addProduct(product.id, product.name, Number(product.unitPrice), product.unitLabel);
   }
 
-  function changeQuantity(productId: string, delta: number) {
+  function changeQuantity(key: string, delta: number) {
     setLineItems((prev) =>
-      prev
-        .map((li) => (li.productId === productId ? { ...li, quantity: li.quantity + delta } : li))
-        .filter((li) => li.quantity > 0),
+      prev.map((li) => (lineItemKey(li) === key ? { ...li, quantity: li.quantity + delta } : li)).filter((li) => li.quantity > 0),
     );
   }
 
   function handleSubmit() {
     setError(null);
     if (!branchId) return setError("Select a branch.");
-    if (lineItems.length === 0) return setError("Add at least one product.");
+    if (lineItems.length === 0) return setError("Add at least one product or service.");
     createSale.mutate();
   }
 
@@ -163,26 +190,65 @@ export default function NewSaleScreen() {
         </View>
       </View>
 
+      <View>
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Add a service</Text>
+          {!addingService && (
+            <Pressable style={styles.scanButton} onPress={() => setAddingService(true)}>
+              <Text style={styles.scanButtonText}>+ Add</Text>
+            </Pressable>
+          )}
+        </View>
+        {addingService && (
+          <View style={{ gap: theme.spacing.sm }}>
+            <Input placeholder="Description (e.g. Installation)" value={serviceDescription} onChangeText={setServiceDescription} />
+            <Input placeholder="Price" value={servicePrice} onChangeText={setServicePrice} keyboardType="decimal-pad" />
+            <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+              <Button label="Add service" onPress={addService} />
+              <Button
+                label="Cancel"
+                variant="secondary"
+                onPress={() => {
+                  setAddingService(false);
+                  setServiceDescription("");
+                  setServicePrice("");
+                }}
+              />
+            </View>
+          </View>
+        )}
+      </View>
+
       {lineItems.length > 0 && (
         <View>
           <Text style={styles.label}>Line items</Text>
           <View style={{ gap: theme.spacing.sm }}>
-            {lineItems.map((li) => (
-              <View key={li.productId} style={styles.lineItemRow}>
-                <View style={{ flex: 1 }}>
-                  <Text>{li.name}</Text>
-                  <Text style={styles.muted}>{formatQuantity(li.quantity, li.unitLabel)}</Text>
+            {lineItems.map((li) => {
+              const key = lineItemKey(li);
+              return (
+                <View key={key} style={styles.lineItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text>{li.kind === "product" ? li.name : li.description}</Text>
+                      {li.kind === "service" && (
+                        <View style={styles.serviceBadge}>
+                          <Text style={styles.serviceBadgeText}>Service</Text>
+                        </View>
+                      )}
+                    </View>
+                    {li.kind === "product" && <Text style={styles.muted}>{formatQuantity(li.quantity, li.unitLabel)}</Text>}
+                  </View>
+                  <Pressable onPress={() => changeQuantity(key, -1)} style={styles.stepperButton}>
+                    <Text style={styles.stepperText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.qty}>{li.quantity}</Text>
+                  <Pressable onPress={() => changeQuantity(key, 1)} style={styles.stepperButton}>
+                    <Text style={styles.stepperText}>+</Text>
+                  </Pressable>
+                  <Text style={styles.lineTotal}>{formatMoney(li.unitPrice * li.quantity, currency)}</Text>
                 </View>
-                <Pressable onPress={() => changeQuantity(li.productId, -1)} style={styles.stepperButton}>
-                  <Text style={styles.stepperText}>−</Text>
-                </Pressable>
-                <Text style={styles.qty}>{li.quantity}</Text>
-                <Pressable onPress={() => changeQuantity(li.productId, 1)} style={styles.stepperButton}>
-                  <Text style={styles.stepperText}>+</Text>
-                </Pressable>
-                <Text style={styles.lineTotal}>{formatMoney(li.unitPrice * li.quantity, currency)}</Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
           <Text style={styles.total}>Total: {formatMoney(total, currency)}</Text>
         </View>
@@ -215,6 +281,8 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: "#fff" },
   muted: { color: theme.textFaint, fontSize: theme.font.caption },
   lineItemRow: { flexDirection: "row", alignItems: "center", gap: theme.spacing.sm },
+  serviceBadge: { backgroundColor: theme.primary, borderRadius: theme.radius.full, paddingHorizontal: 8, paddingVertical: 2 },
+  serviceBadgeText: { color: "#fff", fontSize: 11, fontWeight: "600" },
   stepperButton: {
     width: 28,
     height: 28,

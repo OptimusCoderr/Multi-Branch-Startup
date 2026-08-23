@@ -45,7 +45,6 @@ export default async function EditProductPage({ params }: { params: Promise<{ id
           costPrice: product.costPrice?.toString() ?? null,
           reorderPoint: product.reorderPoint?.toString() ?? null,
           tracksBatches: product.tracksBatches,
-          productType: product.productType,
         }}
         submitLabel="Save changes"
       />

@@ -168,6 +168,7 @@ export default function SaleDetailScreen() {
           <View key={i} style={styles.lineRow}>
             <Text style={{ flex: 1 }}>
               {li.productName} × {li.quantity}
+              {li.isService ? " (Service)" : ""}
             </Text>
             <Text>{formatMoney(li.lineTotal, currency)}</Text>
           </View>

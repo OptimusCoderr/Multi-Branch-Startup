@@ -106,7 +106,7 @@ export type SaleDetail = {
   amountPaid: string;
   dueDate: string | null;
   createdAt: string;
-  lineItems: { productName: string; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
+  lineItems: { productName: string | null; isService: boolean; quantity: number; unitPriceAtSale: string; lineTotal: string }[];
   payments: { id: string; amount: string; mode: string; paidAt: string }[];
   creditNotes: CreditNote[];
 };
@@ -116,7 +116,7 @@ export type CreateSaleInput = {
   customerId?: string;
   customerName?: string;
   customerPhone?: string;
-  lineItems: { productId: string; quantity: number }[];
+  lineItems: { productId?: string; quantity: number; description?: string; unitPrice?: number }[];
   // Set by the offline sync queue (lib/offline-queue.ts) so a retried sync
   // request reuses the original Sale instead of creating a duplicate.
   clientRequestId?: string;
