@@ -25,6 +25,14 @@ export const PERMISSIONS = {
   SALES_RECORD: "sales.record",
   SALES_VOID: "sales.void",
   SALES_OVERRIDE_PRICE: "sales.override_price",
+  // Search the sales list by an arbitrary date range, beyond whatever the
+  // role's default view window is (today/this week/unrestricted — see
+  // sales/page.tsx). Cashier never gets this.
+  SALES_DATE_SEARCH: "sales.date_search",
+  // Export the sales list to CSV — narrower than REPORTS_VIEW (which also
+  // covers the general /reports page): a Branch Manager can see reports
+  // but shouldn't be able to export the raw sales ledger.
+  SALES_EXPORT: "sales.export",
   PAYMENTS_RECORD: "payments.record",
   CREDIT_NOTES_ISSUE: "credit_notes.issue",
   CREDIT_NOTES_VOID: "credit_notes.void",
@@ -89,6 +97,8 @@ export const PERMISSION_CATALOG: {
   { key: PERMISSIONS.SALES_RECORD, category: "sales", description: "Record a sale" },
   { key: PERMISSIONS.SALES_VOID, category: "sales", description: "Void a sale" },
   { key: PERMISSIONS.SALES_OVERRIDE_PRICE, category: "sales", description: "Override a product's price on a sale" },
+  { key: PERMISSIONS.SALES_DATE_SEARCH, category: "sales", description: "Search the sales list by a custom date range" },
+  { key: PERMISSIONS.SALES_EXPORT, category: "sales", description: "Export the sales list to CSV" },
   { key: PERMISSIONS.PAYMENTS_RECORD, category: "sales", description: "Record a payment against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_ISSUE, category: "sales", description: "Issue a credit note against a sale" },
   { key: PERMISSIONS.CREDIT_NOTES_VOID, category: "sales", description: "Void a previously issued credit note" },
@@ -154,6 +164,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, PermissionKey[]> = {
     PERMISSIONS.TRANSFERS_APPROVE,
     PERMISSIONS.TRANSFERS_RECEIVE,
     PERMISSIONS.SALES_RECORD,
+    PERMISSIONS.SALES_DATE_SEARCH,
     PERMISSIONS.PAYMENTS_RECORD,
     PERMISSIONS.CUSTOMERS_VIEW,
     PERMISSIONS.CUSTOMERS_MANAGE,

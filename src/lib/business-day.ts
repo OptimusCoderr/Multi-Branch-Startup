@@ -66,3 +66,31 @@ export function resolveBusinessDay(timezone: string, at: Date = new Date()): Bus
 export function businessDayToDate(dateKey: string): Date {
   return new Date(`${dateKey}T00:00:00.000Z`);
 }
+
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [y, m, d] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+export type BusinessWeek = { startUtc: Date; endUtc: Date };
+
+/**
+ * The Monday-start calendar week containing `at`'s local business day, in
+ * `timezone` — used for the "current week" default sales-view window (see
+ * sales/page.tsx). Built on resolveBusinessDay rather than naive UTC math
+ * for the same DST-safety reason its own boundaries are.
+ */
+export function resolveBusinessWeek(timezone: string, at: Date = new Date()): BusinessWeek {
+  const today = resolveBusinessDay(timezone, at);
+  const [y, m, d] = today.dateKey.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday, 1 = Monday, ...
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  const mondayKey = addDaysToDateKey(today.dateKey, -daysSinceMonday);
+  const sundayKey = addDaysToDateKey(mondayKey, 6);
+  // Noon UTC on each anchor day is guaranteed to fall on the same calendar
+  // date in any real-world timezone (offsets never exceed +/-14h), so this
+  // reliably lands resolveBusinessDay on the intended local day.
+  const startUtc = resolveBusinessDay(timezone, new Date(`${mondayKey}T12:00:00.000Z`)).startUtc;
+  const endUtc = resolveBusinessDay(timezone, new Date(`${sundayKey}T12:00:00.000Z`)).endUtc;
+  return { startUtc, endUtc };
+}

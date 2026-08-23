@@ -265,6 +265,30 @@ Manager is not a reviewer by default, only a dispatcher).
 5. With **zero branches** (a brand-new company before creating one), visit `/sales/new`
    directly — should explain there's no branch yet and link to `/branches/new`, not show a
    broken required dropdown.
+6. **Role-gated `/sales` view windows, search, and export.** Every role has a default date
+   window; `sales.date_search` (Owner/Admin/Branch Manager by default) lets a role widen it
+   with an explicit From/To search, and `sales.export` (Owner/Admin only) gates the CSV
+   export box — both are separate from `reports.view` (which still gates the general
+   `/reports` page, unaffected). Note: after adding/changing a permission key in
+   `src/lib/auth/permissions.ts`, `npm run db:seed` (or the dev server's `predev` hook) must
+   run at least once so the global `Permission` catalog table actually has the new key —
+   without it, `DEFAULT_ROLE_PERMISSIONS` silently drops the grant for every *newly created*
+   company (existing companies are unaffected either way, since role permissions are
+   snapshotted once at company creation, not re-derived from the code on every request).
+   - **Owner**: default view is unrestricted ("All sales"), with From/To search inputs and
+     an Export CSV box, both always present.
+   - **Admin**: default view is the **current calendar week** (`Company.timezone`
+     boundaries) — confirm a sale from earlier this week shows up with no search applied.
+     Same search + export as Owner.
+   - **Branch Manager**: same "current calendar week" default and search inputs as Admin,
+     but confirm the Export CSV box is **absent**.
+   - **Cashier**: default (and *only* possible) view is **today**. Confirm there are no
+     date-search inputs and no export box at all — and that manually visiting
+     `/sales?from=2020-01-01&to=2020-01-02` is silently ignored, still showing only today's
+     sales rather than honoring the query string.
+   - As Admin or Branch Manager, submit the date search for a past range with no sales in
+     it — confirm the page actually narrows to that range (shows "No sales yet") rather than
+     silently ignoring the search, proving the override is real and not just a default.
 
 ### 6. Credit notes and printing
 
