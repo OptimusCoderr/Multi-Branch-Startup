@@ -145,6 +145,8 @@ async function main() {
             name: companyName,
             slug,
             status: "TRIAL",
+            businessType: "Retail / General store",
+            companyCode: `BIZ-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
             verificationDeadline: new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000),
           },
         });

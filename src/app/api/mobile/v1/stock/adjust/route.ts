@@ -45,11 +45,14 @@ export async function POST(request: Request) {
     // allowed to reach recordStockMovement/writeAuditLog, or it persists a
     // phantom record referencing another company's product/branch.
     const [product, branch] = await Promise.all([
-      db.product.findUnique({ where: { id: productId }, select: { id: true } }),
+      db.product.findUnique({ where: { id: productId }, select: { id: true, productType: true } }),
       db.branch.findUnique({ where: { id: branchId }, select: { id: true } }),
     ]);
     if (!product) throw new ApiError("Product not found.", 404);
     if (!branch) throw new ApiError("Branch not found.", 404);
+    // SERVICE products have no BranchStock row to adjust — see
+    // Product.productType's schema comment.
+    if (product.productType === "SERVICE") throw new ApiError("This product has no stock to adjust.", 400);
 
     await db.$transaction(async (tx) => {
       if (delta > 0) {

@@ -3,6 +3,8 @@ import { requireMembership, computeEffectivePermissions } from "@/lib/auth/sessi
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import { InviteStaffForm } from "@/components/forms/invite-staff-form";
+import { CompanyCodeCard } from "@/components/forms/company-code-card";
+import { ApprovePendingStaffForm } from "@/components/forms/approve-pending-staff-form";
 import { revokeInvitation } from "@/server/actions/staff";
 import { getPlanFeaturesForCompany } from "@/server/services/plan-limit-service";
 import { PageHeader, Table, TableHeader, TableHeaderCell, TableBody, TableRow, TableCell, Badge, Button, LinkButton, type BadgeVariant } from "@/components/ui";
@@ -30,7 +32,7 @@ export default async function StaffPage() {
     return <p className="text-gray-500 dark:text-gray-400">You don&apos;t have permission to view staff management.</p>;
   }
 
-  const [members, invitations, roles, { maxStaff }] = await Promise.all([
+  const [members, invitations, pendingRequests, roles, { maxStaff }, company] = await Promise.all([
     db.membership.findMany({
       where: { status: { in: ["ACTIVE", "SUSPENDED"] } },
       include: { user: true, role: true },
@@ -39,8 +41,12 @@ export default async function StaffPage() {
     canInvite
       ? db.invitation.findMany({ where: { status: "PENDING" }, include: { role: true }, orderBy: { createdAt: "desc" } })
       : Promise.resolve([]),
+    canInvite
+      ? db.membership.findMany({ where: { status: "PENDING" }, include: { user: true }, orderBy: { createdAt: "desc" } })
+      : Promise.resolve([]),
     db.role.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
     getPlanFeaturesForCompany(membership.companyId),
+    db.company.findUniqueOrThrow({ where: { id: membership.companyId }, select: { companyCode: true } }),
   ]);
 
   const seatsUsed = members.filter((m) => m.status === "ACTIVE").length + invitations.length;
@@ -60,6 +66,24 @@ export default async function StaffPage() {
         <Link href="/settings/billing" className="-mt-4 text-sm font-medium text-amber-700 dark:text-amber-400 underline">
           Upgrade for more seats
         </Link>
+      )}
+
+      {canInvite && <CompanyCodeCard companyCode={company.companyCode} />}
+
+      {canInvite && pendingRequests.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            Pending join requests
+          </p>
+          {pendingRequests.map((req) => (
+            <div key={req.id} className="flex flex-col gap-2 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-3 text-sm">
+              <span>
+                {req.user.name} · {req.user.email} requested to join using your company code.
+              </span>
+              <ApprovePendingStaffForm membershipId={req.id} roles={roles} />
+            </div>
+          ))}
+        </div>
       )}
 
       {canInvite && <InviteStaffForm roles={roles} />}

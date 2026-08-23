@@ -13,6 +13,7 @@ const slugify = (value: string) =>
 // these just get the process started when the info is on hand already.
 export const createCompanySchema = z.object({
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters").max(100),
+  businessType: z.string().trim().min(1, "Select or describe your business type").max(100),
   rcNumber: z.preprocess(emptyToUndefined, z.string().trim().max(50).optional()),
   // .refine() (not .max(new Date())) — see verification.schema.ts's
   // identical comment; .max() bakes in the Date the schema module

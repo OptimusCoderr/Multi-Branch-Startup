@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { createCompanyForCurrentUser } from "@/server/actions/onboarding";
 import { CompanyNameField } from "@/components/forms/company-name-field";
+import { CompanyBusinessTypeField } from "@/components/forms/company-business-type-field";
 import { CompanyVerificationFields } from "@/components/forms/company-verification-fields";
 
 const initialState = { error: "" };
@@ -20,6 +21,7 @@ export function CompanyStepForm({ email }: { email: string }) {
       </p>
 
       <CompanyNameField />
+      <CompanyBusinessTypeField />
       <CompanyVerificationFields />
 
       {state.error && <p className="text-sm text-red-600 dark:text-red-400">{state.error}</p>}

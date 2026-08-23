@@ -10,8 +10,10 @@ export async function GET() {
     await requireMobilePermission(membership.membershipId, PERMISSIONS.STOCK_LEVELS_VIEW);
 
     const db = getScopedPrisma(membership.companyId);
+    // SERVICE products carry no stock rows at all — see
+    // Product.productType's schema comment.
     const products = await db.product.findMany({
-      where: { isActive: true },
+      where: { isActive: true, productType: "GOODS" },
       orderBy: { name: "asc" },
       include: {
         warehouseStocks: { include: { warehouse: { select: { id: true, name: true } } } },

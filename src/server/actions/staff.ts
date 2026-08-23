@@ -111,6 +111,68 @@ export async function revokeInvitation(invitationId: string): Promise<void> {
   revalidatePath("/staff");
 }
 
+export async function approvePendingStaff(
+  membershipId: string,
+  _prev: ErrorResult,
+  formData: FormData,
+): Promise<ErrorResult> {
+  const membership = await requireMembershipOrThrow();
+  await requirePermission(membership.membershipId, PERMISSIONS.STAFF_INVITE);
+
+  const parsed = updateStaffRoleSchema.safeParse({ roleId: formData.get("roleId") });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Select a role." };
+  }
+
+  const db = getScopedPrisma(membership.companyId);
+  const { ipAddress, userAgent } = await requestMeta();
+
+  try {
+    await db.$transaction(async (tx) => {
+      const updated = await staffService.approvePendingStaff(tx, membershipId, parsed.data.roleId);
+      await writeAuditLog(tx, {
+        companyId: membership.companyId,
+        actorMembershipId: membership.membershipId,
+        action: "staff.request_approved",
+        entityType: "Membership",
+        entityId: updated.id,
+        metadata: { roleId: parsed.data.roleId },
+        ipAddress,
+        userAgent,
+      });
+    });
+  } catch (err) {
+    return { error: friendlyError(err, "Could not approve this request.") };
+  }
+
+  revalidatePath("/staff");
+  return { error: "" };
+}
+
+export async function rejectPendingStaff(membershipId: string): Promise<void> {
+  const membership = await requireMembershipOrThrow();
+  await requirePermission(membership.membershipId, PERMISSIONS.STAFF_INVITE);
+
+  const db = getScopedPrisma(membership.companyId);
+  const { ipAddress, userAgent } = await requestMeta();
+
+  await db.$transaction(async (tx) => {
+    const updated = await staffService.rejectPendingStaff(tx, membershipId);
+    await writeAuditLog(tx, {
+      companyId: membership.companyId,
+      actorMembershipId: membership.membershipId,
+      action: "staff.request_rejected",
+      entityType: "Membership",
+      entityId: updated.id,
+      metadata: {},
+      ipAddress,
+      userAgent,
+    });
+  });
+
+  revalidatePath("/staff");
+}
+
 export async function updateStaffRole(
   membershipId: string,
   _prev: ErrorResult,

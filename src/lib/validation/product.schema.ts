@@ -16,6 +16,7 @@ export const productSchema = z.object({
   costPrice: z.preprocess(emptyToUndefined, z.coerce.number().nonnegative().max(1_000_000_000).optional()),
   reorderPoint: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().max(1_000_000_000).optional()),
   tracksBatches: z.preprocess((v) => v === "on" || v === true, z.boolean()).default(false),
+  productType: z.preprocess(emptyToUndefined, z.enum(["GOODS", "SERVICE"]).default("GOODS")),
 });
 
 export type ProductInput = z.infer<typeof productSchema>;
