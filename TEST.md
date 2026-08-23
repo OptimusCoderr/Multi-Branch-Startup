@@ -1359,6 +1359,57 @@ and confirm the stock table shows the correct 5-tier level badge, then edit the 
 address via the modal and confirm it lands. Exercised end-to-end via a scripted Playwright
 run with zero console/page errors captured.
 
+### 37. ALLMAAJ-pattern UI redesign — Phase 6: Branch Stock (retires `/transfers` and `/stock`)
+
+The highest-risk phase: a new consolidated `/branch-stock` page — branch-selector-driven,
+tabbed (Stock | Pending Requests | Approval History | My Requests) — replaces the standalone
+`/transfers` module (list, `[id]`, `new`, `new-external`, all deleted) and the product-first
+`/stock` page (deleted; Warehouses' Phase 5 expandable cards plus this page together cover
+everything it showed). The `transfer-service.ts` backend is completely unchanged — only the
+UI surface moved, from full pages into tabs and per-row modals on one page.
+
+- **Stock tab** — the selected branch's stock table (search, category chips, low-stock-only
+  toggle, 3-tier `branchStockLevel()` pill), an "Add stock" modal (admin direct correction via
+  the existing `adjustBranchStock`, with an "External delivery" sub-mode for a batch-tracked
+  supplier delivery via `receiveExternalStock`), and a "Request stock" modal
+  (`RequestTransferForm`, destination pre-locked to the branch being viewed).
+- **Pending Requests tab** — every REQUESTED/APPROVED/IN_TRANSIT transfer destined to the
+  selected branch. Each row shows one action for the viewer's role at that status: **Review**
+  (REQUESTED, opens a modal with `ApproveTransferForm` + `RejectTransferForm` — blocked
+  entirely, no button at all, when the viewer is the requester, matching the existing
+  self-approval guard), **Dispatch** (APPROVED, a direct `dispatchTransfer()` call gated by
+  `useConfirm()` — Phase 1's confirm primitive's first real usage), **Receive**
+  (APPROVED/IN_TRANSIT, opens a modal with `ReceiveTransferForm`, preserving the existing
+  blind-receiving behavior — the requested quantity stays hidden from a receive-only viewer
+  until they submit their count), and **Cancel** (REQUESTED/APPROVED, another direct
+  `cancelTransfer()` call behind `useConfirm()`).
+- **Approval History / My Requests tabs** — read-only lists (terminal-status transfers
+  destined to the branch; the current user's own requests across every branch).
+- **Modal-close-on-success extended to transfers** — `requestTransfer`, `approveTransfer`,
+  `rejectTransfer`, `receiveTransfer`, and `receiveExternalStock` no longer `redirect()` to a
+  now-deleted `/transfers/[id]`; they `revalidatePath("/branch-stock")` and return
+  `{ error: "", success: true }` like every other modal-CRUD action this redesign introduced.
+- **Preserved, not dropped: batch-tracked warehouse deliveries.** Removing `/transfers/new-external`
+  would have deleted the only way to record a batch-tracked external delivery straight to a
+  warehouse (built earlier this session) — Warehouses' expandable card gained a "Record an
+  external delivery (with batch tracking)" button reusing the same `ReceiveExternalForm`,
+  scoped to that one warehouse.
+- Nav: "Stock" and "Transfers" are replaced by a single "Branch Stock" entry.
+  `proxy.ts`'s protected-route list, the transfer/stock-adjustment actions' `revalidatePath`
+  targets, and the marketing page's `TransferMockup()` copy were all updated to match.
+
+To verify: exercised end-to-end via two scripted Playwright runs. Single-Owner run — create
+two branches + a product, add stock via the Stock tab's Adjust-stock modal, confirm the
+5-tier badge and the low-stock-only filter, switch branches via the selector, request a
+transfer (destination locked to the viewed branch), confirm the Pending Requests tab shows
+"Awaiting reviewer" with no Review button for a self-requested transfer, cancel it via the new
+`useConfirm()` flow, and confirm it lands correctly in Approval History and My Requests — zero
+console/page errors. Two-person run — Owner + a second membership approved as Admin via the
+company-code self-signup flow, Owner requests a transfer, the Admin (a different membership)
+sees a Review button, approves it from an external source through the modal, and the transfer
+correctly auto-completes to RECEIVED and appears in Approval History — zero console/page
+errors.
+
 ### Barcode scanning — needs a real camera
 
 Same limitation as the printer: nothing in a CI or sandboxed environment has a camera, so

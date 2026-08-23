@@ -96,7 +96,6 @@ export async function adjustWarehouseStock(_prev: { error: string }, formData: F
     return { error: "Could not adjust stock." };
   }
 
-  revalidatePath("/stock");
   revalidatePath("/warehouses");
   return { error: "", success: true };
 }
@@ -177,8 +176,8 @@ export async function adjustBranchStock(_prev: { error: string }, formData: Form
     return { error: "Could not adjust stock." };
   }
 
-  revalidatePath("/stock");
   revalidatePath("/branches");
   revalidatePath("/products");
+  revalidatePath("/branch-stock");
   return { error: "", success: true };
 }

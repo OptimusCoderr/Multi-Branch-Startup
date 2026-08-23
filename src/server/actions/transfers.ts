@@ -1,6 +1,5 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getScopedPrisma } from "@/lib/db/scoped-prisma";
@@ -19,7 +18,7 @@ import { writeAuditLog } from "@/server/services/audit-service";
 import { createNotifications, getOwnerAndAdminMembershipIds } from "@/server/services/notification-service";
 import { resolveMembershipNames } from "@/lib/auth/membership-names";
 
-type ActionResult = { error: string } | never;
+type ActionResult = { error: string; success?: boolean };
 
 async function requestMeta() {
   const h = await headers();
@@ -38,7 +37,7 @@ function friendlyError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function requestTransfer(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function requestTransfer(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.TRANSFERS_REQUEST);
 
@@ -54,7 +53,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
-  let transferId = "";
 
   try {
     await db.$transaction(async (tx) => {
@@ -64,7 +62,6 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
         destinationBranchId: parsed.data.destinationBranchId,
         notes: parsed.data.notes,
       });
-      transferId = transfer.id;
 
       await writeAuditLog(tx, {
         companyId: membership.companyId,
@@ -81,13 +78,13 @@ export async function requestTransfer(_prev: { error: string }, formData: FormDa
     return { error: friendlyError(err, "Could not create the transfer request.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function approveTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -141,13 +138,13 @@ export async function approveTransfer(
     return { error: friendlyError(err, "Could not approve the transfer.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function rejectTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -179,8 +176,8 @@ export async function rejectTransfer(
     return { error: friendlyError(err, "Could not reject the transfer.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
 export async function cancelTransfer(transferId: string): Promise<void> {
@@ -211,8 +208,7 @@ export async function cancelTransfer(transferId: string): Promise<void> {
     });
   });
 
-  revalidatePath(`/transfers/${transferId}`);
-  revalidatePath("/transfers");
+  revalidatePath("/branch-stock");
 }
 
 export async function dispatchTransfer(transferId: string): Promise<void> {
@@ -236,13 +232,12 @@ export async function dispatchTransfer(transferId: string): Promise<void> {
     });
   });
 
-  revalidatePath(`/transfers/${transferId}`);
-  revalidatePath("/transfers");
+  revalidatePath("/branch-stock");
 }
 
 export async function receiveTransfer(
   transferId: string,
-  _prev: { error: string },
+  _prev: ActionResult,
   formData: FormData,
 ): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
@@ -325,11 +320,11 @@ export async function receiveTransfer(
     return { error: friendlyError(err, "Could not record the receipt.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  return { error: "", success: true };
 }
 
-export async function receiveExternalStock(_prev: { error: string }, formData: FormData): Promise<ActionResult> {
+export async function receiveExternalStock(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const membership = await requireMembershipOrThrow();
   await requirePermission(membership.membershipId, PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL);
 
@@ -351,7 +346,6 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
 
   const db = getScopedPrisma(membership.companyId);
   const { ipAddress, userAgent } = await requestMeta();
-  let transferId = "";
 
   const batch =
     parsed.data.batchNumber && parsed.data.expiryDate
@@ -377,7 +371,6 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
         batch,
         ...destination,
       });
-      transferId = transfer.id;
 
       await writeAuditLog(tx, {
         companyId: membership.companyId,
@@ -394,6 +387,7 @@ export async function receiveExternalStock(_prev: { error: string }, formData: F
     return { error: friendlyError(err, "Could not record the delivery.") };
   }
 
-  revalidatePath("/transfers");
-  redirect(`/transfers/${transferId}`);
+  revalidatePath("/branch-stock");
+  revalidatePath("/warehouses");
+  return { error: "", success: true };
 }

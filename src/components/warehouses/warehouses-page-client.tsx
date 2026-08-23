@@ -6,6 +6,7 @@ import { formatMoney, formatQuantity, warehouseStockLevel } from "@/lib/format";
 import { createWarehouse, updateWarehouse, deactivateWarehouse } from "@/server/actions/warehouses";
 import { LocationForm } from "@/components/forms/location-form";
 import { AdjustWarehouseStockForm } from "@/components/forms/adjust-warehouse-stock-form";
+import { ReceiveExternalForm } from "@/components/forms/receive-external-form";
 import {
   StatCard,
   Table,
@@ -23,7 +24,7 @@ import {
 
 type WarehouseRow = { id: string; name: string; address: string | null; isActive: boolean };
 type StockLine = { productId: string; productName: string; productSku: string; unitLabel: string; unitPrice: string; quantity: number };
-type ModalState = { type: "create" } | { type: "edit"; warehouse: WarehouseRow } | null;
+type ModalState = { type: "create" } | { type: "edit"; warehouse: WarehouseRow } | { type: "external"; warehouse: WarehouseRow } | null;
 
 export function WarehousesPageClient({
   warehouses,
@@ -32,13 +33,15 @@ export function WarehousesPageClient({
   currency,
   maxWarehouses,
   canManage,
+  canReceiveExternal,
 }: {
   warehouses: WarehouseRow[];
   stockByWarehouse: Record<string, StockLine[]>;
-  allProducts: { id: string; name: string; sku: string }[];
+  allProducts: { id: string; name: string; sku: string; tracksBatches: boolean }[];
   currency: string;
   maxWarehouses?: number;
   canManage: boolean;
+  canReceiveExternal: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
@@ -177,6 +180,16 @@ export function WarehousesPageClient({
                     )}
 
                     {canManage && <AdjustWarehouseStockForm products={allProducts} warehouses={[]} fixedWarehouseId={w.id} />}
+
+                    {canReceiveExternal && (
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: "external", warehouse: w })}
+                        className="self-start text-sm font-medium text-[var(--brand-primary)] hover:underline"
+                      >
+                        Record an external delivery (with batch tracking) →
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -197,6 +210,17 @@ export function WarehousesPageClient({
             action={updateWarehouse.bind(null, modal.warehouse.id)}
             defaultValues={{ name: modal.warehouse.name, address: modal.warehouse.address }}
             submitLabel="Save changes"
+            onSuccess={() => setModal(null)}
+          />
+        </Modal>
+      )}
+
+      {modal?.type === "external" && (
+        <Modal title={`Record external delivery — ${modal.warehouse.name}`} onClose={() => setModal(null)}>
+          <ReceiveExternalForm
+            products={allProducts}
+            warehouses={[{ id: modal.warehouse.id, name: modal.warehouse.name }]}
+            branches={[]}
             onSuccess={() => setModal(null)}
           />
         </Modal>

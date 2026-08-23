@@ -30,9 +30,10 @@ export default async function NewSalePage() {
   // A sale always belongs to a branch — with none yet (a brand-new company
   // before its first branch), the form's required branchId select would
   // just be an empty dropdown, silently blocked by native validation with
-  // no indication of what to do. Same fix as /transfers/new got for the
-  // zero-warehouse case. Branch creation is a modal on /branches now (no
-  // dedicated /branches/new route), so this just links to the list.
+  // no indication of what to do. Same fix as Branch Stock's "Request stock"
+  // flow needs for the zero-warehouse case. Branch creation is a modal on
+  // /branches now (no dedicated /branches/new route), so this just links
+  // to the list.
   if (branches.length === 0) {
     return (
       <div className="flex max-w-lg flex-col gap-4">

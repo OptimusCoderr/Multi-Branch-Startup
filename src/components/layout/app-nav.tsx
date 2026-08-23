@@ -9,7 +9,6 @@ import {
   Building2,
   Boxes,
   PackageSearch,
-  ArrowLeftRight,
   ClipboardList,
   ShoppingCart,
   Users,
@@ -29,8 +28,9 @@ import type { PlanFeatures } from "@/lib/billing/plan-features";
 // they'd ever discover they can add one later. Hiding it would make that
 // path undiscoverable, not just decluttered. The friction this app
 // actually had for a single-shop/no-warehouse business — a broken empty
-// dropdown on /transfers/new, and dashboard copy that assumed every
-// company uses both — is fixed at the source on those pages instead.
+// dropdown on the old request-transfer flow, and dashboard copy that
+// assumed every company uses both — is fixed at the source on those pages
+// instead.
 //
 // `planFeatureKey` is a genuinely different signal from "0 created so
 // far": it's the plan's *cap*. A cap of exactly 0 (Solo's maxWarehouses,
@@ -42,9 +42,8 @@ const NAV_LINKS: { href: string; label: string; icon: LucideIcon; planFeatureKey
   { href: "/products", label: "Products", icon: Package },
   { href: "/warehouses", label: "Warehouses", icon: Warehouse, planFeatureKey: "maxWarehouses" },
   { href: "/branches", label: "Branches", icon: Building2, planFeatureKey: "maxBranches" },
-  { href: "/stock", label: "Stock", icon: Boxes },
+  { href: "/branch-stock", label: "Branch Stock", icon: Boxes },
   { href: "/batches", label: "Batches", icon: PackageSearch },
-  { href: "/transfers", label: "Transfers", icon: ArrowLeftRight },
   { href: "/purchase-orders", label: "Purchase orders", icon: ClipboardList },
   { href: "/sales", label: "Sales", icon: ShoppingCart },
   { href: "/customers", label: "Customers", icon: Users },

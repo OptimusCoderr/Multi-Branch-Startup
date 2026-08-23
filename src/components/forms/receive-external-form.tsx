@@ -1,26 +1,36 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import { receiveExternalStock } from "@/server/actions/transfers";
 import { Field, Input, Select, FormError, Button, Card } from "@/components/ui";
 
-type FormState = { error: string };
+type FormState = { error: string; success?: boolean };
 const initialState: FormState = { error: "" };
 
 export function ReceiveExternalForm({
   products,
   warehouses,
   branches,
+  fixedBranchId,
+  onSuccess,
 }: {
   products: { id: string; name: string; sku: string; tracksBatches: boolean }[];
   warehouses: { id: string; name: string }[];
   branches: { id: string; name: string }[];
+  /** Locks the destination to one branch and hides the warehouse option — used on Branch Stock, where "External delivery" always means straight into the branch being viewed. */
+  fixedBranchId?: string;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, isPending] = useActionState(receiveExternalStock, initialState);
   const [productId, setProductId] = useState("");
 
-  const canReceiveAtWarehouse = warehouses.length > 0;
-  const canReceiveAtBranch = branches.length > 0;
+  useEffect(() => {
+    if (state.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when the action reports a fresh success
+  }, [state.success]);
+
+  const canReceiveAtWarehouse = !fixedBranchId && warehouses.length > 0;
+  const canReceiveAtBranch = Boolean(fixedBranchId) || branches.length > 0;
   const [destinationType, setDestinationType] = useState<"WAREHOUSE" | "BRANCH">(canReceiveAtWarehouse ? "WAREHOUSE" : "BRANCH");
   const showDestinationTypePicker = canReceiveAtWarehouse && canReceiveAtBranch;
 
@@ -70,7 +80,9 @@ export function ReceiveExternalForm({
       )}
       {!showDestinationTypePicker && <input type="hidden" name="destinationType" value={destinationType} />}
 
-      {destinationType === "WAREHOUSE" ? (
+      {fixedBranchId ? (
+        <input type="hidden" name="destinationBranchId" value={fixedBranchId} />
+      ) : destinationType === "WAREHOUSE" ? (
         <Field label="Receiving warehouse">
           <Select name="destinationWarehouseId" required>
             <option value="">Select a warehouse</option>

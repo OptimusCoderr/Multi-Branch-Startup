@@ -16,7 +16,7 @@ export default async function WarehousesPage() {
       include: { product: { select: { id: true, name: true, sku: true, unitLabel: true, unitPrice: true } } },
       orderBy: { product: { name: "asc" } },
     }),
-    db.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true } }),
+    db.product.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, sku: true, tracksBatches: true } }),
     getPlanFeaturesForCompany(membership.companyId),
   ]);
 
@@ -42,6 +42,7 @@ export default async function WarehousesPage() {
         currency={membership.companyCurrency}
         maxWarehouses={maxWarehouses}
         canManage={permissions.has(PERMISSIONS.WAREHOUSES_MANAGE)}
+        canReceiveExternal={permissions.has(PERMISSIONS.TRANSFERS_RECEIVE_EXTERNAL)}
       />
     </div>
   );

@@ -242,7 +242,8 @@ function PosMockup() {
   );
 }
 
-// A stock-transfer status list mockup — mirrors the real /transfers page.
+// A branch-stock request status list mockup — mirrors the real /branch-stock
+// page's Pending Requests tab.
 function TransferMockup() {
   const rows = [
     { product: "Adire tote bag", route: "Warehouse → Lekki branch", status: "In transit", tone: "brand" as const },
@@ -258,7 +259,7 @@ function TransferMockup() {
     <div className="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl shadow-violet-200/30 dark:border-gray-800 dark:bg-gray-900 dark:shadow-black/40">
       <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3 dark:border-gray-800">
         <ArrowLeftRight size={14} className="text-violet-600" />
-        <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">Stock transfers</p>
+        <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">Branch stock</p>
       </div>
       <div className="flex flex-col gap-2 p-4">
         {rows.map((row) => (
@@ -388,7 +389,7 @@ export default function Home() {
           bg="bg-violet-50/60 dark:bg-violet-950/20"
         />
         <FeatureRow
-          eyebrow="Stock transfers"
+          eyebrow="Branch stock"
           title="Move stock between locations, without losing track of it"
           body="Request a transfer, approve it, and confirm receipt — every step logged, so 'where did this actually end up' always has a real answer."
           mockup={<TransferMockup />}

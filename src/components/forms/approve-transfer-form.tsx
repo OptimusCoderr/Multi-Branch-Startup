@@ -1,10 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { approveTransfer } from "@/server/actions/transfers";
 import { Field, Input, Select, FormError, Button } from "@/components/ui";
 
-type FormState = { error: string };
+type FormState = { error: string; success?: boolean };
 const initialState: FormState = { error: "" };
 
 export function ApproveTransferForm({
@@ -12,16 +12,23 @@ export function ApproveTransferForm({
   warehouses,
   branches,
   requiresBatch,
+  onSuccess,
 }: {
   transferId: string;
   warehouses: { id: string; name: string }[];
   branches: { id: string; name: string }[];
   requiresBatch: boolean;
+  onSuccess?: () => void;
 }) {
   const [state, formAction, isPending] = useActionState(approveTransfer.bind(null, transferId), initialState);
   const [sourceType, setSourceType] = useState<"WAREHOUSE" | "BRANCH" | "EXTERNAL">(
     warehouses.length > 0 ? "WAREHOUSE" : branches.length > 0 ? "BRANCH" : "EXTERNAL",
   );
+
+  useEffect(() => {
+    if (state.success) onSuccess?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-fire when the action reports a fresh success
+  }, [state.success]);
 
   return (
     <form action={formAction} className="flex flex-col gap-4 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
